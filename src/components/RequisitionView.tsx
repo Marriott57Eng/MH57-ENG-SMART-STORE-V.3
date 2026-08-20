@@ -1,0 +1,401 @@
+import React, { useState } from 'react';
+import { RequisitionRecord, InventoryItem } from '../types';
+import { 
+  ClipboardList, Search, Clock, MapPin,
+  Plus, Package, FileText, Trash2, FileDown, Loader2,
+  ArrowDownRight, ArrowUpRight, CheckCircle2, AlertTriangle, XCircle, Boxes, Edit3
+} from 'lucide-react';
+import { generateAndDownloadPdf } from '../utils/pdfGenerator';
+import { formatRecordTimestamp } from '../utils/dateUtils';
+
+interface RequisitionViewProps {
+  records: RequisitionRecord[];
+  items: InventoryItem[];
+  isAdmin?: boolean;
+  onOpenNewRequisition: () => void;
+  onDeleteRecord: (id: string) => void;
+  onEditRecord?: (record: RequisitionRecord) => void;
+}
+
+export const RequisitionView: React.FC<RequisitionViewProps> = ({
+  records,
+  items,
+  isAdmin = false,
+  onOpenNewRequisition,
+  onDeleteRecord,
+  onEditRecord,
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'out' | 'in'>('all');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  const getCategoryColor = (cat: string) => {
+    switch (cat) {
+      case 'เคมี':
+        return 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/80';
+      case 'ท่อ':
+        return 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/80';
+      case 'ไฟฟ้า':
+      case 'Lighting':
+        return 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80';
+      case 'แอร์':
+        return 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/80';
+      case 'สุขภัณฑ์':
+        return 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800/80';
+      case 'สี+Grouting':
+        return 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/80';
+      case 'Fire Alarm':
+        return 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/80';
+      case 'ประตู':
+        return 'bg-stone-100 dark:bg-stone-800/80 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700';
+      case 'เน็ต+โทรศัพท์':
+        return 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/80';
+      default:
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+    }
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      setIsExportingPdf(true);
+      await generateAndDownloadPdf({
+        type: 'requisition_history',
+        title: 'รายงานประวัติการเบิก/รับเข้าสินค้า (Store FL.6)',
+        items,
+        requisitions: filteredRecords.length > 0 ? filteredRecords : records,
+      });
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert('เกิดข้อผิดพลาดในการสร้างไฟล์ PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  // Filtered records by search and type
+  const filteredRecords = records.filter((rec) => {
+    const matchesType = 
+      typeFilter === 'all' 
+        ? true 
+        : typeFilter === 'in' 
+        ? rec.type === 'in' 
+        : (rec.type === 'out' || !rec.type);
+
+    const matchesSearch =
+      rec.requestedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.itemId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.category.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesType && matchesSearch;
+  });
+
+  // Calculate quick stats
+  const totalWithdrawn = records
+    .filter((r) => r.type === 'out' || !r.type)
+    .reduce((sum, r) => sum + r.qty, 0);
+
+  const totalReceived = records
+    .filter((r) => r.type === 'in')
+    .reduce((sum, r) => sum + r.qty, 0);
+
+  return (
+    <div className="flex flex-col h-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
+      {/* Top Header */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 pt-safe-header pb-3 shrink-0 shadow-xs transition-colors duration-200">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">ประวัติการเบิก / รับเข้า</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">บันทึกความเคลื่อนไหวสต็อกสินค้าเข้า-ออก</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleExportPdf}
+              disabled={isExportingPdf || records.length === 0}
+              className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 active:scale-95 disabled:opacity-50 text-slate-700 dark:text-slate-300 px-2.5 py-2 rounded-xl text-lg font-semibold flex items-center gap-1 transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
+              title="ส่งออกรายงาน PDF"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+              ) : (
+                <FileDown className="w-4 h-4 text-red-600 dark:text-red-400" />
+              )}
+              <span className="hidden sm:inline">ส่งออก</span> PDF
+            </button>
+
+            <button
+              onClick={onOpenNewRequisition}
+              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 text-white px-3 py-2 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              บันทึก เบิก/รับเข้า
+            </button>
+          </div>
+        </div>
+
+        {/* Stats summary banner */}
+        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-100 dark:border-slate-700/80 text-center">
+            <span className="text-xs text-slate-400 dark:text-slate-400 block font-medium">รายการทั้งหมด</span>
+            <span className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{records.length} ครั้ง</span>
+          </div>
+          <div className="bg-blue-50/60 dark:bg-blue-950/40 p-2 rounded-xl border border-blue-100 dark:border-blue-900/50 text-center">
+            <span className="text-xs text-blue-600 dark:text-blue-400 block font-medium">เบิกออกรวม</span>
+            <span className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{totalWithdrawn} ชิ้น</span>
+          </div>
+          <div className="bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-100 dark:border-emerald-900/50 text-center">
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">รับเข้ารวม</span>
+            <span className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">+{totalReceived} ชิ้น</span>
+          </div>
+        </div>
+
+        {/* Type Filter Buttons */}
+        <div className="flex items-center gap-1.5 mt-3 pt-1">
+          <button
+            onClick={() => setTypeFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-lg font-bold transition-all cursor-pointer ${
+              typeFilter === 'all'
+                ? 'bg-slate-800 dark:bg-blue-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            ทั้งหมด ({records.length})
+          </button>
+          <button
+            onClick={() => setTypeFilter('out')}
+            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer ${
+              typeFilter === 'out'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+            }`}
+          >
+            <ArrowUpRight className="w-4 h-4" />
+            เบิกออก ({records.filter((r) => r.type === 'out' || !r.type).length})
+          </button>
+          <button
+            onClick={() => setTypeFilter('in')}
+            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer ${
+              typeFilter === 'in'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+            }`}
+          >
+            <ArrowDownRight className="w-4 h-4" />
+            รับเข้า ({records.filter((r) => r.type === 'in').length})
+          </button>
+        </div>
+
+        {/* Search bar */}
+        <div className="relative mt-2.5">
+          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="ค้นหาชื่อผู้ทำรายการ, สินค้า, รหัส หรือสถานที่..."
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-400 transition-all"
+          />
+        </div>
+      </div>
+
+      {/* Record list container */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
+        {filteredRecords.length === 0 ? (
+          <div className="text-center py-12 px-4">
+            <div className="w-14 h-14 bg-slate-100 dark:bg-slate-850 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400 dark:text-slate-500">
+              <ClipboardList className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-700 dark:text-slate-300 text-lg mb-1">
+              {searchTerm
+                ? 'ไม่พบประวัติที่ตรงกับคำค้นหา'
+                : 'ยังไม่มีประวัติการเบิกหรือรับเข้าสินค้า'}
+            </h3>
+            <p className="text-lg text-slate-400 dark:text-slate-500 mb-4">
+              แตะปุ่ม "บันทึก เบิก/รับเข้า" ด้านบนเพื่อเริ่มบันทึกรายการ
+            </p>
+            <button
+              onClick={onOpenNewRequisition}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              บันทึก เบิก/รับเข้า
+            </button>
+          </div>
+        ) : (
+          filteredRecords.map((record) => {
+            const isStockIn = record.type === 'in';
+            
+            // Find current inventory item matching this record
+            const currentItem = items.find((i) => i.id === record.itemId) || 
+                                items.find((i) => i.name === record.itemName);
+            
+            const currentQty = currentItem ? currentItem.qty : null;
+            const currentUnit = currentItem ? currentItem.unit : record.unit;
+            const currentStatus = currentItem ? currentItem.status : 'normal';
+
+            return (
+              <div
+                key={record.id}
+                className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs dark:shadow-none hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-3"
+              >
+                {/* Top: User Info, Type Badge & Timestamp */}
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${
+                      isStockIn 
+                        ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
+                        : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                    }`}>
+                      {isStockIn ? (
+                        <ArrowDownRight className="w-5 h-5" />
+                      ) : (
+                        <ArrowUpRight className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
+                          {record.requestedBy}
+                        </h3>
+                        <span className={`text-xs font-extrabold px-1.5 py-0.2 rounded ${
+                          isStockIn
+                            ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
+                            : 'bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80'
+                        }`}>
+                          {isStockIn ? 'รับเข้า' : 'เบิกออก'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-slate-400 dark:text-slate-400 mt-0.5 font-medium">
+                        <Clock className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <span>{formatRecordTimestamp(record.timestamp, record.isoDate)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction Quantity Badge */}
+                  <div className="text-right">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-lg font-extrabold border ${
+                      isStockIn
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80'
+                        : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/80'
+                    }`}>
+                      {isStockIn ? `+${record.qty}` : `-${record.qty}`} {record.unit}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Middle: Item Details */}
+                <div className="bg-slate-50/90 dark:bg-slate-800/80 rounded-xl p-3 border border-slate-200/70 dark:border-slate-700/80">
+                  <div className="flex items-start gap-3">
+                    {/* Item Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                          {record.itemId}
+                        </span>
+                        <span
+                          className={`text-sm font-semibold px-2 py-0.5 rounded-full border ${getCategoryColor(
+                            record.category
+                          )}`}
+                        >
+                          {record.category}
+                        </span>
+                      </div>
+
+                      <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg sm:text-lg leading-snug line-clamp-2">
+                        {record.itemName}
+                      </h4>
+
+                      {/* CURRENT WAREHOUSE STOCK BALANCE */}
+                      <div className="mt-2 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between flex-wrap gap-1">
+                        <div className="flex items-center gap-1.5 text-lg">
+                          <Boxes className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span className="text-slate-500 dark:text-slate-400 text-sm">สต็อกคงเหลือปัจจุบัน:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white text-lg">
+                            {currentQty !== null ? `${currentQty} ${currentUnit}` : 'ไม่พบข้อมูล'}
+                          </span>
+                        </div>
+
+                        {currentQty !== null && (
+                          <div>
+                            {currentStatus === 'out' ? (
+                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/80 px-1.5 py-0.2 rounded">
+                                <XCircle className="w-2.5 h-2.5" /> หมดสต็อก
+                              </span>
+                            ) : currentStatus === 'low' ? (
+                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 px-1.5 py-0.2 rounded">
+                                <AlertTriangle className="w-2.5 h-2.5" /> สต็อกเหลือน้อย
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 px-1.5 py-0.2 rounded">
+                                <CheckCircle2 className="w-2.5 h-2.5" /> ปกติ
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom: Purpose / Location & Note */}
+                <div className="space-y-1 text-lg">
+                  <div className="flex items-start gap-1.5 text-slate-700 dark:text-slate-300">
+                    <MapPin className={`w-4 h-4 shrink-0 mt-0.5 ${isStockIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`} />
+                    <span className="font-medium text-lg">
+                      <strong className="text-slate-900 dark:text-slate-100">
+                        {isStockIn ? 'แหล่งที่มา / เหตุผล:' : 'งานที่นำไปใช้:'}
+                      </strong>{' '}
+                      {record.purpose}
+                    </span>
+                  </div>
+
+                  {record.note && (
+                    <div className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400 text-sm">
+                      <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                      <span>หมายเหตุ: {record.note}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Admin Actions: Edit & Delete (Only visible for Admin) */}
+                {isAdmin && (
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                    {onEditRecord && (
+                      <button
+                        onClick={() => onEditRecord(record)}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1 font-semibold transition-all px-2.5 py-1 rounded-lg cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        แก้ไขประวัติ
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const cleanId = record.id.replace(/^REQ-?/i, '');
+                        if (confirm(`คุณต้องการลบประวัติรายการ "${record.itemName}" (${cleanId}) ใช่หรือไม่?`)) {
+                          onDeleteRecord(record.id);
+                        }
+                      }}
+                      className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 dark:hover:bg-red-900/50 flex items-center gap-1 font-semibold transition-all px-2.5 py-1 rounded-lg cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      ลบประวัตินี้
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};

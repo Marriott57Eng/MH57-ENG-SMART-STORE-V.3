@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "An item in the warehouse inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "qty": { "type": "number" },
+        "minStock": { "type": "number" },
+        "location": { "type": "string" },
+        "note": { "type": "string" },
+        "ordered": { "type": "string" },
+        "orderedDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["normal", "low", "out"] },
+        "outOfStockDate": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "unit", "qty", "minStock", "status"]
+    },
+    "RequisitionRecord": {
+      "title": "Requisition Record",
+      "description": "Log of stock in and stock out transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["in", "out"] },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "category": { "type": "string" },
+        "qty": { "type": "number" },
+        "unit": { "type": "string" },
+        "requestedBy": { "type": "string" },
+        "purpose": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "isoDate": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "itemId", "itemName", "qty", "unit", "requestedBy", "isoDate"]
+    }
+  },
+  "firestore": {
+    "/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Warehouse stock inventory items"
+    },
+    "/requisitions/{requisitionId}": {
+      "schema": "RequisitionRecord",
+      "description": "Transaction logs for stock requisition and receiving"
+    }
+  }
+}

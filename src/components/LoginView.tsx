@@ -1,0 +1,283 @@
+
+import React, { useState, useEffect } from 'react';
+import { User as UserIcon, AlertCircle, Loader2 } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, getDocs, setDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { User } from '../types';
+import { initialUsers } from '../data/users';
+import { EngLogo } from './EngLogo';
+
+interface LoginViewProps {
+  onLogin: (user: User) => void;
+}
+
+// Build instant offline/initial users list
+const getInitialDbUsers = (): User[] => {
+  try {
+    const cached = localStorage.getItem('warehouse_cached_users');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+
+  const defaultList: User[] = initialUsers.map((u) => ({
+    id: u.id,
+    username: u.id,
+    name: u.name,
+    nickname: u.nickname,
+    role: 'user',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  }));
+
+  defaultList.push({
+    id: 'Admininmad',
+    username: 'Admininmad',
+    name: 'Administrator',
+    role: 'admin',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  });
+
+  return defaultList;
+};
+
+export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
+  const [loginInput, setLoginInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [dbUsers, setDbUsers] = useState<User[]>(getInitialDbUsers);
+
+  // Background silent sync: fetch fresh users and seed if necessary without blocking the UI
+  useEffect(() => {
+    let isMounted = true;
+    const syncUsersSilently = async () => {
+      try {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        let loadedUsers: User[] = [];
+        const existingIds = new Set<string>();
+
+        usersSnapshot.forEach((docSnap) => {
+          existingIds.add(docSnap.id);
+          loadedUsers.push(docSnap.data() as User);
+        });
+
+        const batch = [];
+        let needsUpdate = false;
+
+        // Seed missing initial users if Firestore collection is fresh
+        for (const u of initialUsers) {
+          if (!existingIds.has(u.id)) {
+            const newUser: User = {
+              id: u.id,
+              username: u.id,
+              name: u.name,
+              nickname: u.nickname,
+              role: 'user',
+              createdAt: new Date().toISOString(),
+            };
+            batch.push(setDoc(doc(db, 'users', u.id), newUser));
+            loadedUsers.push(newUser);
+            needsUpdate = true;
+          }
+        }
+
+        // Ensure admin exists
+        if (!existingIds.has('Admininmad')) {
+          const defaultAdmin: User = {
+            id: 'Admininmad',
+            username: 'Admininmad',
+            name: 'Administrator',
+            role: 'admin',
+            createdAt: new Date().toISOString(),
+          };
+          batch.push(setDoc(doc(db, 'users', 'Admininmad'), defaultAdmin));
+          loadedUsers.push(defaultAdmin);
+          needsUpdate = true;
+        }
+
+        if (needsUpdate && batch.length > 0) {
+          await Promise.all(batch);
+        }
+
+        if (isMounted && loadedUsers.length > 0) {
+          setDbUsers(loadedUsers);
+          try {
+            localStorage.setItem('warehouse_cached_users', JSON.stringify(loadedUsers));
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn('Silent users sync (offline fallback active):', err);
+      }
+    };
+
+    syncUsersSilently();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanInput = loginInput.trim().toLowerCase();
+
+    if (!cleanInput) {
+      setError('กรุณากรอกรหัสพนักงาน หรือชื่อจริง');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // 1. Find user locally from instant loaded list
+      let foundUser = dbUsers.find(
+        (u) =>
+          u.id.toLowerCase() === cleanInput ||
+          (u.username && u.username.toLowerCase() === cleanInput) ||
+          u.name.toLowerCase().includes(cleanInput)
+      );
+
+      // 2. If not found in local memory, search live in Firestore doc directly
+      if (!foundUser) {
+        try {
+          const directDoc = await getDoc(doc(db, 'users', loginInput.trim()));
+          if (directDoc.exists()) {
+            foundUser = directDoc.data() as User;
+          } else {
+            // Check by ID, username or name in collection
+            const snap = await getDocs(collection(db, 'users'));
+            snap.forEach((d) => {
+              const u = d.data() as User;
+              if (
+                u.id.toLowerCase() === cleanInput ||
+                (u.username && u.username.toLowerCase() === cleanInput) ||
+                u.name.toLowerCase().includes(cleanInput)
+              ) {
+                foundUser = u;
+              }
+            });
+          }
+        } catch (_) {}
+      }
+
+      if (foundUser) {
+        // Handle persistent device lock
+        let deviceId = localStorage.getItem('device_id');
+        if (!deviceId) {
+          deviceId = crypto.randomUUID();
+          localStorage.setItem('device_id', deviceId);
+        }
+
+        // Fetch fresh user data to check if already active on another device
+        const userRef = doc(db, 'users', foundUser.id);
+        try {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists() && foundUser.id !== 'Admininmad') {
+            const freshData = userSnap.data() as User;
+            if (freshData.activeDeviceId && freshData.activeDeviceId !== deviceId) {
+              setError('ไม่สามารถเข้าสู่ระบบได้ เนื่องจากมีการเข้าสู่ระบบอยู่แล้ว กรุณาเข้าสู่ระบบด้วย User ของตนเอง');
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (_) {}
+
+        const newToken = crypto.randomUUID();
+        const updateData: any = { sessionToken: newToken };
+        if (foundUser.id !== 'Admininmad') {
+          updateData.activeDeviceId = deviceId;
+        } else {
+          updateData.activeDeviceId = ''; // Never lock Admininmad
+        }
+
+        // Update active device token
+        updateDoc(userRef, updateData).catch((err) => {
+          console.warn('Failed to update session token in Firestore:', err);
+        });
+
+        const updatedUser = {
+          ...foundUser,
+          sessionToken: newToken,
+          activeDeviceId: foundUser.id !== 'Admininmad' ? deviceId : '',
+        };
+        localStorage.setItem('warehouse_user', JSON.stringify(updatedUser));
+        onLogin(updatedUser);
+      } else {
+        setError('ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาตรวจสอบรหัสพนักงานหรือชื่อจริง');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex justify-center selection:bg-blue-500 selection:text-white">
+      <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[auto] sm:rounded-3xl sm:my-10 sm:h-fit shadow-2xl flex flex-col p-8 pt-safe-content justify-center relative overflow-hidden">
+        {/* Decorative background */}
+        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-b-[40px] opacity-10 blur-xl"></div>
+
+        <div className="relative z-10 flex flex-col items-center mb-8">
+          <div className="w-full max-w-[500px] h-[150px] flex items-center justify-center mb-6 overflow-hidden rounded-2xl">
+            <EngLogo
+              alt="ENG Smart Store Logo"
+              style={{ width: '500px', maxWidth: '100%', height: '150px' }}
+              className="object-contain drop-shadow-md rounded-2xl"
+            />
+          </div>
+          <h1
+            style={{ fontSize: '20.5px', fontStyle: 'normal', fontFamily: "'Fredericka the Great', cursive", textDecorationLine: 'none', textAlign: 'center' }}
+            className="font-bold text-slate-900 mb-2 tracking-tight"
+          >
+            ENG Smart Store App
+          </h1>
+          <p className="text-slate-500 text-sm">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700 relative z-10">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <span className="text-sm font-medium">{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="relative z-10 flex flex-col gap-5">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-slate-700 ml-1">รหัสพนักงาน หรือ ชื่อจริง</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <UserIcon className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                value={loginInput}
+                onChange={(e) => setLoginInput(e.target.value)}
+                className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all text-slate-900 outline-none"
+                placeholder="กรอกรหัสพนักงาน หรือ ชื่อจริง"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-4 w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-70 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              'เข้าสู่ระบบ'
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+

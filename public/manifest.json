@@ -1,0 +1,18 @@
+{
+  "short_name": "ENG Store",
+  "name": "ENG Smart Store App",
+  "description": "ระบบจัดการคลังสินค้าเชื่อมต่อฐานข้อมูล พร้อมระบบจัดการสต็อก",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "portrait"
+}

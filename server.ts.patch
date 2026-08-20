@@ -1,0 +1,15 @@
+--- server.ts
++++ server.ts
+@@ -1,7 +1,11 @@
+ import express from "express";
+ import path from "path";
+ import { createServer as createViteServer } from "vite";
+ import { GoogleGenAI } from "@google/genai";
++import admin from "firebase-admin";
++
++// Initialize Firebase Admin
++admin.initializeApp();
++const db = admin.firestore();
+ 
+ const SPREADSHEET_ID = "1CcVHWwEiFyZHa684ftrevx2aXt-DKn7mMqYp7QsZ2sc";
+ const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv`;
