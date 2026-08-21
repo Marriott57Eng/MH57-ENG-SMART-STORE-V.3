@@ -121,10 +121,13 @@ export function useLiveAudio(
         setIsLiveConnected(true);
         onStatusChange?.(true);
 
-        // Instantly sync real-time inventory snapshot to server session
-        if (Array.isArray(currentItems) && currentItems.length > 0) {
-          ws.send(JSON.stringify({ type: 'sync_inventory', items: currentItems }));
-        }
+        // Instantly send init payload with real-time inventory snapshot to server session
+        ws.send(JSON.stringify({ 
+          type: 'init', 
+          userName, 
+          userRole, 
+          items: Array.isArray(currentItems) ? currentItems : [] 
+        }));
 
         const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
         const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });

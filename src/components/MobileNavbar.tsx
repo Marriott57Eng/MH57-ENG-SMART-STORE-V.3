@@ -63,7 +63,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
       {/* 3. AI Assistant Tab (Center Highlighted Button) */}
       <button
         onClick={() => setActiveTab('voice')}
-        className={`relative -top-2 flex flex-col items-center justify-center transition-transform active:scale-95 px-1 cursor-pointer`}
+        className={`relative -top-4 flex flex-col items-center justify-center transition-transform active:scale-95 px-1 cursor-pointer`}
       >
         {isLiveActive && (
           <span className="absolute -top-1 right-0 flex h-3 w-3 z-20">
@@ -72,7 +72,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
           </span>
         )}
         <div
-          className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${
+          className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
             isLiveActive
               ? 'bg-gradient-to-tr from-red-500 to-purple-600 text-white shadow-red-500/40 ring-4 ring-red-200 dark:ring-red-950 animate-pulse'
               : activeTab === 'voice'
@@ -80,10 +80,10 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
               : 'bg-slate-900 dark:bg-slate-800 text-white shadow-slate-300 dark:shadow-none hover:bg-slate-800 dark:hover:bg-slate-700 border border-transparent dark:border-slate-700'
           }`}
         >
-          <Bot className="w-5 h-5" />
+          <Bot className="w-6 h-6 sm:w-7 sm:h-7" />
         </div>
         <span
-          className={`text-[10px] font-bold mt-0.5 ${
+          className={`text-[11px] sm:text-[12px] font-bold mt-1 ${
             isLiveActive
               ? 'text-red-600 dark:text-red-400 animate-pulse'
               : activeTab === 'voice'

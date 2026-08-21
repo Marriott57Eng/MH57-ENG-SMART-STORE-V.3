@@ -579,14 +579,24 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       return msg;
     }));
 
-    // 3. Play voice and chime: "ยืนยันเรียบร้อยแล้วค่ะ"
-    const textToSpeak = action.action === 'stock_in' 
-      ? 'ยืนยันรับเข้าสินค้าเรียบร้อยแล้วค่ะ'
-      : action.action === 'requisition'
-      ? 'ยืนยันการเบิกสินค้าเรียบร้อยแล้วค่ะ'
-      : 'ยืนยันเรียบร้อยแล้วค่ะ';
-    playSuccessSoundAndSpeak(textToSpeak);
-  }, [onExecuteDbAction, setChatHistory]);
+    // 3. Audio / Speech Feedback
+    if (isLiveConnected) {
+      // If active in Live Speech session, let Live Speech AI speak instead of browser TTS
+      const actionName = action.action === 'stock_in' ? 'รับเข้าสินค้า' : 'เบิกสินค้า';
+      const itemName = action.item?.name || action.record?.itemName || 'สินค้า';
+      const itemQty = action.record?.qty || 1;
+      const itemUnit = action.item?.unit || action.record?.unit || 'หน่วย';
+      sendMessage(`ผู้ใช้กดยืนยันการทำรายการ${actionName} ${itemName} จำนวน ${itemQty} ${itemUnit} เรียบร้อยแล้ว กรุณาแจ้งยืนยันด้วยเสียงสั้นๆ`);
+    } else {
+      // For typed / text chat requisition, speak using browser Thai SpeechSynthesis
+      const textToSpeak = action.action === 'stock_in' 
+        ? 'ยืนยันรับเข้าสินค้าเรียบร้อยแล้วค่ะ'
+        : action.action === 'requisition'
+        ? 'ยืนยันการเบิกสินค้าเรียบร้อยแล้วค่ะ'
+        : 'ยืนยันเรียบร้อยแล้วค่ะ';
+      playSuccessSoundAndSpeak(textToSpeak);
+    }
+  }, [onExecuteDbAction, setChatHistory, isLiveConnected, sendMessage]);
 
   // Handle user cancelling a DB action
   const handleCancelDbAction = useCallback((messageId: string) => {
@@ -601,8 +611,14 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       return msg;
     }));
 
-    playSuccessSoundAndSpeak('ยกเลิกรายการแล้วค่ะ');
-  }, [setChatHistory]);
+    if (isLiveConnected) {
+      // If active in Live Speech, inform Live Speech AI to respond
+      sendMessage('ผู้ใช้กดยกเลิกรายการแล้ว กรุณาแจ้งรับทราบการยกเลิกด้วยเสียงสั้นๆ');
+    } else {
+      // For typed chat, play TTS sound
+      playSuccessSoundAndSpeak('ยกเลิกรายการแล้วค่ะ');
+    }
+  }, [setChatHistory, isLiveConnected, sendMessage]);
 
   return (
     <div className="flex flex-col h-full max-h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
@@ -934,8 +950,6 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                   </div>
                 </div>
               ))}
-
-
             </div>
           </div>
         ))}
@@ -982,16 +996,16 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               type="button"
               onClick={() => isLiveConnected ? stopLive() : startLive(currentUser?.name, currentUser?.role, items)}
               disabled={isProcessing}
-              className={`relative z-10 w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer ${
+              className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer ${
                 isLiveConnected
-                  ? 'bg-red-500 text-white ring-4 ring-red-100 dark:ring-red-950 shadow-red-500/40 animate-pulse'
-                  : 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-purple-500/30 hover:scale-105'
+                  ? 'bg-red-500 text-white ring-4 ring-red-100 dark:ring-red-950 shadow-red-500/50 animate-pulse'
+                  : 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-purple-500/40 hover:scale-105'
               }`}
             >
               {isLiveConnected ? (
-                <Radio className="w-5 h-5 sm:w-6 sm:h-6" />
+                <Radio className="w-6 h-6 sm:w-8 sm:h-8" />
               ) : (
-                <Headset className="w-5 h-5 sm:w-6 sm:h-6" />
+                <Headset className="w-6 h-6 sm:w-8 sm:h-8" />
               )}
             </button>
           </div>

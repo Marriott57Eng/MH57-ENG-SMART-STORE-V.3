@@ -88,49 +88,61 @@ let cacheTimestamp = 0;
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
 
-async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
+async function fetchInventoryFromFirestore(): Promise<Item[]> {
   const items: Item[] = [];
+  if (!firebaseConfig.projectId) return items;
 
-  if (firebaseConfig.projectId) {
-    try {
-      const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-      const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/inventory`;
+  try {
+    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    let pageToken = "";
+    do {
+      const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+      const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/inventory?pageSize=300${pageParam}`;
       const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.documents && data.documents.length > 0) {
-          for (const doc of data.documents) {
-            const fields = doc.fields || {};
-            const qty = fields.qty?.integerValue ? parseInt(fields.qty.integerValue) : (fields.qty?.doubleValue ? parseFloat(fields.qty.doubleValue) : 0);
-            const minStock = fields.minStock?.integerValue ? parseInt(fields.minStock.integerValue) : (fields.minStock?.doubleValue ? parseFloat(fields.minStock.doubleValue) : 1);
-            let status: 'normal' | 'low' | 'out' = 'normal';
-            if (qty <= 0) status = 'out';
-            else if (qty <= minStock) status = 'low';
+      if (!res.ok) break;
+      const data = await res.json();
+      if (data.documents && data.documents.length > 0) {
+        for (const doc of data.documents) {
+          const fields = doc.fields || {};
+          const qty = Number(fields.qty?.integerValue ?? fields.qty?.doubleValue ?? fields.qty?.stringValue ?? 0);
+          const minStock = Number(fields.minStock?.integerValue ?? fields.minStock?.doubleValue ?? fields.minStock?.stringValue ?? 1);
+          let status: 'normal' | 'low' | 'out' = 'normal';
+          if (qty <= 0) status = 'out';
+          else if (qty <= minStock) status = 'low';
 
-            items.push({
-              id: fields.id?.stringValue || '',
-              name: fields.name?.stringValue || '',
-              category: fields.category?.stringValue || 'ทั่วไป',
-              unit: fields.unit?.stringValue || 'ชิ้น',
-              qty,
-              minStock,
-              location: fields.location?.stringValue || 'Store FL.6',
-              note: fields.note?.stringValue || '',
-              ordered: fields.ordered?.stringValue || '',
-              orderedDate: fields.orderedDate?.stringValue || '',
-              outOfStockDate: fields.outOfStockDate?.stringValue || '',
-              status
-            });
-          }
-          return items;
+          items.push({
+            id: fields.id?.stringValue || '',
+            name: fields.name?.stringValue || '',
+            category: fields.category?.stringValue || 'ทั่วไป',
+            unit: fields.unit?.stringValue || 'ชิ้น',
+            qty,
+            minStock,
+            location: fields.location?.stringValue || 'Store FL.6',
+            note: fields.note?.stringValue || '',
+            ordered: fields.ordered?.stringValue || '',
+            orderedDate: fields.orderedDate?.stringValue || '',
+            outOfStockDate: fields.outOfStockDate?.stringValue || '',
+            status
+          });
         }
       }
-    } catch (err) {
-      console.warn("Failed to fetch inventory from Firestore:", err);
-    }
+      pageToken = data.nextPageToken || "";
+    } while (pageToken);
+
+    return items;
+  } catch (err) {
+    console.warn("Failed to fetch inventory from Firestore:", err);
+    return [];
+  }
+}
+
+async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
+  const firestoreItems = await fetchInventoryFromFirestore();
+  if (firestoreItems.length > 0) {
+    return firestoreItems;
   }
 
-  // Fallback to CSV if Firestore is empty or force is true
+  // Fallback to CSV if Firestore is empty
   try {
     const res = await fetch(SHEET_CSV_URL, {
       headers: { 'User-Agent': 'Warehouse-Manager/1.0' },
@@ -821,350 +833,377 @@ ${!isAdminUser ? `
   const wss = new WebSocketServer({ server, path: '/live' });
 
   wss.on("connection", async (clientWs, req) => {
-    try {
-      const url = new URL(req.url || '', `http://${req.headers.host}`);
-      const userName = url.searchParams.get('userName') || 'ผู้ใช้งาน';
-      const userRole = url.searchParams.get('userRole') || 'user';
+    let sessionPromise: Promise<any> | null = null;
+    let sessionActiveItems: Item[] = [];
+    let isInitialized = false;
 
-      let sessionActiveItems: Item[] = await fetchInventoryFromSheet(true);
-      
-      const outOfStockItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0);
-      const lowStockItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1));
-      const normalStockItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) > (Number(i.minStock) || 1));
-      const totalUnits = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    const setupLiveSession = async (userName: string, userRole: string, initialItems: Item[]) => {
+      if (isInitialized) return;
+      isInitialized = true;
 
-      const outOfStockListText = outOfStockItems.length > 0
-        ? outOfStockItems.map(i => `${i.name} (${i.id})`).join(', ')
-        : 'ไม่มีสินค้าหมดสต็อก';
+      try {
+        if (Array.isArray(initialItems) && initialItems.length > 0) {
+          sessionActiveItems = initialItems;
+        } else {
+          sessionActiveItems = await fetchInventoryFromSheet(true);
+        }
 
-      const lowStockListText = lowStockItems.length > 0
-        ? lowStockItems.map(i => `${i.name} (เหลือ ${i.qty} ${i.unit})`).join(', ')
-        : 'ไม่มีสินค้าใกล้หมด';
+        const outOfStockItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+        const lowStockItems = sessionActiveItems.filter(i => 
+          ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || 
+          (i.status === 'low' && (Number(i.qty) || 0) > 0)
+        );
+        const normalStockItems = sessionActiveItems.filter(i => 
+          (Number(i.qty) || 0) > (Number(i.minStock) || 1) && i.status !== 'out' && i.status !== 'low'
+        );
+        const totalUnits = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
 
-      const inventoryContext = sessionActiveItems.map((i: any) => `- ${i.name} (${i.id}): ${i.qty} ${i.unit} [${i.status}] (ที่เก็บ: ${i.location})`).join('\n');
+        const adminInstruction = userRole === 'admin' 
+          ? "อนุญาตให้ใช้เครื่องมือปรับสต็อกได้" 
+          : "ผู้ใช้ท่านนี้ไม่มีสิทธิ์แก้ไขสต็อก(update_stock) หรือแก้ไขชื่อสินค้า หากผู้ใช้สั่งแก้ไขให้ตอบปฏิเสธอย่างสุภาพ อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) เท่านั้น";
 
-      const adminInstruction = userRole === 'admin' 
-        ? "อนุญาตให้ใช้เครื่องมือปรับสต็อกได้" 
-        : "ผู้ใช้ท่านนี้ไม่มีสิทธิ์แก้ไขสต็อก(update_stock) หรือแก้ไขชื่อสินค้า หากผู้ใช้สั่งแก้ไขให้ตอบปฏิเสธอย่างสุภาพ อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) เท่านั้น";
-
-      const config = {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
-        },
-        systemInstruction: `คุณคือผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของ ENG Smart Store ในโหมดสนทนาด้วยเสียงสด (Live Speech)
+        const config = {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
+          },
+          systemInstruction: `คุณคือผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของ ENG Smart Store ในโหมดสนทนาด้วยเสียงสด (Live Speech)
 ให้ตอบสนองด้วยเสียงภาษาไทยอย่างเป็นธรรมชาติ สุภาพ ชัดเจน สั้นกระชับ และเป็นกันเอง
 ผู้ใช้งานที่คุณกำลังคุยด้วยชื่อ: ${userName} (สิทธิ์: ${userRole})
 ${adminInstruction}
 
-📊 ข้อมูลสถานะคลังสินค้าปัจจุบันแบบเรียลไทม์ (Live Database Snapshot):
-- สินค้าทั้งหมด: ${sessionActiveItems.length} รายการ (รวม ${totalUnits} หน่วย)
-- สินค้าหมดสต็อก (Out of Stock / 0 หน่วย): มี ${outOfStockItems.length} รายการ ได้แก่ -> ${outOfStockListText}
-- สินค้าใกล้หมด (Low Stock): มี ${lowStockItems.length} รายการ ได้แก่ -> ${lowStockListText}
-- สินค้าปกติ: ${normalStockItems.length} รายการ
+🚨 กฎเหล็กสำคัญสูงสุด (ห้ามตอบผิดเด็ดขาด):
+1. คุณไม่มีข้อมูลรายการสต็อกในสมองของคุณ คุณต้องใช้เครื่องมือ (Tools) ในการค้นหาข้อมูลเสมอ!
+2. เมื่อผู้ใช้ถามว่า "มีของขาดสต็อกไหม", "มีอะไรหมดบ้าง", "เช็คของขาดสต็อก" ให้เรียกใช้ฟังก์ชัน \`get_out_of_stock_items\` ทันที ⛔ ห้ามตอบว่า "ไม่มี" ก่อนเรียกใช้ Tool เด็ดขาด
+3. เมื่อผู้ใช้ถามว่า "มีของใกล้หมดไหม", "อะไรเหลือน้อยบ้าง" ให้เรียกใช้ฟังก์ชัน \`get_low_stock_items\` ทันที
+4. เมื่อผู้ใช้ถามถึงข้อมูลภาพรวมคลังสินค้า ให้เรียกใช้ \`get_stock_summary\`
+5. เมื่อผู้ใช้ถามถึงสินค้าเฉพาะเจาะจง (เช่น "มีถุงมือไหม", "เช็คหลอดไฟ") ให้เรียกใช้ \`check_stock\` โดยใส่คำค้นหา
+6. เมื่อผู้ใช้สั่งเบิก หรือรับเข้าสินค้า ให้เรียกใช้ฟังก์ชัน \`prepare_stock_action\` ทันทีเพื่อส่งรายการไปให้ผู้ใช้กดยืนยันที่หน้าจอ
+7. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน \`export_report\`
+8. หากมีข้อความแจ้งว่าผู้ใช้กดยืนยันรายการ ให้ตอบกลับด้วยเสียงสั้นๆ ว่า "บันทึกรายการลงระบบให้เรียบร้อยแล้วค่ะ" หรือหากยกเลิกให้บอกว่า "ยกเลิกรายการให้แล้วค่ะ"`,
+          tools: [{
+            functionDeclarations: [
+              {
+                name: "get_stock_summary",
+                description: "เรียกใช้นี้เพื่อดูข้อมูลสรุปภาพรวมของคลังสินค้าแบบเรียลไทม์ เช่น จำนวนรายการทั้งหมด, จำนวนหน่วยสต็อกรวม, จำนวนสินค้าหมดสต็อก, จำนวนสินค้าใกล้หมด",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {}
+                }
+              },
+              {
+                name: "get_out_of_stock_items",
+                description: "เรียกใช้นี้เมื่อผู้ใช้ถามว่า มีสินค้าอะไรหมดบ้าง หรือมีของขาดสต็อกกี่ชิ้น ตัวไหนบ้าง ระบบจะดึงรายชื่อสินค้าที่จำนวนเป็น 0 จากฐานข้อมูลทันที",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {}
+                }
+              },
+              {
+                name: "get_low_stock_items",
+                description: "เรียกใช้นี้เมื่อผู้ใช้ถามว่า มีสินค้าอะไรใกล้หมดบ้าง หรือต่ำกว่าเกณฑ์ความปลอดภัย ระบบจะดึงรายชื่อสินค้าใกล้หมดจากฐานข้อมูลทันที",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {}
+                }
+              },
+              {
+                name: "check_stock",
+                description: "ตรวจสอบสต็อกสินค้าปัจจุบันจากฐานข้อมูลแบบเรียลไทม์ทันทีตามคำค้นหา",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {
+                    searchTerm: { type: Type.STRING, description: "คำค้นหา เช่น ชื่อสินค้า หรือรหัสสินค้า หรือหมวดหมู่" }
+                  },
+                  required: ["searchTerm"]
+                }
+              },
+              {
+                name: "prepare_stock_action",
+                description: "เรียกใช้นี้เมื่อผู้ใช้ต้องการ เบิก (stock_out) หรือ รับเข้า (stock_in) สินค้า ระบบจะส่งการ์ดยืนยันไปยังหน้าจอของผู้ใช้ทันที",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {
+                    action: { type: Type.STRING, description: "ประเภทรายการ 'stock_in' หรือ 'stock_out'" },
+                    itemId: { type: Type.STRING, description: "รหัสสินค้า ID (เช่น ITEM-001)" },
+                    quantity: { type: Type.NUMBER, description: "จำนวนสินค้า" },
+                    purpose: { type: Type.STRING, description: "งานหรือสถานที่นำไปใช้ หรือแหล่งรับเข้า" },
+                    note: { type: Type.STRING, description: "หมายเหตุ หรือ ชื่อผู้ที่เบิก/รับเข้า" }
+                  },
+                  required: ["action", "itemId", "quantity"]
+                }
+              },
+              {
+                name: "export_report",
+                description: "เรียกใช้นี้เมื่อผู้ใช้ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF หรือ Excel เช่น สต็อกทั้งหมด, สินค้าใกล้หมด, ประวัติการเบิกรับเข้า, หรือรายงานแยกตามหมวดหมู่",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {
+                    format: { type: Type.STRING, description: "รูปแบบไฟล์ 'pdf' หรือ 'excel'" },
+                    reportType: { type: Type.STRING, description: "ประเภทรายงาน: 'inventory_all' (สต็อกทั้งหมด), 'low_stock' (สินค้าใกล้หมด/หมดสต็อก), 'requisition_history' (ประวัติการเบิก/รับเข้า), 'category' (แยกตามหมวดหมู่)" },
+                    title: { type: Type.STRING, description: "ชื่อหัวข้อรายงานภาษาไทย" },
+                    categoryFilter: { type: Type.STRING, description: "ชื่อหมวดหมู่ที่ต้องการกรอง (ถ้ามี เช่น 'ไฟฟ้า', 'ประปา')" }
+                  },
+                  required: ["format", "reportType"]
+                }
+              },
+              {
+                name: "inquire_item_info",
+                description: "เรียกใช้นี้เมื่อผู้ใช้ถามหาข้อมูลสินค้า สต็อก ตำแหน่งที่เก็บ หรือต้องการให้แสดงข้อมูลอะไหล่บนหน้าจอ",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {
+                    searchTerm: { type: Type.STRING, description: "คำค้นหา หรือชื่อสินค้า หรือรหัสสินค้า" },
+                    summary: { type: Type.STRING, description: "ข้อความสรุปข้อมูลเพื่อแสดงบนหน้าจอ" }
+                  },
+                  required: ["searchTerm"]
+                }
+              }
+            ]
+          }]
+        };
 
-⚠️ กฎเหล็กสำคัญ:
-1. เมื่อผู้ใช้ถามถึงจำนวนของหมดสต็อก, รายการของหมดสต็อก, ของใกล้หมด หรือภาพรวมคลังสินค้า ให้ใช้ข้อมูลสถิติด้านบนตอบอย่างแม่นยำ หรือเรียกใช้ Tool get_stock_summary / get_out_of_stock_items / get_low_stock_items ทันที ห้ามคาดเดาหรือตอบตัวเลขที่ไม่ตรงกับฐานข้อมูล
-2. เมื่อผู้ใช้สั่งเบิก หรือรับเข้าสินค้า ให้เรียกใช้ฟังก์ชัน prepare_stock_action ทันทีเพื่อส่งรายการไปให้ผู้ใช้กดยืนยันที่หน้าจอ
-3. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน export_report
-4. เมื่อผู้ใช้ถามข้อมูลสินค้า ตำแหน่งที่เก็บ หรือต้องการดูข้อมูล ให้เรียกใช้ฟังก์ชัน inquire_item_info
-5. หากมีข้อความแจ้งว่าผู้ใช้ยืนยันรายการเรียบร้อย ให้ตอบกลับด้วยเสียงว่า "ทำรายการและบันทึกลงระบบให้เรียบร้อยแล้วค่ะ"
-
-รายการสต็อกในคลังทั้งหมด:
-${inventoryContext}`,
-        tools: [{
-          functionDeclarations: [
-            {
-              name: "get_stock_summary",
-              description: "เรียกใช้นี้เพื่อดูข้อมูลสรุปภาพรวมของคลังสินค้าแบบเรียลไทม์ เช่น จำนวนรายการทั้งหมด, จำนวนหน่วยสต็อกรวม, จำนวนสินค้าหมดสต็อก, จำนวนสินค้าใกล้หมด",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {}
-              }
-            },
-            {
-              name: "get_out_of_stock_items",
-              description: "เรียกใช้นี้เมื่อผู้ใช้ถามว่า มีสินค้าอะไรหมดบ้าง หรือมีของหมดสต็อกกี่ชิ้น ตัวไหนบ้าง ระบบจะดึงรายชื่อสินค้าที่จำนวนเป็น 0 จากฐานข้อมูลทันที",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {}
-              }
-            },
-            {
-              name: "get_low_stock_items",
-              description: "เรียกใช้นี้เมื่อผู้ใช้ถามว่า มีสินค้าอะไรใกล้หมดบ้าง หรือต่ำกว่าเกณฑ์ความปลอดภัย ระบบจะดึงรายชื่อสินค้าใกล้หมดจากฐานข้อมูลทันที",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {}
-              }
-            },
-            {
-              name: "check_stock",
-              description: "ตรวจสอบสต็อกสินค้าปัจจุบันจากฐานข้อมูลแบบเรียลไทม์ทันทีตามคำค้นหา",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {
-                  searchTerm: { type: Type.STRING, description: "คำค้นหา เช่น ชื่อสินค้า หรือรหัสสินค้า หรือหมวดหมู่" }
-                },
-                required: ["searchTerm"]
-              }
-            },
-            {
-              name: "prepare_stock_action",
-              description: "เรียกใช้นี้เมื่อผู้ใช้ต้องการ เบิก (stock_out) หรือ รับเข้า (stock_in) สินค้า ระบบจะส่งการ์ดยืนยันไปยังหน้าจอของผู้ใช้ทันที",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {
-                  action: { type: Type.STRING, description: "ประเภทรายการ 'stock_in' หรือ 'stock_out'" },
-                  itemId: { type: Type.STRING, description: "รหัสสินค้า ID (เช่น ITEM-001)" },
-                  quantity: { type: Type.NUMBER, description: "จำนวนสินค้า" },
-                  purpose: { type: Type.STRING, description: "งานหรือสถานที่นำไปใช้ หรือแหล่งรับเข้า" },
-                  note: { type: Type.STRING, description: "หมายเหตุ หรือ ชื่อผู้ที่เบิก/รับเข้า" }
-                },
-                required: ["action", "itemId", "quantity"]
-              }
-            },
-            {
-              name: "export_report",
-              description: "เรียกใช้นี้เมื่อผู้ใช้ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF หรือ Excel เช่น สต็อกทั้งหมด, สินค้าใกล้หมด, ประวัติการเบิกรับเข้า, หรือรายงานแยกตามหมวดหมู่",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {
-                  format: { type: Type.STRING, description: "รูปแบบไฟล์ 'pdf' หรือ 'excel'" },
-                  reportType: { type: Type.STRING, description: "ประเภทรายงาน: 'inventory_all' (สต็อกทั้งหมด), 'low_stock' (สินค้าใกล้หมด/หมดสต็อก), 'requisition_history' (ประวัติการเบิก/รับเข้า), 'category' (แยกตามหมวดหมู่)" },
-                  title: { type: Type.STRING, description: "ชื่อหัวข้อรายงานภาษาไทย" },
-                  categoryFilter: { type: Type.STRING, description: "ชื่อหมวดหมู่ที่ต้องการกรอง (ถ้ามี เช่น 'ไฟฟ้า', 'ประปา')" }
-                },
-                required: ["format", "reportType"]
-              }
-            },
-            {
-              name: "inquire_item_info",
-              description: "เรียกใช้นี้เมื่อผู้ใช้ถามหาข้อมูลสินค้า สต็อก ตำแหน่งที่เก็บ หรือต้องการให้แสดงข้อมูลอะไหล่บนหน้าจอ",
-              parameters: {
-                type: Type.OBJECT,
-                properties: {
-                  searchTerm: { type: Type.STRING, description: "คำค้นหา หรือชื่อสินค้า หรือรหัสสินค้า" },
-                  summary: { type: Type.STRING, description: "ข้อความสรุปข้อมูลเพื่อแสดงบนหน้าจอ" }
-                },
-                required: ["searchTerm"]
-              }
+        const callbacks = {
+          onmessage: (message: LiveServerMessage) => {
+            const parts = message.serverContent?.modelTurn?.parts || [];
+            let textTranscript = "";
+            let audioData = "";
+            for (const part of parts) {
+              if (part.text) textTranscript += part.text;
+              if (part.inlineData?.data) audioData = part.inlineData.data;
             }
-          ]
-        }]
-      };
 
-      const callbacks = {
-        onmessage: (message: LiveServerMessage) => {
-          const parts = message.serverContent?.modelTurn?.parts || [];
-          let textTranscript = "";
-          let audioData = "";
-          for (const part of parts) {
-            if (part.text) textTranscript += part.text;
-            if (part.inlineData?.data) audioData = part.inlineData.data;
-          }
+            if (textTranscript) {
+              clientWs.send(JSON.stringify({ text: textTranscript, transcript: true }));
+            }
 
-          if (textTranscript) {
-            clientWs.send(JSON.stringify({ text: textTranscript, transcript: true }));
-          }
+            if (audioData) {
+              clientWs.send(JSON.stringify({ audio: audioData }));
+            }
 
-          if (audioData) {
-            clientWs.send(JSON.stringify({ audio: audioData }));
-          }
+            if (message.serverContent?.turnComplete) {
+              clientWs.send(JSON.stringify({ turnComplete: true }));
+            }
 
-          if (message.serverContent?.turnComplete) {
-            clientWs.send(JSON.stringify({ turnComplete: true }));
-          }
+            if (message.serverContent?.interrupted) {
+              clientWs.send(JSON.stringify({ interrupted: true }));
+            }
 
-          if (message.serverContent?.interrupted) {
-            clientWs.send(JSON.stringify({ interrupted: true }));
-          }
+            if (message.toolCall) {
+              const calls = message.toolCall.functionCalls || [];
+              for (const fc of calls) {
+                if (fc) {
+                  clientWs.send(JSON.stringify({
+                    toolCall: { name: fc.name, args: fc.args, id: fc.id }
+                  }));
 
-          if (message.toolCall) {
-            const calls = message.toolCall.functionCalls || [];
-            for (const fc of calls) {
-              if (fc) {
-                clientWs.send(JSON.stringify({
-                  toolCall: { name: fc.name, args: fc.args, id: fc.id }
-                }));
-
-                let toolResult = "ดำเนินการเรียบร้อยแล้ว";
-                
-                if (fc.name === "get_stock_summary") {
-                  const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0);
-                  const lowItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1));
-                  const units = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+                  let toolResult = "ดำเนินการเรียบร้อยแล้ว";
                   
-                  toolResult = `ข้อมูลสรุปคลังสินค้า Store FL.6 ปัจจุบัน:\n- สินค้าทั้งหมด: ${sessionActiveItems.length} รายการ (รวม ${units} หน่วย)\n- สินค้าหมดสต็อก: ${outItems.length} รายการ ${outItems.length > 0 ? `(${outItems.map(i => i.name).join(', ')})` : ''}\n- สินค้าใกล้หมด: ${lowItems.length} รายการ ${lowItems.length > 0 ? `(${lowItems.map(i => `${i.name} เหลือ ${i.qty} ${i.unit}`).join(', ')})` : ''}\n- สินค้าปกติ: ${sessionActiveItems.length - outItems.length - lowItems.length} รายการ`;
+                  if (fc.name === "get_stock_summary") {
+                    const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+                    const lowItems = sessionActiveItems.filter(i => ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || (i.status === 'low' && (Number(i.qty) || 0) > 0));
+                    const units = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+                    
+                    toolResult = `ข้อมูลสรุปคลังสินค้า Store FL.6 ปัจจุบัน:\n- สินค้าทั้งหมด: ${sessionActiveItems.length} รายการ (รวม ${units} หน่วย)\n- สินค้าหมดสต็อก/ขาดสต็อก: ${outItems.length} รายการ ${outItems.length > 0 ? `(${outItems.map(i => `${i.name} [รหัส: ${i.id}]`).join(', ')})` : '(ไม่มี)'}\n- สินค้าใกล้หมด: ${lowItems.length} รายการ ${lowItems.length > 0 ? `(${lowItems.map(i => `${i.name} เหลือ ${i.qty} ${i.unit}`).join(', ')})` : '(ไม่มี)'}\n- สินค้าปกติ: ${sessionActiveItems.length - outItems.length - lowItems.length} รายการ`;
 
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
-                      });
-                    } catch (e) {
-                      console.error("Tool response error", e);
-                    }
-                  });
-                } else if (fc.name === "get_out_of_stock_items") {
-                  const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0);
-                  toolResult = outItems.length > 0
-                    ? `มีสินค้าหมดสต็อกทั้งหมด ${outItems.length} รายการ ได้แก่:\n` + outItems.map(i => `- ${i.name} (รหัส: ${i.id}, ที่เก็บ: ${i.location})`).join('\n')
-                    : "ยอดเยี่ยมมากค่ะ ขณะนี้ไม่มีสินค้าหมดสต็อกในคลัง ทุกรายการมีสต็อกพร้อมใช้งาน";
+                    sessionPromise?.then(session => {
+                      try {
+                        session.sendToolResponse({
+                          functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    });
+                  } else if (fc.name === "get_out_of_stock_items") {
+                    const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+                    toolResult = outItems.length > 0
+                      ? `ขณะนี้มีสินค้าหมดสต็อก/ขาดสต็อกทั้งหมด ${outItems.length} รายการ ได้แก่:\n` + outItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}, ตำแหน่งที่เก็บ: ${i.location})`).join('\n')
+                      : "ยอดเยี่ยมมากค่ะ ขณะนี้ไม่มีสินค้าหมดสต็อกในคลัง ทุกรายการมีสต็อกพร้อมใช้งาน";
 
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
-                      });
-                    } catch (e) {
-                      console.error("Tool response error", e);
-                    }
-                  });
-                } else if (fc.name === "get_low_stock_items") {
-                  const lowItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1));
-                  toolResult = lowItems.length > 0
-                    ? `มีสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ ได้แก่:\n` + lowItems.map(i => `- ${i.name} (รหัส: ${i.id}) เหลือเพียง ${i.qty} ${i.unit} (จุดสั่งซื้อขั้นต่ำ: ${i.minStock})`).join('\n')
-                    : "ไม่มีสินค้าใกล้หมดสต็อก สินค้าส่วนใหญ่มีปริมาณเกินเกณฑ์ขั้นต่ำ";
+                    sessionPromise?.then(session => {
+                      try {
+                        session.sendToolResponse({
+                          functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    });
+                  } else if (fc.name === "get_low_stock_items") {
+                    const lowItems = sessionActiveItems.filter(i => ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || (i.status === 'low' && (Number(i.qty) || 0) > 0));
+                    toolResult = lowItems.length > 0
+                      ? `มีสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ ได้แก่:\n` + lowItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}) เหลือเพียง ${i.qty} ${i.unit} (จุดสั่งซื้อขั้นต่ำ: ${i.minStock})`).join('\n')
+                      : "ไม่มีสินค้าใกล้หมดสต็อก สินค้าส่วนใหญ่มีปริมาณเกินเกณฑ์ขั้นต่ำ";
 
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                    sessionPromise?.then(session => {
+                      try {
+                        session.sendToolResponse({
+                          functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    });
+                  } else if (fc.name === "prepare_stock_action") {
+                    toolResult = "ส่งการ์ดยืนยันรายการไปยังหน้าจอของผู้ใช้เรียบร้อยแล้ว แจ้งให้ผู้ใช้ตรวจสอบและกดยืนยัน";
+                    sessionPromise?.then(session => {
+                      try {
+                        session.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    });
+                  } else if (fc.name === "export_report") {
+                    const fmt = (fc.args?.format as string)?.toUpperCase() || "PDF";
+                    toolResult = `สร้างและดาวน์โหลดรายงาน ${fmt} ให้ผู้ใช้เรียบร้อยแล้ว พร้อมแสดงการ์ดดาวน์โหลดบนหน้าจอ`;
+                    sessionPromise?.then(session => {
+                      try {
+                        session.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    });
+                  } else if (fc.name === "inquire_item_info" || fc.name === "check_stock") {
+                    const searchTerm = (fc.args?.searchTerm as string || "").toLowerCase().trim();
+                    let matchingItems = sessionActiveItems;
+                    if (searchTerm) {
+                      const tokens = searchTerm.split(/\s+/).filter(t => t.length > 0);
+                      matchingItems = sessionActiveItems.filter(i => {
+                        const n = i.name.toLowerCase();
+                        const id = i.id.toLowerCase();
+                        const c = i.category.toLowerCase();
+                        return tokens.every(t => n.includes(t) || id.includes(t) || c.includes(t));
                       });
-                    } catch (e) {
-                      console.error("Tool response error", e);
                     }
-                  });
-                } else if (fc.name === "prepare_stock_action") {
-                  toolResult = "ส่งการ์ดยืนยันรายการไปยังหน้าจอของผู้ใช้เรียบร้อยแล้ว แจ้งให้ผู้ใช้ตรวจสอบและกดยืนยัน";
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{
-                          id: fc.id,
-                          name: fc.name,
-                          response: { result: toolResult }
-                        }]
-                      });
-                    } catch (e) {
-                      console.error("Tool response error", e);
+                    
+                    let resultText = "";
+                    if (matchingItems.length > 0) {
+                      resultText = `พบข้อมูลสินค้า ${matchingItems.length} รายการ:\n` + matchingItems.slice(0, 5).map(i => 
+                        `- ${i.name} (รหัส: ${i.id})\n  สต็อกปัจจุบัน: ${i.qty} ${i.unit}\n  สถานะ: ${i.status}\n  ที่เก็บ: ${i.location}`
+                      ).join('\n\n');
+                      if (fc.name === "inquire_item_info") {
+                         resultText += "\n\n(และได้ส่งการ์ดข้อมูลสินค้าขึ้นหน้าจอให้ผู้ใช้แล้ว)";
+                      }
+                    } else {
+                      resultText = `ไม่พบสินค้าที่ตรงกับคำค้นหา "${searchTerm}" ในฐานข้อมูลเลย`;
                     }
-                  });
-                } else if (fc.name === "export_report") {
-                  const fmt = (fc.args?.format as string)?.toUpperCase() || "PDF";
-                  toolResult = `สร้างและดาวน์โหลดรายงาน ${fmt} ให้ผู้ใช้เรียบร้อยแล้ว พร้อมแสดงการ์ดดาวน์โหลดบนหน้าจอ`;
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{
-                          id: fc.id,
-                          name: fc.name,
-                          response: { result: toolResult }
-                        }]
-                      });
-                    } catch (e) {
-                      console.error("Tool response error", e);
-                    }
-                  });
-                } else if (fc.name === "inquire_item_info") {
-                  toolResult = "แสดงการ์ดข้อมูลสินค้าและสต็อกคงเหลือบนหน้าจอแชทเรียบร้อยแล้ว";
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{
-                          id: fc.id,
-                          name: fc.name,
-                          response: { result: toolResult }
-                        }]
-                      });
-                    } catch (e) {
-                      console.error("Tool response error", e);
-                    }
-                  });
-                } else if (fc.name === "check_stock") {
-                  const searchTerm = fc.args?.searchTerm as string || "";
-                  let matchingItems = sessionActiveItems;
-                  if (searchTerm) {
-                    const lowerSearch = searchTerm.toLowerCase();
-                    matchingItems = sessionActiveItems.filter(i => 
-                      i.name.toLowerCase().includes(lowerSearch) || 
-                      i.id.toLowerCase().includes(lowerSearch) ||
-                      i.category.toLowerCase().includes(lowerSearch)
-                    );
+                    
+                    toolResult = resultText;
+                    
+                    sessionPromise?.then(session => {
+                      try {
+                        session.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    });
                   }
-                  const resultText = matchingItems.length > 0
-                    ? `พบสินค้า ${matchingItems.length} รายการ:\n` + matchingItems.slice(0, 5).map(i => `- ${i.name} (${i.id}) มีสต็อก ${i.qty} ${i.unit} [สถานะ: ${i.status}] (ตำแหน่ง: ${i.location})`).join('\n')
-                    : `ไม่พบสินค้าที่ตรงกับคำค้นหา "${searchTerm}"`;
-                  
-                  sessionPromise.then(session => {
-                    try {
-                      session.sendToolResponse({
-                        functionResponses: [{
-                          id: fc.id,
-                          name: fc.name,
-                          response: { result: resultText }
-                        }]
-                      });
-                    } catch (e) {
-                      console.error("Tool response error", e);
-                    }
-                  });
                 }
               }
             }
-          }
-        },
-      };
+          },
+        };
 
-      let sessionPromise;
-      try {
-        sessionPromise = ai.live.connect({
-          model: "gemini-3.1-flash-live-preview",
-          config,
-          callbacks,
-        });
-        await sessionPromise; // Wait to see if connection succeeds
-      } catch (err) {
-        console.warn("Primary Live model failed, falling back to gemini-2.5-flash:", err);
-        sessionPromise = ai.live.connect({
-          model: "gemini-2.5-flash",
-          config,
-          callbacks,
-        });
-        await sessionPromise;
-      }
-
-      clientWs.on("message", async (data) => {
         try {
-          const parsed = JSON.parse(data.toString());
+          sessionPromise = ai.live.connect({
+            model: "gemini-3.1-flash-live-preview",
+            config,
+            callbacks,
+          });
+          await sessionPromise;
+        } catch (err) {
+          console.warn("Primary Live model failed, falling back to gemini-2.5-flash:", err);
+          sessionPromise = ai.live.connect({
+            model: "gemini-2.5-flash",
+            config,
+            callbacks,
+          });
+          await sessionPromise;
+        }
+      } catch (err) {
+        console.error("Live API setup failed:", err);
+        clientWs.close();
+      }
+    };
+
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const defaultUserName = url.searchParams.get('userName') || 'ผู้ใช้งาน';
+    const defaultUserRole = url.searchParams.get('userRole') || 'user';
+
+    // Auto-initialize after 200ms if client hasn't sent 'init' message yet
+    const fallbackTimer = setTimeout(() => {
+      if (!isInitialized) {
+        setupLiveSession(defaultUserName, defaultUserRole, []);
+      }
+    }, 200);
+
+    clientWs.on("message", async (data) => {
+      try {
+        const parsed = JSON.parse(data.toString());
+
+        if (parsed.type === "init") {
+          clearTimeout(fallbackTimer);
+          await setupLiveSession(
+            parsed.userName || defaultUserName,
+            parsed.userRole || defaultUserRole,
+            parsed.items || []
+          );
+          return;
+        }
+
+        if (parsed.type === "sync_inventory" && Array.isArray(parsed.items)) {
+          sessionActiveItems = parsed.items;
+          return;
+        }
+
+        if (!isInitialized) {
+          clearTimeout(fallbackTimer);
+          await setupLiveSession(defaultUserName, defaultUserRole, []);
+        }
+
+        if (sessionPromise) {
           const session = await sessionPromise;
-          
-          if (parsed.type === "sync_inventory" && Array.isArray(parsed.items)) {
-            // Update session live inventory cache immediately
-            sessionActiveItems = parsed.items;
-          } else if (parsed.audio) {
+          if (parsed.audio) {
             session.sendRealtimeInput({
               audio: { data: parsed.audio, mimeType: "audio/pcm;rate=16000" },
             });
           } else if (parsed.text) {
             session.sendClientContent({ turns: [{ role: "user", parts: [{ text: parsed.text }] }] });
           }
-        } catch (e) {
-          console.error("Error sending realtime input:", e);
         }
-      });
+      } catch (e) {
+        console.error("Error processing websocket message:", e);
+      }
+    });
 
-      clientWs.on("close", async () => {
-        try {
+    clientWs.on("close", async () => {
+      clearTimeout(fallbackTimer);
+      try {
+        if (sessionPromise) {
           const session = await sessionPromise;
           session.close();
-        } catch (e) { }
-      });
-    } catch (err) {
-      console.error("Live API connection failed:", err);
-      clientWs.close();
-    }
+        }
+      } catch (e) { }
+    });
   });
 
   server.listen(PORT, "0.0.0.0", () => {
