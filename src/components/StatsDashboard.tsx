@@ -196,9 +196,13 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
             onClick={onFilterLowStock}
             className="bg-amber-500/20 dark:bg-amber-950/40 backdrop-blur-md rounded-xl p-2.5 border border-amber-400/30 dark:border-amber-500/40 text-center cursor-pointer active:scale-95 transition-transform"
           >
-            <span className="text-xs text-amber-200 dark:text-amber-300 uppercase tracking-wider block">สต็อกใกล้หมด</span>
-            <span className="text-lg font-extrabold text-amber-300 dark:text-amber-300">{summary?.lowStockCount || 0}</span>
-            <span className="text-sm text-amber-200/80 dark:text-amber-300/80 block">กดดูรายการ &gt;</span>
+            <span className="text-[11px] sm:text-xs text-amber-200 dark:text-amber-300 font-semibold uppercase tracking-tight block truncate">
+              สต๊อกใกล้หมดและหมดแล้ว
+            </span>
+            <span className="text-lg font-extrabold text-amber-300 dark:text-amber-300">
+              {lowStockItems.length}
+            </span>
+            <span className="text-xs text-amber-200/80 dark:text-amber-300/80 block">กดดูรายการ &gt;</span>
           </div>
 
           <div className="bg-white/10 dark:bg-slate-800/60 backdrop-blur-md rounded-xl p-2.5 border border-white/10 dark:border-slate-700/50 text-center">

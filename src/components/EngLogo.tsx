@@ -17,12 +17,18 @@ export const EngLogo: React.FC<EngLogoProps> = ({
   return (
     <div className="relative flex items-center justify-center w-full h-full">
       <img
-        src={logoImg}
+        src={logoImg || '/logo.png'}
         alt={alt}
         style={style}
         loading="eager"
         decoding="async"
         onLoad={() => setImgLoaded(true)}
+        onError={(e) => {
+          const target = e.currentTarget;
+          if (target.src !== window.location.origin + '/logo.png') {
+            target.src = '/logo.png';
+          }
+        }}
         className={`${className}`}
       />
     </div>

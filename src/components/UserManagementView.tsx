@@ -26,12 +26,52 @@ interface UserManagementViewProps {
   onUpdateCurrentUser?: (user: UserType) => void;
 }
 
+// Build instant offline/initial users list for 0ms load time
+const getInitialDbUsers = (): UserType[] => {
+  try {
+    const cached = localStorage.getItem('warehouse_cached_users');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.sort((a, b) => {
+          if (a.role === 'admin' && b.role !== 'admin') return -1;
+          if (a.role !== 'admin' && b.role === 'admin') return 1;
+          return (a.id || '').localeCompare(b.id || '');
+        });
+      }
+    }
+  } catch (_) {}
+
+  const defaultList: UserType[] = initialUsers.map((u) => ({
+    id: u.id,
+    username: u.id,
+    name: u.name,
+    nickname: u.nickname,
+    role: 'user',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  }));
+
+  defaultList.push({
+    id: 'Admininmad',
+    username: 'Admininmad',
+    name: 'Administrator',
+    role: 'admin',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  });
+
+  return defaultList.sort((a, b) => {
+    if (a.role === 'admin' && b.role !== 'admin') return -1;
+    if (a.role !== 'admin' && b.role === 'admin') return 1;
+    return (a.id || '').localeCompare(b.id || '');
+  });
+};
+
 export const UserManagementView: React.FC<UserManagementViewProps> = ({ 
   currentUser,
   onUpdateCurrentUser 
 }) => {
-  const [users, setUsers] = useState<UserType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<UserType[]>(getInitialDbUsers);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -62,14 +102,23 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const fetchUsers = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'users'));
+      // Fetch with a 5-second timeout so it never blocks or spins indefinitely
+      const fetchPromise = getDocs(collection(db, 'users'));
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4500));
+      
+      const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (!snapshot) {
+        // Timeout reached, keep current instant users without error
+        return;
+      }
+
       let usersData: UserType[] = [];
       const existingIds = new Set<string>();
       
       snapshot.forEach(docSnap => {
         existingIds.add(docSnap.id);
         const data = docSnap.data() as UserType;
-        // ensure id and username exist
         usersData.push({
           ...data,
           id: data.id || docSnap.id,
@@ -77,8 +126,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         });
       });
 
-      // Quick seed check
-      let needsUpdate = false;
+      // Quick seed check (run non-blocking in background)
       const batch = [];
       for (const u of initialUsers) {
         if (!existingIds.has(u.id)) {
@@ -92,7 +140,6 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           };
           batch.push(setDoc(doc(db, 'users', u.id), newUser));
           usersData.push(newUser);
-          needsUpdate = true;
         }
       }
 
@@ -107,23 +154,25 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         };
         batch.push(setDoc(doc(db, 'users', 'Admininmad'), defaultAdmin));
         usersData.push(defaultAdmin);
-        needsUpdate = true;
       }
 
-      if (needsUpdate && batch.length > 0) {
-        await Promise.all(batch);
+      if (batch.length > 0) {
+        Promise.allSettled(batch).catch(console.error);
       }
 
       // Sort: admins first, then by id
       usersData.sort((a, b) => {
         if (a.role === 'admin' && b.role !== 'admin') return -1;
         if (a.role !== 'admin' && b.role === 'admin') return 1;
-        return a.id.localeCompare(b.id);
+        return (a.id || '').localeCompare(b.id || '');
       });
+
       setUsers(usersData);
+      try {
+        localStorage.setItem('warehouse_cached_users', JSON.stringify(usersData));
+      } catch (_) {}
     } catch (err) {
-      console.error("Error fetching users:", err);
-      setError('เกิดข้อผิดพลาดในการโหลดข้อมูลผู้ใช้งาน');
+      console.warn("Background fetching users notice:", err);
     } finally {
       setLoading(false);
     }
@@ -165,11 +214,17 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
       await setDoc(doc(db, 'users', cleanId), newUser);
       
-      setUsers(prev => [newUser, ...prev].sort((a, b) => {
-        if (a.role === 'admin' && b.role !== 'admin') return -1;
-        if (a.role !== 'admin' && b.role === 'admin') return 1;
-        return a.id.localeCompare(b.id);
-      }));
+      setUsers(prev => {
+        const next = [newUser, ...prev].sort((a, b) => {
+          if (a.role === 'admin' && b.role !== 'admin') return -1;
+          if (a.role !== 'admin' && b.role === 'admin') return 1;
+          return (a.id || '').localeCompare(b.id || '');
+        });
+        try {
+          localStorage.setItem('warehouse_cached_users', JSON.stringify(next));
+        } catch (_) {}
+        return next;
+      });
       
       setNewId('');
       setNewUsername('');
@@ -315,7 +370,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     if (window.confirm(`คุณแน่ใจหรือไม่ที่จะลบผู้ใช้ "${userName}" (ID: ${userId}) ออกจากระบบ?`)) {
       try {
         await deleteDoc(doc(db, 'users', userId));
-        setUsers(users.filter(u => u.id !== userId));
+        setUsers(prev => {
+          const next = prev.filter(u => u.id !== userId);
+          try {
+            localStorage.setItem('warehouse_cached_users', JSON.stringify(next));
+          } catch (_) {}
+          return next;
+        });
         setSuccessMsg(`ลบผู้ใช้ "${userName}" เรียบร้อยแล้ว`);
         setTimeout(() => setSuccessMsg(''), 4000);
       } catch (err) {
@@ -341,7 +402,17 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       setUpdating(user.id);
       try {
         await updateDoc(doc(db, 'users', user.id), { role: newRole });
-        setUsers(users.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+        setUsers(prev => {
+          const next = prev.map(u => u.id === user.id ? { ...u, role: newRole } : u).sort((a, b) => {
+            if (a.role === 'admin' && b.role !== 'admin') return -1;
+            if (a.role !== 'admin' && b.role === 'admin') return 1;
+            return (a.id || '').localeCompare(b.id || '');
+          });
+          try {
+            localStorage.setItem('warehouse_cached_users', JSON.stringify(next));
+          } catch (_) {}
+          return next;
+        });
         setSuccessMsg(`เปลี่ยนสิทธิ์ของ ${user.name} เป็น ${newRole.toUpperCase()} เรียบร้อยแล้ว`);
         setTimeout(() => setSuccessMsg(''), 4000);
       } catch (err) {

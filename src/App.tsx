@@ -95,11 +95,47 @@ const INITIAL_REQUISITION_LOGS: RequisitionRecord[] = [
   },
 ];
 
+// Initial state helpers for instant 0ms load time
+const getInitialInventory = (): InventoryItem[] => {
+  try {
+    const cached = localStorage.getItem('warehouse_inventory');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (_) {}
+  return [];
+};
+
+const getInitialSummary = (): InventorySummary | null => {
+  try {
+    const cached = localStorage.getItem('warehouse_summary');
+    if (cached) return JSON.parse(cached);
+  } catch (_) {}
+  return null;
+};
+
+const getInitialRequisitions = (): RequisitionRecord[] => {
+  try {
+    const saved = localStorage.getItem('warehouse_requisitions');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((r: RequisitionRecord) => ({
+          ...r,
+          id: (r.id || '').replace(/^REQ-?/i, '')
+        }));
+      }
+    }
+  } catch (_) {}
+  return INITIAL_REQUISITION_LOGS;
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [summary, setSummary] = useState<InventorySummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<InventoryItem[]>(getInitialInventory);
+  const [summary, setSummary] = useState<InventorySummary | null>(getInitialSummary);
+  const [loading, setLoading] = useState(() => getInitialInventory().length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
@@ -119,10 +155,10 @@ export default function App() {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ทั้งหมด');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'low_or_out'>('all');
 
   // Requisition history state with localStorage
-  const [requisitions, setRequisitions] = useState<RequisitionRecord[]>([]);
+  const [requisitions, setRequisitions] = useState<RequisitionRecord[]>(getInitialRequisitions);
 
   // Modals state
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -184,40 +220,28 @@ export default function App() {
   const fetchRequisitions = async () => {
     try {
       const q = query(collection(db, 'requisitions'), orderBy('isoDate', 'desc'), limit(500));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(d => {
-        const req = d.data() as RequisitionRecord;
-        return {
-          ...req,
-          id: (req.id || d.id).replace(/^REQ-?/i, ''),
-        };
-      });
-      if (data.length > 0) {
-        setRequisitions(data);
-      } else {
-        // Initialize with default sample logs and seed to Firestore
-        setRequisitions(INITIAL_REQUISITION_LOGS);
-        INITIAL_REQUISITION_LOGS.forEach(req => {
-          const cleanReq = cleanForFirestore(req);
-          setDoc(doc(db, 'requisitions', cleanReq.id), cleanReq).catch(() => {});
+      const fetchPromise = getDocs(q);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+      const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
+
+      if (querySnapshot && !querySnapshot.empty) {
+        const data = querySnapshot.docs.map(d => {
+          const req = d.data() as RequisitionRecord;
+          return {
+            ...req,
+            id: (req.id || d.id).replace(/^REQ-?/i, ''),
+          };
         });
+        if (data.length > 0) {
+          setRequisitions(data);
+          try {
+            localStorage.setItem('warehouse_requisitions', JSON.stringify(data));
+          } catch (_) {}
+          return;
+        }
       }
     } catch (err) {
       console.warn('Error fetching requisitions from Firestore, loading local fallback:', err);
-      try {
-        const saved = localStorage.getItem('warehouse_requisitions');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setRequisitions(parsed.map((r: RequisitionRecord) => ({
-              ...r,
-              id: (r.id || '').replace(/^REQ-?/i, '')
-            })));
-            return;
-          }
-        }
-      } catch (_) {}
-      setRequisitions(INITIAL_REQUISITION_LOGS);
     }
   };
 
@@ -225,29 +249,17 @@ export default function App() {
   const fetchInventory = async (forceRefresh = false) => {
     try {
       if (forceRefresh) setRefreshing(true);
-      else {
-        // Quick load from localStorage for instant perceived performance
-        try {
-          const cached = localStorage.getItem('warehouse_inventory');
-          const cachedSummary = localStorage.getItem('warehouse_summary');
-          if (cached && cachedSummary) {
-            setItems(JSON.parse(cached));
-            setSummary(JSON.parse(cachedSummary));
-          } else {
-            setLoading(true);
-          }
-        } catch (_) {
-          setLoading(true);
-        }
-      }
       setError('');
 
       let inventoryData: InventoryItem[] = [];
 
-      // 1. Try pulling directly from Firestore (primary persistent source of truth)
+      // 1. Try pulling directly from Firestore with a 3.5s timeout (never hangs)
       try {
-        const snapshot = await getDocs(collection(db, 'inventory'));
-        if (!snapshot.empty) {
+        const fetchPromise = getDocs(collection(db, 'inventory'));
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+        const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if (snapshot && !snapshot.empty) {
           inventoryData = snapshot.docs.map((docSnap) => {
             const data = docSnap.data() as InventoryItem;
             if (data.status === 'out' && !data.outOfStockDate) {
@@ -257,47 +269,64 @@ export default function App() {
           });
         }
       } catch (firestoreErr) {
-        console.warn('Firestore fetch failed, will check fallback:', firestoreErr);
+        console.warn('Firestore fetch failed or timed out:', firestoreErr);
       }
 
-      // 2. If Firestore is completely empty, fetch initial data from /api/inventory to seed Firestore
+      // 2. If Firestore is empty or timed out, fetch quickly from /api/inventory
       if (inventoryData.length === 0) {
-        const res = await fetch(`/api/inventory?refresh=true`);
-        if (!res.ok) throw new Error('Failed to fetch inventory from Store Data API');
-        const data = await res.json();
-        inventoryData = data.items || [];
+        try {
+          const res = await fetch(`/api/inventory?refresh=true`);
+          if (res.ok) {
+            const data = await res.json();
+            inventoryData = data.items || [];
 
-        // Seed Firestore
-        if (inventoryData.length > 0) {
-          inventoryData.forEach((item) => {
-            const cleanItem = cleanForFirestore(item);
-            setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch((err) => {
-              console.warn('Seed error for item:', item.id, err);
-            });
-          });
+            // Seed Firestore in background without blocking UI
+            if (inventoryData.length > 0) {
+              setTimeout(() => {
+                inventoryData.forEach((item) => {
+                  const cleanItem = cleanForFirestore(item);
+                  setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(() => {});
+                });
+              }, 100);
+            }
+          }
+        } catch (apiErr) {
+          console.warn('API inventory fetch failed:', apiErr);
         }
       }
 
-      const calculatedSummary = recalculateSummary(inventoryData);
-      setItems(inventoryData);
-      
-      try {
-        localStorage.setItem('warehouse_inventory', JSON.stringify(inventoryData));
-      } catch (_) {}
-      
-      // Fetch requisitions
-      await fetchRequisitions();
-      
-      // Trigger low stock alert if needed
-      if (calculatedSummary && (calculatedSummary.lowStockCount > 0 || calculatedSummary.outOfStockCount > 0)) {
-        if (!hasShownAlert) {
-          setShowLowStockAlert(true);
-          setHasShownAlert(true);
+      if (inventoryData.length > 0) {
+        const calculatedSummary = recalculateSummary(inventoryData);
+        setItems(inventoryData);
+        
+        try {
+          localStorage.setItem('warehouse_inventory', JSON.stringify(inventoryData));
+        } catch (_) {}
+        
+        // Trigger low stock alert if needed
+        if (calculatedSummary && (calculatedSummary.lowStockCount > 0 || calculatedSummary.outOfStockCount > 0)) {
+          if (!hasShownAlert) {
+            setShowLowStockAlert(true);
+            setHasShownAlert(true);
+          }
+        }
+      } else {
+        // If both network sources failed or timed out, ensure local cached inventory is activated
+        const cached = getInitialInventory();
+        if (cached.length > 0) {
+          setItems(cached);
+          const cachedSum = getInitialSummary() || recalculateSummary(cached);
+          setSummary(cachedSum);
         }
       }
+      
+      // Fetch requisitions in background non-blocking
+      fetchRequisitions().catch(console.warn);
     } catch (err: any) {
       console.error('Error fetching inventory:', err);
-      setError(err.message || 'ไม่สามารถโหลดข้อมูลจาก Store Data ได้ กรุณาลองใหม่อีกครั้ง');
+      if (items.length === 0) {
+        setError(err.message || 'ไม่สามารถโหลดข้อมูลจาก Store Data ได้ กรุณาลองใหม่อีกครั้ง');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -358,7 +387,7 @@ export default function App() {
     } catch (_) {}
   };
 
-  // Handle New Requisition / Stock In submission
+  // Handle New Requisition / Stock In submission (0ms Optimistic Update)
   const handleAddRequisition = async (recordData: Omit<RequisitionRecord, 'id'>) => {
     const newRecord: RequisitionRecord = cleanForFirestore({
       ...recordData,
@@ -367,11 +396,16 @@ export default function App() {
     });
 
     try {
-      // 1. Save requisition log to Firestore
-      await setDoc(doc(db, 'requisitions', newRecord.id), newRecord);
-      setRequisitions((prev) => [newRecord, ...prev]);
+      // 1. Instantly update requisition logs in memory (0ms)
+      setRequisitions((prev) => {
+        const updated = [newRecord, ...prev];
+        try {
+          localStorage.setItem('warehouse_requisitions', JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
 
-      // 2. Find target item and calculate new quantity
+      // 2. Find target item and immediately update inventory in memory (0ms)
       const currentItem = items.find((item) => item.id === recordData.itemId);
       if (currentItem) {
         const isStockIn = recordData.type === 'in';
@@ -392,10 +426,7 @@ export default function App() {
             : {})
         });
 
-        // 3. Save updated item directly to Firestore
-        await setDoc(doc(db, 'inventory', updatedItem.id), updatedItem);
-
-        // 4. Update memory state
+        // Instant UI & state update
         const updatedList = items.map((i) => (i.id === updatedItem.id ? updatedItem : i));
         setItems(updatedList);
         recalculateSummary(updatedList);
@@ -413,13 +444,21 @@ export default function App() {
           title: isStockIn ? 'รับเข้าสินค้าสำเร็จ' : 'เบิกสินค้าสำเร็จ',
           message: `${isStockIn ? 'รับเข้า' : 'เบิก'} ${updatedItem.name} จำนวน ${recordData.qty} ${updatedItem.unit} (คงเหลือ: ${newQty} ${updatedItem.unit})`,
         });
+
+        // 3. Persist to Firestore asynchronously in background (Non-blocking)
+        Promise.all([
+          setDoc(doc(db, 'requisitions', newRecord.id), newRecord),
+          setDoc(doc(db, 'inventory', updatedItem.id), updatedItem)
+        ]).catch(err => console.error("Background Firestore sync error:", err));
+      } else {
+        setDoc(doc(db, 'requisitions', newRecord.id), newRecord).catch(console.error);
       }
     } catch (err) {
-      console.error("Failed to save requisition or update inventory:", err);
+      console.error("Failed to add requisition:", err);
       addToast({
         type: 'error',
         title: 'เกิดข้อผิดพลาด',
-        message: 'ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง',
+        message: 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง',
       });
     }
   };
@@ -539,7 +578,7 @@ export default function App() {
     }
   };
 
-  // Handle database modifications executed by AI
+  // Handle database modifications executed by AI (0ms Optimistic Update)
   const handleExecuteDbAction = async (action: DbActionPayload) => {
     if (action.action === 'error') {
       addToast({ type: 'error', title: 'ไม่สามารถทำรายการได้', message: action.message || 'เกิดข้อผิดพลาด' });
@@ -564,7 +603,13 @@ export default function App() {
     if (action.action === 'requisition' || action.action === 'stock_in') {
       if (action.record) {
         const cleanRecord = cleanForFirestore(action.record);
-        setRequisitions((prev) => [cleanRecord, ...prev]);
+        setRequisitions((prev) => {
+          const updated = [cleanRecord, ...prev];
+          try {
+            localStorage.setItem('warehouse_requisitions', JSON.stringify(updated));
+          } catch (_) {}
+          return updated;
+        });
         setDoc(doc(db, 'requisitions', cleanRecord.id), cleanRecord).catch(err => console.error("Failed to save requisition", err));
       }
       if (action.item) {
@@ -576,12 +621,21 @@ export default function App() {
             : {})
         });
 
-        await setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(err => console.error("Failed to update inventory", err));
+        // Instant optimistic update (0ms)
         setItems((prev) => {
           const updated = prev.map((i) => (i.id === cleanItem.id ? cleanItem : i));
           recalculateSummary(updated);
+          try {
+            localStorage.setItem('warehouse_inventory', JSON.stringify(updated));
+          } catch (_) {}
           return updated;
         });
+
+        if (selectedItem?.id === cleanItem.id) {
+          setSelectedItem(cleanItem);
+        }
+
+        setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(err => console.error("Failed to update inventory", err));
       }
     } else if (action.action === 'update_stock') {
       if (action.item) {
@@ -593,15 +647,30 @@ export default function App() {
             : {})
         });
 
-        await setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(err => console.error("Failed to update inventory", err));
+        // Instant optimistic update (0ms)
         setItems((prev) => {
           const updated = prev.map((i) => (i.id === cleanItem.id ? cleanItem : i));
           recalculateSummary(updated);
+          try {
+            localStorage.setItem('warehouse_inventory', JSON.stringify(updated));
+          } catch (_) {}
           return updated;
         });
+
+        if (selectedItem?.id === cleanItem.id) {
+          setSelectedItem(cleanItem);
+        }
+
+        setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(err => console.error("Failed to update inventory", err));
       }
     } else if (action.action === 'delete_record' && action.recordId) {
-      setRequisitions((prev) => prev.filter((r) => r.id !== action.recordId));
+      setRequisitions((prev) => {
+        const updated = prev.filter((r) => r.id !== action.recordId);
+        try {
+          localStorage.setItem('warehouse_requisitions', JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
       deleteDoc(doc(db, 'requisitions', action.recordId)).catch(err => console.error("Failed to delete requisition", err));
     }
 
@@ -649,7 +718,8 @@ export default function App() {
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'low' && item.status === 'low') ||
-      (statusFilter === 'out' && item.status === 'out');
+      (statusFilter === 'out' && item.status === 'out') ||
+      (statusFilter === 'low_or_out' && (item.status === 'low' || item.status === 'out' || Number(item.qty) <= Number(item.minStock)));
 
     return matchesSearch && matchesCategory && matchesStatus;
   });
@@ -1006,7 +1076,7 @@ export default function App() {
                 setActiveTab('inventory');
               }}
               onFilterLowStock={() => {
-                setStatusFilter('low');
+                setStatusFilter('low_or_out');
                 setActiveTab('inventory');
               }}
               onSelectItem={(item) => setSelectedItem(item)}

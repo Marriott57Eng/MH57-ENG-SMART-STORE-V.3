@@ -5,7 +5,7 @@ import {
   Mic, MicOff, Send, Sparkles, 
   RotateCcw, Bot, User, ArrowRight, Loader2, FileDown, FileText, 
   ArrowDownRight, ArrowUpRight, Sliders, Trash2, ExternalLink, AlertCircle, Headset, Radio,
-  CheckCircle2, XCircle, Check, X, Clock
+  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2
 } from 'lucide-react';
 import { generateAndDownloadPdf } from '../utils/pdfGenerator';
 import { generateAndDownloadExcel } from '../utils/excelGenerator';
@@ -254,27 +254,94 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       }]);
     }
 
-    // 3. Inquire Item Info
-    else if (toolCall.name === 'inquire_item_info') {
-      const { searchTerm, summary } = toolCall.args || {};
+    // 3. Inquire Item Info & Check Stock
+    else if (toolCall.name === 'inquire_item_info' || toolCall.name === 'check_stock') {
+      const { searchTerm } = toolCall.args || {};
       const term = (searchTerm || '').trim().toLowerCase();
-      let matched = items.filter(i => 
-        i.name.toLowerCase().includes(term) || 
-        i.id.toLowerCase().includes(term) || 
-        (i.category && i.category.toLowerCase().includes(term))
-      ).slice(0, 5);
+      const tokens = term.split(/\s+/).filter((t: string) => t.length > 0);
+      let matched = items.filter(i => {
+        const n = (i.name || '').toLowerCase();
+        const id = (i.id || '').toLowerCase();
+        const c = (i.category || '').toLowerCase();
+        return tokens.length === 0 || tokens.every((t: string) => n.includes(t) || id.includes(t) || c.includes(t));
+      }).slice(0, 6);
 
-      if (matched.length === 0 && items.length > 0) {
-        matched = items.slice(0, 3);
+      let textOutput = `📦 พบรายการอะไหล่ตรงกับ "${searchTerm || 'คำค้นหา'}" (${matched.length} รายการ):`;
+      if (matched.length === 1) {
+        const target = matched[0];
+        const qty = Number(target.qty) || 0;
+        const minStock = Number(target.minStock) || 1;
+        const isOut = qty <= 0 || target.status === 'out';
+        const isLow = !isOut && (qty <= minStock || target.status === 'low');
+        
+        if (isOut) {
+          textOutput = `⛔ ข้อมูล **${target.name}** (\`${target.id}\`): สินค้า**หมดสต็อก** (คงเหลือ 0 ${target.unit})`;
+        } else if (isLow) {
+          textOutput = `⚠️ ข้อมูล **${target.name}** (\`${target.id}\`): สินค้า**ใกล้หมดสต็อก** (เหลือ ${qty} ${target.unit} / เกณฑ์สั่งซื้อ ${minStock} ${target.unit})`;
+        } else {
+          textOutput = `✅ ข้อมูล **${target.name}** (\`${target.id}\`): มีสต็อก**พร้อมใช้งาน** (คงเหลือ ${qty} ${target.unit})`;
+        }
+      } else if (matched.length === 0) {
+        textOutput = `🔍 ไม่พบรายการอะไหล่ตรงกับ "${searchTerm || 'คำค้นหา'}" ในคลัง Store FL.6`;
       }
 
       setChatHistory(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
         source: 'live',
-        text: summary || `ข้อมูลรายการสินค้าที่เกี่ยวข้องกับ "${searchTerm || 'การค้นหา'}":`,
+        text: textOutput,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedItems: matched.length > 0 ? matched : undefined
+      }]);
+    }
+
+    // 4. Out of stock items
+    else if (toolCall.name === 'get_out_of_stock_items') {
+      const outItems = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+      setChatHistory(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        source: 'live',
+        text: outItems.length > 0 
+          ? `⛔ พบรายการสินค้าหมดสต็อกทั้งหมด ${outItems.length} รายการ ดังนี้:`
+          : `✅ ยอดเยี่ยมมาก ขณะนี้ไม่มีรายการสินค้าหมดสต็อกในคลัง ทุกรายการพร้อมใช้งาน`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedItems: outItems.length > 0 ? outItems : undefined
+      }]);
+    }
+
+    // 5. Low stock items
+    else if (toolCall.name === 'get_low_stock_items') {
+      const lowItems = items.filter(i => ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || (i.status === 'low' && (Number(i.qty) || 0) > 0));
+      setChatHistory(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        source: 'live',
+        text: lowItems.length > 0 
+          ? `⚠️ พบรายการสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ ดังนี้:`
+          : `✅ ขณะนี้ไม่มีสินค้าใกล้หมดสต็อก ปริมาณสินค้าส่วนใหญ่เกินเกณฑ์ความปลอดภัย`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedItems: lowItems.length > 0 ? lowItems : undefined
+      }]);
+    }
+
+    // 6. Extremes (min/max stock)
+    else if (toolCall.name === 'get_stock_extremes') {
+      const sorted = [...items].sort((a, b) => (Number(a.qty) || 0) - (Number(b.qty) || 0));
+      const extremeItems: InventoryItem[] = [];
+      if (sorted.length > 0) {
+        extremeItems.push(sorted[0]);
+        if (sorted.length > 1 && sorted[sorted.length - 1].id !== sorted[0].id) {
+          extremeItems.push(sorted[sorted.length - 1]);
+        }
+      }
+      setChatHistory(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        source: 'live',
+        text: `📊 ข้อมูลสินค้าที่มีจำนวนน้อยที่สุดและมากที่สุดในคลัง:`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedItems: extremeItems.length > 0 ? extremeItems : undefined
       }]);
     }
   }, [items, currentUser, setChatHistory, handleDownloadReport]);
@@ -305,7 +372,17 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     }
   }, [setChatHistory]);
 
-  const { isLiveConnected, startLive, stopLive, sendMessage, syncInventory } = useLiveAudio(
+  const { 
+    isLiveConnected, 
+    isConnecting, 
+    audioVolume,
+    isAiSpeaking,
+    isUserSpeaking,
+    startLive, 
+    stopLive, 
+    sendMessage, 
+    syncInventory 
+  } = useLiveAudio(
     handleLiveToolCall,
     handleTranscript,
     onLiveStateChange
@@ -910,6 +987,118 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 </div>
               )}
 
+              {/* Item Cards List (Shown when inquiring stock or checking parts) */}
+              {msg.suggestedItems && msg.suggestedItems.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold px-0.5">
+                    <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+                      <Package className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      การ์ดข้อมูลอะไหล่/สินค้า ({msg.suggestedItems.length} รายการ):
+                    </span>
+                    <span className="text-[10px] sm:text-xs text-slate-400">แตะเพื่อดูรายละเอียดหรือเบิก</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {msg.suggestedItems.map((rawItem) => {
+                      const item = items.find(i => i.id === rawItem.id) || rawItem;
+                      const qty = Number(item.qty) || 0;
+                      const minStock = Number(item.minStock) || 1;
+                      const isOut = qty <= 0 || item.status === 'out';
+                      const isLow = !isOut && (qty <= minStock || item.status === 'low');
+
+                      return (
+                        <div 
+                          key={item.id}
+                          className={`rounded-xl border p-2.5 sm:p-3 shadow-xs transition-all flex flex-col justify-between ${
+                            isOut
+                              ? 'bg-gradient-to-b from-red-50/80 to-white dark:from-red-950/30 dark:to-slate-900 border-red-200 dark:border-red-900/60'
+                              : isLow
+                              ? 'bg-gradient-to-b from-amber-50/80 to-white dark:from-amber-950/30 dark:to-slate-900 border-amber-200 dark:border-amber-900/60'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
+                          }`}
+                        >
+                          {/* Item Details (Without Image) */}
+                          <div>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                                  {item.name}
+                                </h4>
+                                <span className="font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                                  {item.id}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded font-medium">
+                                  {item.category}
+                                </span>
+                                {item.location && (
+                                  <div className="flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>{item.location}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Stock Status Badge */}
+                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400">สถานะคงเหลือ:</span>
+                              <div>
+                                {isOut ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                    หมดสต็อก (0 {item.unit})
+                                  </span>
+                                ) : isLow ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    ใกล้หมด (เหลือ {qty}/{minStock} {item.unit})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    มีสต็อก {qty} {item.unit}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Action Buttons */}
+                          <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => onSelectItem(item)}
+                              className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              ดูอะไหล่
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isLiveConnected) {
+                                  sendMessage(`ต้องการเบิก ${item.name} รหัส ${item.id} จำนวน 1 ${item.unit}`);
+                                } else {
+                                  sendQuery(`ขอเบิก ${item.name} จำนวน 1 ${item.unit}`);
+                                }
+                              }}
+                              disabled={isOut}
+                              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white disabled:text-slate-500 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs"
+                            >
+                              <ArrowUpRight className="w-3 h-3" />
+                              เบิกทันที
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Interactive PDF / Excel Generation Download Card */}
               {(msg.fileReports || (msg.fileReport ? [msg.fileReport] : [])).map((report, idx) => (
                 <div key={idx} className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -982,40 +1171,115 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         }}
         className="px-3 pt-2 pb-1 bg-white dark:bg-slate-900 border-t border-slate-200/90 dark:border-slate-800 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] transition-colors duration-200 z-20"
       >
-        {/* Live Chat Button */}
-        <div className="flex flex-col items-center justify-center mb-1.5">
-          <div className="relative">
+        {/* Live Chat Button & Voice Reactive Controls */}
+        <div className="flex flex-col items-center justify-center mb-2">
+          <div className="relative flex items-center justify-center">
+            {/* Dynamic Soundwave Ripple Rings */}
             {isLiveConnected && (
               <>
-                <div className="absolute inset-0 rounded-full bg-purple-400/30 animate-ping" />
-                <div className="absolute -inset-1.5 rounded-full bg-purple-300/20 animate-pulse" />
+                {/* Outer dynamic ring */}
+                <div 
+                  className={`absolute rounded-full transition-all duration-75 pointer-events-none ${
+                    isAiSpeaking 
+                      ? 'bg-purple-400/30 border border-purple-400/40' 
+                      : 'bg-emerald-400/25 border border-emerald-400/40'
+                  }`}
+                  style={{
+                    width: '68px',
+                    height: '68px',
+                    transform: `scale(${1.15 + (audioVolume * 0.85)})`,
+                    opacity: 0.2 + (audioVolume * 0.7)
+                  }}
+                />
+
+                {/* Mid dynamic ring */}
+                <div 
+                  className={`absolute rounded-full transition-all duration-75 pointer-events-none ${
+                    isAiSpeaking 
+                      ? 'bg-purple-500/35' 
+                      : 'bg-emerald-500/30'
+                  }`}
+                  style={{
+                    width: '60px',
+                    height: '60px',
+                    transform: `scale(${1.08 + (audioVolume * 0.5)})`,
+                    opacity: 0.4 + (audioVolume * 0.6)
+                  }}
+                />
               </>
             )}
 
             <button
               type="button"
               onClick={() => isLiveConnected ? stopLive() : startLive(currentUser?.name, currentUser?.role, items)}
-              disabled={isProcessing}
-              className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer ${
+              disabled={isProcessing || isConnecting}
+              style={{
+                transform: isLiveConnected 
+                  ? `scale(${1 + Math.min(0.24, audioVolume * 0.36)})` 
+                  : undefined
+              }}
+              className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-xl transition-transform duration-75 active:scale-95 cursor-pointer ${
                 isLiveConnected
-                  ? 'bg-red-500 text-white ring-4 ring-red-100 dark:ring-red-950 shadow-red-500/50 animate-pulse'
+                  ? isAiSpeaking
+                    ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white ring-4 ring-purple-200 dark:ring-purple-950 shadow-purple-500/50'
+                    : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white ring-4 ring-emerald-200 dark:ring-emerald-950 shadow-emerald-500/50'
+                  : isConnecting
+                  ? 'bg-indigo-600 text-white animate-pulse'
                   : 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-purple-500/40 hover:scale-105'
               }`}
             >
-              {isLiveConnected ? (
-                <Radio className="w-6 h-6 sm:w-8 sm:h-8" />
+              {isConnecting ? (
+                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin" />
+              ) : isLiveConnected ? (
+                isAiSpeaking ? (
+                  <Volume2 className="w-6 h-6 sm:w-8 sm:h-8 animate-bounce" />
+                ) : (
+                  <Mic className="w-6 h-6 sm:w-8 sm:h-8" />
+                )
               ) : (
                 <Headset className="w-6 h-6 sm:w-8 sm:h-8" />
               )}
             </button>
           </div>
 
-          <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
-            {isLiveConnected ? (
-              <span className="text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
-                กำลังคุยสดกับ AI... (พูดโต้ตอบได้เลย)
+          {/* Voice-reactive Equalizer Bars (shown when connected) */}
+          {isLiveConnected && (
+            <div className="flex items-center gap-1 h-3.5 mt-1.5">
+              {[0.5, 0.9, 1.2, 0.8, 0.6].map((multiplier, i) => (
+                <div 
+                  key={i}
+                  className={`w-1 rounded-full transition-all duration-75 ${
+                    isAiSpeaking 
+                      ? 'bg-purple-500' 
+                      : 'bg-emerald-500'
+                  }`}
+                  style={{
+                    height: `${Math.max(3, Math.min(16, (audioVolume * 18 * multiplier) + 3))}px`
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Voice Status Description */}
+          <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 text-center">
+            {isConnecting ? (
+              <span className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 justify-center">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                กำลังเชื่อมต่อ Live Speech...
               </span>
+            ) : isLiveConnected ? (
+              isAiSpeaking ? (
+                <span className="text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1 justify-center">
+                  <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
+                  🔊 AI กำลังตอบด้วยเสียง...
+                </span>
+              ) : (
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 justify-center">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  🎙️ กำลังฟังเสียงของคุณ... (พูดโต้ตอบได้เลย)
+                </span>
+              )
             ) : (
               'แตะเพื่อเปิดโหมดคุยสดกับ AI แบบเรียลไทม์'
             )}

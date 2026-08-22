@@ -85,8 +85,7 @@ interface Item {
 
 let cachedItems: Item[] = [];
 let cacheTimestamp = 0;
-const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
-
+const CACHE_TTL_MS = 120 * 1000; // 2 minutes cache
 
 async function fetchInventoryFromFirestore(): Promise<Item[]> {
   const items: Item[] = [];
@@ -137,8 +136,14 @@ async function fetchInventoryFromFirestore(): Promise<Item[]> {
 }
 
 async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
+  if (!force && cachedItems.length > 0 && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedItems;
+  }
+
   const firestoreItems = await fetchInventoryFromFirestore();
   if (firestoreItems.length > 0) {
+    cachedItems = firestoreItems;
+    cacheTimestamp = Date.now();
     return firestoreItems;
   }
 
@@ -150,7 +155,7 @@ async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
     if (!res.ok) throw new Error(`Failed to fetch sheet: HTTP ${res.status}`);
     const csvText = await res.text();
     const rows = parseCSV(csvText);
-    if (rows.length < 2) return [];
+    if (rows.length < 2) return cachedItems;
 
     const headers = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
     const idIdx = headers.findIndex(h => h.includes('itemid') || h.includes('id') || h.includes('code'));
@@ -200,14 +205,13 @@ async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
         status,
       });
     }
-    
-    // Save to Firestore
-    
-    
+
+    cachedItems = items;
+    cacheTimestamp = Date.now();
     return items;
   } catch (err) {
     console.error('Error loading inventory sheet:', err);
-    return [];
+    return cachedItems;
   }
 }
 
@@ -629,7 +633,7 @@ ${!isAdminUser ? `
            'gemini-3.5-flash-lite',
            'gemini-3.1-flash-lite',
            'gemini-flash-lite-latest',
-           'gemini-2.5-flash',
+           'gemini-3.1-flash-live-preview',
            'gemini-flash-latest',
            'gemini-3.7-flash'
         ];
@@ -833,9 +837,11 @@ ${!isAdminUser ? `
   const wss = new WebSocketServer({ server, path: '/live' });
 
   wss.on("connection", async (clientWs, req) => {
+    let activeLiveSession: any = null;
     let sessionPromise: Promise<any> | null = null;
-    let sessionActiveItems: Item[] = [];
+    let sessionActiveItems: Item[] = cachedItems.length > 0 ? [...cachedItems] : [];
     let isInitialized = false;
+    const pendingInputQueue: Array<{ type: 'audio' | 'text'; data: string }> = [];
 
     const setupLiveSession = async (userName: string, userRole: string, initialItems: Item[]) => {
       if (isInitialized) return;
@@ -844,8 +850,8 @@ ${!isAdminUser ? `
       try {
         if (Array.isArray(initialItems) && initialItems.length > 0) {
           sessionActiveItems = initialItems;
-        } else {
-          sessionActiveItems = await fetchInventoryFromSheet(true);
+        } else if (sessionActiveItems.length === 0) {
+          sessionActiveItems = await fetchInventoryFromSheet();
         }
 
         const outOfStockItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
@@ -853,14 +859,18 @@ ${!isAdminUser ? `
           ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || 
           (i.status === 'low' && (Number(i.qty) || 0) > 0)
         );
-        const normalStockItems = sessionActiveItems.filter(i => 
-          (Number(i.qty) || 0) > (Number(i.minStock) || 1) && i.status !== 'out' && i.status !== 'low'
-        );
         const totalUnits = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
 
         const adminInstruction = userRole === 'admin' 
           ? "อนุญาตให้ใช้เครื่องมือปรับสต็อกได้" 
           : "ผู้ใช้ท่านนี้ไม่มีสิทธิ์แก้ไขสต็อก(update_stock) หรือแก้ไขชื่อสินค้า หากผู้ใช้สั่งแก้ไขให้ตอบปฏิเสธอย่างสุภาพ อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) เท่านั้น";
+
+        const inventoryCatalog = sessionActiveItems.map(i => {
+          const qty = Number(i.qty) || 0;
+          const min = Number(i.minStock) || 1;
+          const status = qty <= 0 ? 'หมดสต็อก (0)' : qty <= min ? `ใกล้หมด (${qty})` : `ปกติ (${qty})`;
+          return `- ${i.name} (รหัส ${i.id}) | คงเหลือ: ${qty} ${i.unit} (ขั้นต่ำ ${min}) | สถานะ: ${status} | หมวด: ${i.category} | ที่เก็บ: ${i.location}`;
+        }).join('\n');
 
         const config = {
           responseModalities: [Modality.AUDIO],
@@ -868,24 +878,37 @@ ${!isAdminUser ? `
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
           },
           systemInstruction: `คุณคือผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของ ENG Smart Store ในโหมดสนทนาด้วยเสียงสด (Live Speech)
-ให้ตอบสนองด้วยเสียงภาษาไทยอย่างเป็นธรรมชาติ สุภาพ ชัดเจน สั้นกระชับ และเป็นกันเอง
+ให้ตอบสนองด้วยเสียงภาษาไทยอย่างเป็นธรรมชาติ สุภาพ ชัดเจน สั้นกระชับ รวดเร็ว และเป็นกันเอง
 ผู้ใช้งานที่คุณกำลังคุยด้วยชื่อ: ${userName} (สิทธิ์: ${userRole})
 ${adminInstruction}
 
-🚨 กฎเหล็กสำคัญสูงสุด (ห้ามตอบผิดเด็ดขาด):
-1. คุณไม่มีข้อมูลรายการสต็อกในสมองของคุณ คุณต้องใช้เครื่องมือ (Tools) ในการค้นหาข้อมูลเสมอ!
-2. เมื่อผู้ใช้ถามว่า "มีของขาดสต็อกไหม", "มีอะไรหมดบ้าง", "เช็คของขาดสต็อก" ให้เรียกใช้ฟังก์ชัน \`get_out_of_stock_items\` ทันที ⛔ ห้ามตอบว่า "ไม่มี" ก่อนเรียกใช้ Tool เด็ดขาด
-3. เมื่อผู้ใช้ถามว่า "มีของใกล้หมดไหม", "อะไรเหลือน้อยบ้าง" ให้เรียกใช้ฟังก์ชัน \`get_low_stock_items\` ทันที
-4. เมื่อผู้ใช้ถามถึงข้อมูลภาพรวมคลังสินค้า ให้เรียกใช้ \`get_stock_summary\`
-5. เมื่อผู้ใช้ถามถึงสินค้าเฉพาะเจาะจง (เช่น "มีถุงมือไหม", "เช็คหลอดไฟ") ให้เรียกใช้ \`check_stock\` โดยใส่คำค้นหา
-6. เมื่อผู้ใช้สั่งเบิก หรือรับเข้าสินค้า ให้เรียกใช้ฟังก์ชัน \`prepare_stock_action\` ทันทีเพื่อส่งรายการไปให้ผู้ใช้กดยืนยันที่หน้าจอ
-7. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน \`export_report\`
-8. หากมีข้อความแจ้งว่าผู้ใช้กดยืนยันรายการ ให้ตอบกลับด้วยเสียงสั้นๆ ว่า "บันทึกรายการลงระบบให้เรียบร้อยแล้วค่ะ" หรือหากยกเลิกให้บอกว่า "ยกเลิกรายการให้แล้วค่ะ"`,
+📊 ข้อมูลภาพรวมคลัง Store FL.6 ปัจจุบัน:
+- มีรายการสินค้าทั้งหมด: ${sessionActiveItems.length} รายการ (รวม ${totalUnits} หน่วย)
+- สินค้าหมดสต็อก: ${outOfStockItems.length} รายการ
+- สินค้าใกล้หมด: ${lowStockItems.length} รายการ
+
+📦 รายการสต็อกสินค้าคงคลังปัจจุบัน:
+${inventoryCatalog}
+
+⚡ คำแนะนำในการตอบ:
+1. คุณมีข้อมูลสต็อกทั้งหมดอยู่แล้วด้านบน ตอบคำถามเรื่องจำนวนคงเหลือ สินค้าหมด หรือสินค้าใกล้หมดได้ทันทีอย่างรวดเร็วและกระชับ
+2. เมื่อผู้ใช้สั่ง "เบิก" หรือ "รับเข้า" สินค้า ให้เรียกใช้ฟังก์ชัน \`prepare_stock_action\` ทันทีเพื่อส่งการ์ดยืนยันไปยังหน้าจอของผู้ใช้
+3. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน \`export_report\` ทันที
+4. เมื่อผู้ใช้ต้องการดูข้อมูลสินค้าเฉพาะเจาะจงหรือต้องการแสดงการ์ดบนจอ ให้เรียกใช้ \`inquire_item_info\`
+5. หากผู้ใช้กดยืนยันรายการ ให้ตอบสั้นๆ ว่า "บันทึกรายการลงระบบให้เรียบร้อยแล้วค่ะ"`,
           tools: [{
             functionDeclarations: [
               {
+                name: "get_stock_extremes",
+                description: "ค้นหาสินค้าที่มีจำนวนมากที่สุดและน้อยที่สุดในคลัง",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {}
+                }
+              },
+              {
                 name: "get_stock_summary",
-                description: "เรียกใช้นี้เพื่อดูข้อมูลสรุปภาพรวมของคลังสินค้าแบบเรียลไทม์ เช่น จำนวนรายการทั้งหมด, จำนวนหน่วยสต็อกรวม, จำนวนสินค้าหมดสต็อก, จำนวนสินค้าใกล้หมด",
+                description: "ดูข้อมูลสรุปภาพรวมของคลังสินค้า เช่น จำนวนรายการทั้งหมด หน่วยรวม หมดสต็อก ใกล้หมด",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {}
@@ -893,7 +916,7 @@ ${adminInstruction}
               },
               {
                 name: "get_out_of_stock_items",
-                description: "เรียกใช้นี้เมื่อผู้ใช้ถามว่า มีสินค้าอะไรหมดบ้าง หรือมีของขาดสต็อกกี่ชิ้น ตัวไหนบ้าง ระบบจะดึงรายชื่อสินค้าที่จำนวนเป็น 0 จากฐานข้อมูลทันที",
+                description: "ดึงรายชื่อสินค้าที่จำนวนเป็น 0 หรือหมดสต็อก",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {}
@@ -901,7 +924,7 @@ ${adminInstruction}
               },
               {
                 name: "get_low_stock_items",
-                description: "เรียกใช้นี้เมื่อผู้ใช้ถามว่า มีสินค้าอะไรใกล้หมดบ้าง หรือต่ำกว่าเกณฑ์ความปลอดภัย ระบบจะดึงรายชื่อสินค้าใกล้หมดจากฐานข้อมูลทันที",
+                description: "ดึงรายชื่อสินค้าใกล้หมดจากเกณฑ์ความปลอดภัย",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {}
@@ -909,7 +932,7 @@ ${adminInstruction}
               },
               {
                 name: "check_stock",
-                description: "ตรวจสอบสต็อกสินค้าปัจจุบันจากฐานข้อมูลแบบเรียลไทม์ทันทีตามคำค้นหา",
+                description: "ตรวจสอบสต็อกสินค้าปัจจุบันตามคำค้นหา",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {
@@ -953,8 +976,7 @@ ${adminInstruction}
                 parameters: {
                   type: Type.OBJECT,
                   properties: {
-                    searchTerm: { type: Type.STRING, description: "คำค้นหา หรือชื่อสินค้า หรือรหัสสินค้า" },
-                    summary: { type: Type.STRING, description: "ข้อความสรุปข้อมูลเพื่อแสดงบนหน้าจอ" }
+                    searchTerm: { type: Type.STRING, description: "คำค้นหา หรือชื่อสินค้า หรือรหัสสินค้า" }
                   },
                   required: ["searchTerm"]
                 }
@@ -999,57 +1021,129 @@ ${adminInstruction}
 
                   let toolResult = "ดำเนินการเรียบร้อยแล้ว";
                   
-                  if (fc.name === "get_stock_summary") {
-                    const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
-                    const lowItems = sessionActiveItems.filter(i => ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || (i.status === 'low' && (Number(i.qty) || 0) > 0));
-                    const units = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+                  if (fc.name === "get_stock_extremes") {
+                    let sortedItems = [...sessionActiveItems].sort((a, b) => (Number(a.qty) || 0) - (Number(b.qty) || 0));
                     
-                    toolResult = `ข้อมูลสรุปคลังสินค้า Store FL.6 ปัจจุบัน:\n- สินค้าทั้งหมด: ${sessionActiveItems.length} รายการ (รวม ${units} หน่วย)\n- สินค้าหมดสต็อก/ขาดสต็อก: ${outItems.length} รายการ ${outItems.length > 0 ? `(${outItems.map(i => `${i.name} [รหัส: ${i.id}]`).join(', ')})` : '(ไม่มี)'}\n- สินค้าใกล้หมด: ${lowItems.length} รายการ ${lowItems.length > 0 ? `(${lowItems.map(i => `${i.name} เหลือ ${i.qty} ${i.unit}`).join(', ')})` : '(ไม่มี)'}\n- สินค้าปกติ: ${sessionActiveItems.length - outItems.length - lowItems.length} รายการ`;
+                    if (sortedItems.length === 0) {
+                      toolResult = "ขณะนี้ไม่มีข้อมูลสินค้าในคลังค่ะ";
+                    } else {
+                      const minItem = sortedItems[0];
+                      const maxItem = sortedItems[sortedItems.length - 1];
+                      toolResult = `สินค้าที่มีจำนวนน้อยที่สุดคือ: ${minItem.name} (รหัส ${minItem.id}) มีจำนวน ${minItem.qty} ${minItem.unit}\n` +
+                        `สินค้าที่มีจำนวนมากที่สุดคือ: ${maxItem.name} (รหัส ${maxItem.id}) มีจำนวน ${maxItem.qty} ${maxItem.unit}`;
+                    }
 
-                    sessionPromise?.then(session => {
+                    if (activeLiveSession) {
                       try {
-                        session.sendToolResponse({
-                          functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                        activeLiveSession.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
                         });
                       } catch (e) {
                         console.error("Tool response error", e);
                       }
-                    });
+                    }
+                  } else if (fc.name === "get_stock_summary") {
+                    const totalItems = sessionActiveItems.length;
+                    const totalQty = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+                    const outCount = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out').length;
+                    const lowCount = sessionActiveItems.filter(i => 
+                      ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || 
+                      (i.status === 'low' && (Number(i.qty) || 0) > 0)
+                    ).length;
+                    
+                    toolResult = `ข้อมูลสรุปภาพรวมคลังสินค้า Store FL.6 ปัจจุบัน:\n` +
+                      `- มีสินค้าทั้งหมด: ${totalItems} รายการ\n` +
+                      `- ปริมาณสต็อกรวมทุกรายการ: ${totalQty} หน่วย\n` +
+                      `- สินค้าหมดสต็อก (ของขาด): ${outCount} รายการ\n` +
+                      `- สินค้าใกล้หมด (ต่ำกว่าเกณฑ์ความปลอดภัย): ${lowCount} รายการ`;
+                    
+                    if (activeLiveSession) {
+                      try {
+                        activeLiveSession.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
+                        });
+                      } catch (e) {
+                        console.error("Tool response error", e);
+                      }
+                    }
                   } else if (fc.name === "get_out_of_stock_items") {
                     const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
-                    toolResult = outItems.length > 0
-                      ? `ขณะนี้มีสินค้าหมดสต็อก/ขาดสต็อกทั้งหมด ${outItems.length} รายการ ได้แก่:\n` + outItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}, ตำแหน่งที่เก็บ: ${i.location})`).join('\n')
-                      : "ยอดเยี่ยมมากค่ะ ขณะนี้ไม่มีสินค้าหมดสต็อกในคลัง ทุกรายการมีสต็อกพร้อมใช้งาน";
+                    if (outItems.length === 0) {
+                      toolResult = "ขณะนี้ไม่มีสินค้าหมดสต็อกในคลัง Store FL.6 ทุกรายการมีของพร้อมใช้งานค่ะ";
+                    } else {
+                      toolResult = `พบสินค้าหมดสต็อกทั้งหมด ${outItems.length} รายการ:\n` +
+                        outItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}) - ตำแหน่ง: ${i.location}`).join('\n');
+                    }
 
-                    sessionPromise?.then(session => {
+                    if (activeLiveSession) {
                       try {
-                        session.sendToolResponse({
-                          functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                        activeLiveSession.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
                         });
                       } catch (e) {
                         console.error("Tool response error", e);
                       }
-                    });
+                    }
                   } else if (fc.name === "get_low_stock_items") {
-                    const lowItems = sessionActiveItems.filter(i => ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || (i.status === 'low' && (Number(i.qty) || 0) > 0));
-                    toolResult = lowItems.length > 0
-                      ? `มีสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ ได้แก่:\n` + lowItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}) เหลือเพียง ${i.qty} ${i.unit} (จุดสั่งซื้อขั้นต่ำ: ${i.minStock})`).join('\n')
-                      : "ไม่มีสินค้าใกล้หมดสต็อก สินค้าส่วนใหญ่มีปริมาณเกินเกณฑ์ขั้นต่ำ";
+                    const lowItems = sessionActiveItems.filter(i => 
+                      ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || 
+                      (i.status === 'low' && (Number(i.qty) || 0) > 0)
+                    );
+                    if (lowItems.length === 0) {
+                      toolResult = "ขณะนี้ไม่มีสินค้าใกล้หมดสต็อก ปริมาณสินค้าทุกรายการเกินเกณฑ์ความปลอดภัยค่ะ";
+                    } else {
+                      toolResult = `พบสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ:\n` +
+                        lowItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}) - คงเหลือ ${i.qty} ${i.unit} (เกณฑ์ขั้นต่ำ ${i.minStock} ${i.unit})`).join('\n');
+                    }
 
-                    sessionPromise?.then(session => {
+                    if (activeLiveSession) {
                       try {
-                        session.sendToolResponse({
-                          functionResponses: [{ id: fc.id, name: fc.name, response: { result: toolResult } }]
+                        activeLiveSession.sendToolResponse({
+                          functionResponses: [{
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: toolResult }
+                          }]
                         });
                       } catch (e) {
                         console.error("Tool response error", e);
                       }
-                    });
+                    }
                   } else if (fc.name === "prepare_stock_action") {
+                    const { action, itemId, quantity } = (fc.args as any) || {};
+                    const qtyNum = Math.max(1, Number(quantity) || 1);
+                    const isStockIn = action === 'stock_in';
+
+                    sessionActiveItems = sessionActiveItems.map(item => {
+                      if (item.id === itemId || 
+                          item.name.toLowerCase() === (itemId || '').toLowerCase() || 
+                          item.name.toLowerCase().includes((itemId || '').toLowerCase())) {
+                        const prevQty = Number(item.qty) || 0;
+                        const newQty = isStockIn ? prevQty + qtyNum : Math.max(0, prevQty - qtyNum);
+                        let newStatus = 'normal';
+                        if (newQty <= 0) newStatus = 'out';
+                        else if (newQty <= (Number(item.minStock) || 1)) newStatus = 'low';
+                        return { ...item, qty: newQty, status: newStatus as any };
+                      }
+                      return item;
+                    });
+
                     toolResult = "ส่งการ์ดยืนยันรายการไปยังหน้าจอของผู้ใช้เรียบร้อยแล้ว แจ้งให้ผู้ใช้ตรวจสอบและกดยืนยัน";
-                    sessionPromise?.then(session => {
+                    if (activeLiveSession) {
                       try {
-                        session.sendToolResponse({
+                        activeLiveSession.sendToolResponse({
                           functionResponses: [{
                             id: fc.id,
                             name: fc.name,
@@ -1059,13 +1153,13 @@ ${adminInstruction}
                       } catch (e) {
                         console.error("Tool response error", e);
                       }
-                    });
+                    }
                   } else if (fc.name === "export_report") {
-                    const fmt = (fc.args?.format as string)?.toUpperCase() || "PDF";
-                    toolResult = `สร้างและดาวน์โหลดรายงาน ${fmt} ให้ผู้ใช้เรียบร้อยแล้ว พร้อมแสดงการ์ดดาวน์โหลดบนหน้าจอ`;
-                    sessionPromise?.then(session => {
+                    const format = (fc.args?.format as string || "pdf").toLowerCase();
+                    toolResult = `สร้างการ์ดดาวน์โหลดรายงาน ${format.toUpperCase()} ส่งไปยังหน้าจอเรียบร้อยแล้วค่ะ`;
+                    if (activeLiveSession) {
                       try {
-                        session.sendToolResponse({
+                        activeLiveSession.sendToolResponse({
                           functionResponses: [{
                             id: fc.id,
                             name: fc.name,
@@ -1075,37 +1169,44 @@ ${adminInstruction}
                       } catch (e) {
                         console.error("Tool response error", e);
                       }
-                    });
+                    }
                   } else if (fc.name === "inquire_item_info" || fc.name === "check_stock") {
                     const searchTerm = (fc.args?.searchTerm as string || "").toLowerCase().trim();
                     let matchingItems = sessionActiveItems;
                     if (searchTerm) {
                       const tokens = searchTerm.split(/\s+/).filter(t => t.length > 0);
                       matchingItems = sessionActiveItems.filter(i => {
-                        const n = i.name.toLowerCase();
-                        const id = i.id.toLowerCase();
-                        const c = i.category.toLowerCase();
+                        const n = (i.name || "").toLowerCase();
+                        const id = (i.id || "").toLowerCase();
+                        const c = (i.category || "").toLowerCase();
                         return tokens.every(t => n.includes(t) || id.includes(t) || c.includes(t));
                       });
                     }
                     
                     let resultText = "";
                     if (matchingItems.length > 0) {
-                      resultText = `พบข้อมูลสินค้า ${matchingItems.length} รายการ:\n` + matchingItems.slice(0, 5).map(i => 
-                        `- ${i.name} (รหัส: ${i.id})\n  สต็อกปัจจุบัน: ${i.qty} ${i.unit}\n  สถานะ: ${i.status}\n  ที่เก็บ: ${i.location}`
-                      ).join('\n\n');
-                      if (fc.name === "inquire_item_info") {
-                         resultText += "\n\n(และได้ส่งการ์ดข้อมูลสินค้าขึ้นหน้าจอให้ผู้ใช้แล้ว)";
-                      }
+                      resultText = `พบข้อมูลสินค้าตรงกัน ${matchingItems.length} รายการ (ส่งการ์ดขึ้นจอเรียบร้อยแล้ว):\n` + 
+                        matchingItems.slice(0, 3).map((i, idx) => {
+                          const qty = Number(i.qty) || 0;
+                          const minStock = Number(i.minStock) || 1;
+                          const isOut = qty <= 0 || i.status === 'out';
+                          const isLow = !isOut && (qty <= minStock || i.status === 'low');
+                          const statusStr = isOut 
+                            ? `⛔ หมดสต็อก (เหลือ 0 ${i.unit})` 
+                            : isLow 
+                            ? `⚠️ ใกล้หมดสต็อก (เหลือ ${qty} ${i.unit} จากขั้นต่ำ ${minStock})` 
+                            : `✅ พร้อมใช้ (${qty} ${i.unit})`;
+                          return `${idx + 1}. ${i.name} (รหัส: ${i.id}) - คงเหลือ: ${qty} ${i.unit} [${statusStr}] ที่เก็บ: ${i.location}`;
+                        }).join('\n');
                     } else {
-                      resultText = `ไม่พบสินค้าที่ตรงกับคำค้นหา "${searchTerm}" ในฐานข้อมูลเลย`;
+                      resultText = `ไม่พบสินค้าหรืออะไหล่ที่ตรงกับคำค้นหา "${searchTerm}" ในระบบคลังสินค้า Store FL.6`;
                     }
                     
                     toolResult = resultText;
                     
-                    sessionPromise?.then(session => {
+                    if (activeLiveSession) {
                       try {
-                        session.sendToolResponse({
+                        activeLiveSession.sendToolResponse({
                           functionResponses: [{
                             id: fc.id,
                             name: fc.name,
@@ -1115,7 +1216,7 @@ ${adminInstruction}
                       } catch (e) {
                         console.error("Tool response error", e);
                       }
-                    });
+                    }
                   }
                 }
               }
@@ -1123,21 +1224,28 @@ ${adminInstruction}
           },
         };
 
-        try {
-          sessionPromise = ai.live.connect({
-            model: "gemini-3.1-flash-live-preview",
-            config,
-            callbacks,
-          });
-          await sessionPromise;
-        } catch (err) {
-          console.warn("Primary Live model failed, falling back to gemini-2.5-flash:", err);
-          sessionPromise = ai.live.connect({
-            model: "gemini-2.5-flash",
-            config,
-            callbacks,
-          });
-          await sessionPromise;
+        sessionPromise = ai.live.connect({
+          model: "gemini-3.1-flash-live-preview",
+          config,
+          callbacks,
+        });
+
+        const session = await sessionPromise;
+        activeLiveSession = session;
+        if (clientWs.readyState === 1) {
+          clientWs.send(JSON.stringify({ ready: true }));
+        }
+
+        // Flush any pending audio/text received during connect handshake
+        while (pendingInputQueue.length > 0) {
+          const item = pendingInputQueue.shift();
+          if (item?.type === 'audio') {
+            activeLiveSession.sendRealtimeInput({
+              audio: { data: item.data, mimeType: "audio/pcm;rate=16000" },
+            });
+          } else if (item?.type === 'text') {
+            activeLiveSession.sendClientContent({ turns: [{ role: "user", parts: [{ text: item.data }] }] });
+          }
         }
       } catch (err) {
         console.error("Live API setup failed:", err);
@@ -1149,24 +1257,24 @@ ${adminInstruction}
     const defaultUserName = url.searchParams.get('userName') || 'ผู้ใช้งาน';
     const defaultUserRole = url.searchParams.get('userRole') || 'user';
 
-    // Auto-initialize after 200ms if client hasn't sent 'init' message yet
-    const fallbackTimer = setTimeout(() => {
-      if (!isInitialized) {
-        setupLiveSession(defaultUserName, defaultUserRole, []);
-      }
-    }, 200);
+    // Immediate session initialization on connection
+    setupLiveSession(defaultUserName, defaultUserRole, cachedItems);
 
     clientWs.on("message", async (data) => {
       try {
         const parsed = JSON.parse(data.toString());
 
         if (parsed.type === "init") {
-          clearTimeout(fallbackTimer);
-          await setupLiveSession(
-            parsed.userName || defaultUserName,
-            parsed.userRole || defaultUserRole,
-            parsed.items || []
-          );
+          if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+            sessionActiveItems = parsed.items;
+          }
+          if (!isInitialized) {
+            setupLiveSession(
+              parsed.userName || defaultUserName,
+              parsed.userRole || defaultUserRole,
+              parsed.items || []
+            );
+          }
           return;
         }
 
@@ -1175,19 +1283,21 @@ ${adminInstruction}
           return;
         }
 
-        if (!isInitialized) {
-          clearTimeout(fallbackTimer);
-          await setupLiveSession(defaultUserName, defaultUserRole, []);
-        }
-
-        if (sessionPromise) {
-          const session = await sessionPromise;
-          if (parsed.audio) {
-            session.sendRealtimeInput({
+        if (parsed.audio) {
+          if (activeLiveSession) {
+            activeLiveSession.sendRealtimeInput({
               audio: { data: parsed.audio, mimeType: "audio/pcm;rate=16000" },
             });
-          } else if (parsed.text) {
-            session.sendClientContent({ turns: [{ role: "user", parts: [{ text: parsed.text }] }] });
+          } else {
+            if (pendingInputQueue.length < 20) {
+              pendingInputQueue.push({ type: 'audio', data: parsed.audio });
+            }
+          }
+        } else if (parsed.text) {
+          if (activeLiveSession) {
+            activeLiveSession.sendClientContent({ turns: [{ role: "user", parts: [{ text: parsed.text }] }] });
+          } else {
+            pendingInputQueue.push({ type: 'text', data: parsed.text });
           }
         }
       } catch (e) {
@@ -1196,15 +1306,20 @@ ${adminInstruction}
     });
 
     clientWs.on("close", async () => {
-      clearTimeout(fallbackTimer);
       try {
-        if (sessionPromise) {
+        if (activeLiveSession) {
+          activeLiveSession.close();
+          activeLiveSession = null;
+        } else if (sessionPromise) {
           const session = await sessionPromise;
           session.close();
         }
       } catch (e) { }
     });
   });
+
+  // Pre-warm inventory cache immediately on startup
+  fetchInventoryFromSheet().catch(() => {});
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
