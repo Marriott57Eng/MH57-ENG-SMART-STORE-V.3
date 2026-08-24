@@ -700,7 +700,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   return (
     <div className="flex flex-col h-full max-h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Top Bar */}
-      <div className="bg-white dark:bg-slate-900 px-3.5 pt-safe-header pb-1.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 shadow-xs transition-colors duration-200 z-10">
+      <div className="bg-white dark:bg-slate-900 px-3.5 pt-safe-header pb-1.5 border-b border-slate-300 dark:border-slate-750 flex items-center justify-between shrink-0 shadow-2xs transition-colors duration-200 z-10">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0">
             <Sparkles className="w-3 h-3" />
@@ -708,7 +708,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           <div>
             <div className="flex items-center gap-1.5">
               <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base leading-tight">AI ผู้ช่วยคลังสินค้า</h2>
-              <span className="text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+              <span className="text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.2 rounded border border-blue-300 dark:border-blue-700">
                 Gemini 3.5 Flash Lite
               </span>
             </div>
@@ -807,7 +807,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 {msg.role === 'user' ? (
                   <div className="whitespace-pre-wrap">{msg.text}</div>
                 ) : (
-                  <div className="prose prose-slate dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed space-y-2 prose-p:my-1 prose-p:leading-relaxed prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-strong:font-extrabold prose-strong:text-slate-900 dark:prose-strong:text-white prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono">
+                  <div className="prose prose-slate dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed space-y-2 prose-p:my-1 prose-p:leading-relaxed prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-strong:font-extrabold prose-strong:text-slate-900 dark:prose-strong:text-white prose-code:text-white prose-code:bg-slate-950 dark:prose-code:bg-black prose-code:border prose-code:border-slate-800 prose-code:px-2 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono">
                     <ReactMarkdown>{msg.text}</ReactMarkdown>
                   </div>
                 )}
@@ -879,7 +879,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                       </div>
 
                       {msg.dbAction.record && (
-                        <div className="font-mono text-sm font-semibold bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm">
+                        <div className="font-mono text-sm font-semibold bg-slate-950 dark:bg-black px-2.5 py-1 rounded-lg border border-slate-700 dark:border-slate-800 text-white shadow-xs">
                           {msg.dbAction.record.id}
                         </div>
                       )}
@@ -898,7 +898,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                               {msg.dbAction.item.category}
                             </div>
                           </div>
-                          <div className="font-mono text-sm text-slate-500 dark:text-slate-400 text-right pt-1">
+                          <div className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2 py-0.5 rounded border border-slate-700 dark:border-slate-800 text-right shadow-2xs">
                             {msg.dbAction.item.id}
                           </div>
                         </div>
@@ -1024,7 +1024,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                 <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 leading-snug">
                                   {item.name}
                                 </h4>
-                                <span className="font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                                <span className="font-mono text-[11px] font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs shrink-0">
                                   {item.id}
                                 </span>
                               </div>
@@ -1169,7 +1169,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         style={{
           paddingBottom: 'max(108px, calc(env(safe-area-inset-bottom, 24px) + 90px))'
         }}
-        className="px-3 pt-2 pb-1 bg-white dark:bg-slate-900 border-t border-slate-200/90 dark:border-slate-800 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] transition-colors duration-200 z-20"
+        className="px-3 pt-2 pb-1 bg-white dark:bg-slate-900 border-t border-slate-300 dark:border-slate-750 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] transition-colors duration-200 z-20"
       >
         {/* Live Chat Button & Voice Reactive Controls */}
         <div className="flex flex-col items-center justify-center mb-2">
@@ -1292,16 +1292,16 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
             e.preventDefault();
             handleStopAndSend();
           }}
-          className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 rounded-xl p-1 shadow-xs transition-colors"
+          className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 rounded-xl p-1 shadow-2xs transition-colors"
         >
           {/* Normal Dictation Mic Button */}
           <button
             type="button"
             onClick={toggleListening}
             disabled={isProcessing}
-            className={`w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 ${
+            className={`w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 border border-slate-300 dark:border-slate-650 ${
               isListening
-                ? 'bg-red-500 text-white animate-pulse'
+                ? 'bg-red-500 text-white animate-pulse border-red-400'
                 : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'
             }`}
           >
@@ -1319,7 +1319,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           <button
             type="submit"
             disabled={!inputText.trim() || isProcessing}
-            className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
+            className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 border border-blue-500"
           >
             <Send className="w-3.5 h-3.5" />
           </button>

@@ -55,27 +55,27 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 animate-in zoom-in-95 duration-200 transition-colors"
+        className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-300 dark:border-slate-700 animate-in zoom-in-95 duration-200 transition-colors"
       >
         {/* Header Badges & Close Button */}
-        <div className="p-3.5 pb-2.5 bg-white dark:bg-slate-900 flex items-center justify-between">
+        <div className="p-3.5 pb-2.5 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-750">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs font-bold text-white bg-blue-600 px-2.5 py-0.5 rounded-md shadow-xs">
+            <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2.5 py-0.5 rounded-md shadow-xs border border-slate-700 dark:border-slate-800">
               {item.id}
             </span>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs">
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-2xs">
               {item.category}
             </span>
             {isOut ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-600 dark:bg-red-950/70 dark:text-red-300 border border-red-200 dark:border-red-800/80 shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-600 dark:bg-red-950/70 dark:text-red-300 border border-red-300 dark:border-red-700 shadow-2xs">
                 <XCircle className="w-3.5 h-3.5" /> หมดจากคลัง
               </span>
             ) : isLow ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-2xs">
                 <AlertTriangle className="w-3.5 h-3.5" /> ใกล้หมด
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5" /> ปกติ
               </span>
             )}
@@ -83,14 +83,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer shrink-0 border border-slate-300 dark:border-slate-650"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Item Title */}
-        <div className="px-3.5 py-2 border-y border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-850/50">
+        <div className="px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-850">
           <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 leading-snug">
             {item.name}
           </h2>
@@ -100,32 +100,32 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         <div className="p-3.5 space-y-2.5 bg-white dark:bg-slate-900">
           {/* Stock Status Card */}
           <div
-            className={`p-3 rounded-xl border ${
+            className={`p-3 rounded-xl border shadow-2xs ${
               isOut
-                ? 'bg-red-50/20 dark:bg-red-950/20 border-red-200 dark:border-red-800/70'
+                ? 'bg-red-50/40 dark:bg-red-950/30 border-red-300 dark:border-red-700'
                 : isLow
-                ? 'bg-amber-50/20 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/70'
-                : 'bg-emerald-50/20 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/70'
+                ? 'bg-amber-50/40 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700'
+                : 'bg-emerald-50/40 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 จำนวนคงเหลือปัจจุบัน
               </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                เกณฑ์ขั้นต่ำ: <strong className="text-slate-800 dark:text-slate-200 font-bold">{item.minStock}</strong> {item.unit}
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                เกณฑ์ขั้นต่ำ: <strong className="text-slate-900 dark:text-slate-200 font-bold">{item.minStock}</strong> {item.unit}
               </span>
             </div>
 
             <div className="flex items-baseline">
               <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{item.qty}</span>
-              <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 ml-1.5">{item.unit}</span>
+              <span className="text-sm font-bold text-slate-600 dark:text-slate-300 ml-1.5">{item.unit}</span>
             </div>
           </div>
           
           {/* Out of Stock Details Card */}
           {isOut && (
-            <div className="bg-red-50/50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/80 p-2.5 rounded-xl relative overflow-hidden">
+            <div className="bg-red-50/60 dark:bg-red-950/40 border border-red-300 dark:border-red-700 p-2.5 rounded-xl relative overflow-hidden shadow-2xs">
               <div className="absolute top-1 right-2 opacity-15 pointer-events-none">
                 <AlertTriangle className="w-12 h-12 text-red-500" />
               </div>
@@ -160,16 +160,16 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
           {/* Details Grid */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="bg-slate-50/80 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 p-2.5 rounded-xl">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+            <div className="bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5">
                 <MapPin className="w-3.5 h-3.5 text-blue-500" />
                 <span>ตำแหน่งจัดเก็บ</span>
               </div>
               <p className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{item.location || 'Store FL.6'}</p>
             </div>
 
-            <div className="bg-slate-50/80 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 p-2.5 rounded-xl">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+            <div className="bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5">
                 <Layers className="w-3.5 h-3.5 text-purple-500" />
                 <span>หมวดหมู่</span>
               </div>
@@ -179,7 +179,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
           {/* Ordered / Delivery info if any */}
           {(item.ordered || item.orderedDate) && (
-            <div className="bg-blue-50/50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-800/70 p-2.5 rounded-xl">
+            <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-2.5 rounded-xl shadow-2xs">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-800 dark:text-blue-300 mb-0.5">
                 <ShoppingCart className="w-3.5 h-3.5" />
                 <span>สถานะการสั่งซื้อล่าสุด</span>
@@ -197,8 +197,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
           {/* Note if any */}
           {item.note && (
-            <div className="bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 p-2.5 rounded-xl">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+            <div className="bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5">
                 <FileText className="w-3.5 h-3.5 text-slate-400" />
                 <span>หมายเหตุ</span>
               </div>
@@ -208,14 +208,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
 
         {/* Footer Actions (2 Columns) */}
-        <div className="p-3.5 pt-1 pb-3.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2">
+        <div className="p-3.5 pt-2 pb-3.5 border-t border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 flex flex-col gap-2">
           <div className="grid grid-cols-2 gap-2.5">
             <button
               onClick={() => {
                 onStartRequisition(item);
                 onClose();
               }}
-              className="w-full bg-[#0f172a] hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-750 text-white py-2.5 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xs active:scale-98 transition-all cursor-pointer"
+              className="w-full bg-[#0f172a] hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white py-2.5 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xs active:scale-98 transition-all cursor-pointer border border-slate-800 dark:border-blue-500"
             >
               <ClipboardList className="w-4 h-4" />
               เบิก / รับเข้า
@@ -226,7 +226,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 onAskAI(item);
                 onClose();
               }}
-              className="w-full bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border border-blue-400 dark:border-blue-500/80 hover:bg-blue-50/50 dark:hover:bg-slate-800 py-2.5 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer shadow-xs"
+              className="w-full bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-400 dark:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-750 py-2.5 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer shadow-2xs"
             >
               <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               ถาม AI
@@ -239,7 +239,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 onEditItem(item);
                 onClose();
               }}
-              className="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              className="w-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
             >
               <Edit3 className="w-3.5 h-3.5" />
               แก้ไขข้อมูลอะไหล่นี้ (Admin)

@@ -103,10 +103,10 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Top Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 pt-safe-header pb-3 shrink-0 shadow-xs transition-colors duration-200">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 px-4 pt-safe-header pb-3 shrink-0 shadow-sm transition-colors duration-200">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs border border-blue-500">
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
@@ -119,7 +119,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             <button
               onClick={handleExportPdf}
               disabled={isExportingPdf || records.length === 0}
-              className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 active:scale-95 disabled:opacity-50 text-slate-700 dark:text-slate-300 px-2.5 py-2 rounded-xl text-lg font-semibold flex items-center gap-1 transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
+              className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 active:scale-95 disabled:opacity-50 text-slate-700 dark:text-slate-200 px-2.5 py-2 rounded-xl text-lg font-semibold flex items-center gap-1 transition-all border border-slate-300 dark:border-slate-650 cursor-pointer shadow-2xs"
               title="ส่งออกรายงาน PDF"
             >
               {isExportingPdf ? (
@@ -132,7 +132,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 
             <button
               onClick={onOpenNewRequisition}
-              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 text-white px-3 py-2 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 text-white px-3 py-2 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-sm transition-all border border-blue-500 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               บันทึก เบิก/รับเข้า
@@ -141,16 +141,16 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
         </div>
 
         {/* Stats summary banner */}
-        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-100 dark:border-slate-700/80 text-center">
-            <span className="text-xs text-slate-400 dark:text-slate-400 block font-medium">รายการทั้งหมด</span>
+        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-slate-750">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-center shadow-2xs">
+            <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">รายการทั้งหมด</span>
             <span className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{records.length} ครั้ง</span>
           </div>
-          <div className="bg-blue-50/60 dark:bg-blue-950/40 p-2 rounded-xl border border-blue-100 dark:border-blue-900/50 text-center">
+          <div className="bg-blue-50/70 dark:bg-blue-950/40 p-2 rounded-xl border border-blue-200 dark:border-blue-800/80 text-center shadow-2xs">
             <span className="text-xs text-blue-600 dark:text-blue-400 block font-medium">เบิกออกรวม</span>
             <span className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{totalWithdrawn} ชิ้น</span>
           </div>
-          <div className="bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-100 dark:border-emerald-900/50 text-center">
+          <div className="bg-emerald-50/70 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800/80 text-center shadow-2xs">
             <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">รับเข้ารวม</span>
             <span className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">+{totalReceived} ชิ้น</span>
           </div>
@@ -160,20 +160,20 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
         <div className="flex items-center gap-1.5 mt-3 pt-1">
           <button
             onClick={() => setTypeFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-lg font-bold transition-all cursor-pointer shadow-2xs ${
               typeFilter === 'all'
-                ? 'bg-slate-800 dark:bg-blue-600 text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-650 hover:bg-slate-100 dark:hover:bg-slate-750'
             }`}
           >
             ทั้งหมด ({records.length})
           </button>
           <button
             onClick={() => setTypeFilter('out')}
-            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
               typeFilter === 'out'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+                ? 'bg-blue-600 text-white border border-blue-700 dark:border-blue-500 shadow-xs'
+                : 'bg-blue-50/80 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 hover:bg-blue-100 dark:hover:bg-blue-900/50'
             }`}
           >
             <ArrowUpRight className="w-4 h-4" />
@@ -181,10 +181,10 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
           </button>
           <button
             onClick={() => setTypeFilter('in')}
-            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
               typeFilter === 'in'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+                ? 'bg-emerald-600 text-white border border-emerald-700 dark:border-emerald-500 shadow-xs'
+                : 'bg-emerald-50/80 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
             }`}
           >
             <ArrowDownRight className="w-4 h-4" />
@@ -200,7 +200,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="ค้นหาชื่อผู้ทำรายการ, สินค้า, รหัส หรือสถานที่..."
-            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-400 transition-all"
+            className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-3 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 shadow-2xs transition-all"
           />
         </div>
       </div>
@@ -208,8 +208,8 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
       {/* Record list container */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
         {filteredRecords.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <div className="w-14 h-14 bg-slate-100 dark:bg-slate-850 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400 dark:text-slate-500">
+          <div className="text-center py-12 px-4 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-900/50">
+            <div className="w-14 h-14 bg-slate-100 dark:bg-slate-850 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-750">
               <ClipboardList className="w-6 h-6" />
             </div>
             <h3 className="font-bold text-slate-700 dark:text-slate-300 text-lg mb-1">
@@ -222,7 +222,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             </p>
             <button
               onClick={onOpenNewRequisition}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer border border-blue-500"
             >
               <Plus className="w-4 h-4" />
               บันทึก เบิก/รับเข้า
@@ -243,15 +243,15 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             return (
               <div
                 key={record.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs dark:shadow-none hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-3"
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-4 shadow-sm hover:border-blue-400 dark:hover:border-blue-500/80 transition-all space-y-3"
               >
                 {/* Top: User Info, Type Badge & Timestamp */}
-                <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <div className="flex items-start justify-between gap-2 border-b border-slate-200 dark:border-slate-750 pb-2.5">
                   <div className="flex items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg shrink-0 border ${
                       isStockIn 
-                        ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
-                        : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                        ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' 
+                        : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                     }`}>
                       {isStockIn ? (
                         <ArrowDownRight className="w-5 h-5" />
@@ -292,12 +292,12 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                 </div>
 
                 {/* Middle: Item Details */}
-                <div className="bg-slate-50/90 dark:bg-slate-800/80 rounded-xl p-3 border border-slate-200/70 dark:border-slate-700/80">
+                <div className="bg-slate-50 dark:bg-slate-800/80 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-start gap-3">
                     {/* Item Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                        <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2 py-0.5 rounded-md border border-slate-700 dark:border-slate-800 shadow-2xs">
                           {record.itemId}
                         </span>
                         <span
@@ -314,7 +314,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                       </h4>
 
                       {/* CURRENT WAREHOUSE STOCK BALANCE */}
-                      <div className="mt-2 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between flex-wrap gap-1">
+                      <div className="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between flex-wrap gap-1">
                         <div className="flex items-center gap-1.5 text-lg">
                           <Boxes className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                           <span className="text-slate-500 dark:text-slate-400 text-sm">สต็อกคงเหลือปัจจุบัน:</span>
@@ -367,11 +367,11 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 
                 {/* Admin Actions: Edit & Delete (Only visible for Admin) */}
                 {isAdmin && (
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-750 flex items-center justify-end gap-2">
                     {onEditRecord && (
                       <button
                         onClick={() => onEditRecord(record)}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1 font-semibold transition-all px-2.5 py-1 rounded-lg cursor-pointer"
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1 font-semibold transition-all px-2.5 py-1 rounded-lg cursor-pointer border border-blue-200 dark:border-blue-800"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                         แก้ไขประวัติ
@@ -384,7 +384,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                           onDeleteRecord(record.id);
                         }
                       }}
-                      className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 dark:hover:bg-red-900/50 flex items-center gap-1 font-semibold transition-all px-2.5 py-1 rounded-lg cursor-pointer"
+                      className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 dark:hover:bg-red-900/50 flex items-center gap-1 font-semibold transition-all px-2.5 py-1 rounded-lg cursor-pointer border border-red-200 dark:border-red-800"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       ลบประวัตินี้

@@ -161,13 +161,13 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/80 dark:border-slate-800 animate-in slide-in-from-bottom-4 sm:zoom-in-95 transition-colors">
+      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 animate-in slide-in-from-bottom-4 sm:zoom-in-95 transition-colors">
         
         {/* Header */}
-        <div className="px-3.5 sm:px-4 pt-safe-header pb-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
+        <div className="px-3.5 sm:px-4 pt-safe-header pb-3 sm:py-4 border-b border-slate-200 dark:border-slate-750 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-sm transition-colors ${
-              transactionType === 'out' ? 'bg-blue-600 shadow-blue-500/20' : 'bg-emerald-600 shadow-emerald-500/20'
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-sm transition-colors border ${
+              transactionType === 'out' ? 'bg-blue-600 border-blue-500 shadow-blue-500/20' : 'bg-emerald-600 border-emerald-500 shadow-emerald-500/20'
             }`}>
               {transactionType === 'out' ? (
                 <ArrowUpRight className="w-5 h-5 stroke-[2.5]" />
@@ -188,7 +188,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-650"
           >
             <X className="w-4 h-4" />
           </button>
@@ -196,7 +196,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
         {/* Transaction Type Switcher (เบิกออก vs รับเข้า) */}
         <div className="px-3.5 sm:px-4 pt-2.5 pb-1 bg-white dark:bg-slate-900 shrink-0">
-          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-200/80 dark:border-slate-700">
+          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-850 rounded-xl sm:rounded-2xl border border-slate-300 dark:border-slate-700 shadow-2xs">
             <button
               type="button"
               onClick={() => {
@@ -205,7 +205,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               }}
               className={`py-2 px-3 rounded-lg sm:rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 transactionType === 'out'
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs border border-blue-500'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
@@ -221,7 +221,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               }}
               className={`py-2 px-3 rounded-lg sm:rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 transactionType === 'in'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-emerald-600 text-white shadow-xs border border-emerald-500'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
@@ -235,7 +235,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 bg-white dark:bg-slate-900">
           <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3 flex-1">
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-xl text-sm flex items-center gap-2">
+              <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-xl text-sm flex items-center gap-2 shadow-2xs">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -264,12 +264,12 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                   setIsDropdownOpen(true);
                 }}
                 placeholder="พิมพ์ชื่อสินค้า หรือรหัส (เช่น A0000001, แอลกอฮอล์, สายยาง)..."
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-800 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-8 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-800 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
               />
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
               >
                 <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -277,7 +277,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
             {/* Live Autocomplete Dropdown List */}
             {isDropdownOpen && (
-              <div className="absolute z-50 left-0 right-0 mt-1 max-h-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/80 animate-in fade-in-50 zoom-in-95">
+              <div className="absolute z-50 left-0 right-0 mt-1 max-h-56 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl shadow-xl overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/80 animate-in fade-in-50 zoom-in-95">
                 {filteredDropdownItems.length === 0 ? (
                   <div className="p-3 text-center text-sm text-slate-400 dark:text-slate-500">
                     ไม่พบสินค้าที่ตรงกับ "{itemSearchQuery}"
@@ -295,7 +295,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-1 py-0.2 rounded">
+                            <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-1.5 py-0.2 rounded shadow-2xs">
                               {item.id}
                             </span>
                             <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-850 px-1.5 py-0.2 rounded">
@@ -331,11 +331,11 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
             {/* Current Item Summary Card */}
             {currentItem && (
-              <div className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3">
+              <div className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-mono font-bold text-blue-700 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-950/60 px-1.5 py-0.2 rounded">
+                      <span className="text-xs font-mono font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
                         {currentItem.id}
                       </span>
                       <span className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
@@ -382,9 +382,9 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                        setQty(isNaN(parsed) ? '' : Math.max(0, parsed));
                     }
                   }}
-                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800"
+                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
                 />
-                <span className="text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl min-w-[65px] text-center">
+                <span className="text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 px-3 py-2 rounded-xl min-w-[65px] text-center shadow-2xs">
                   {currentItem?.unit || 'ชิ้น'}
                 </span>
               </div>
@@ -399,7 +399,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 type="text"
                 value={requestedBy}
                 readOnly
-                className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed font-medium"
+                className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed font-medium shadow-2xs"
               />
             </div>
           </div>
@@ -421,7 +421,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                   ? 'เช่น ซ่อมระบบแอร์ชั้น 4, เปลี่ยนสวิตช์ไฟห้อง 201'
                   : 'เช่น สั่งซื้อเติมสต็อกประจำเดือน, ซัพพลายเออร์ส่งมอบ, คืนของเหลือ'
               }
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
             />
           </div>
 
@@ -436,7 +436,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 type="date"
                 value={dateStr}
                 onChange={(e) => setDateStr(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
               />
             </div>
 
@@ -449,7 +449,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 type="time"
                 value={timeStr}
                 onChange={(e) => setTimeStr(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
               />
             </div>
           </div>
@@ -465,19 +465,19 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="เช่น ใบสั่งซื้อ PO-1029, งานด่วนรอบดึก"
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
             />
           </div>
         </div>
 
         {/* Sticky Fixed Bottom Action Button */}
-        <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-750 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
           <button
             type="submit"
-            className={`w-full text-white font-bold py-3.5 rounded-xl shadow-md text-base flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer ${
+            className={`w-full text-white font-bold py-3.5 rounded-xl shadow-md text-base flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer border ${
               transactionType === 'out'
-                ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
-                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                ? 'bg-blue-600 hover:bg-blue-700 border-blue-500 shadow-blue-500/20'
+                : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-500 shadow-emerald-500/20'
             }`}
           >
             <Check className="w-5 h-5 stroke-[2.5]" />

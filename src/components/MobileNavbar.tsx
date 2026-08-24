@@ -27,7 +27,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
         transform: 'translateZ(0)',
         WebkitTransform: 'translateZ(0)'
       }}
-      className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 px-1 pt-1.5 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] transition-colors duration-200"
+      className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-300 dark:border-slate-750 px-1 pt-1.5 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] transition-colors duration-200"
     >
       {/* 1. Inventory Tab */}
       <button

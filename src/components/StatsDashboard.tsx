@@ -160,7 +160,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
   return (
     <div className="p-4 pt-safe-content space-y-4 pb-24 bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Top Header Card */}
-      <div className="bg-gradient-to-tr from-slate-900 via-slate-800 to-blue-950 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/80 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden border border-transparent dark:border-slate-800">
+      <div className="bg-gradient-to-tr from-slate-900 via-slate-800 to-blue-950 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/80 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden border border-slate-700/80 dark:border-slate-700">
         <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />
         
         <div className="flex items-center justify-between mb-3 relative z-10">
@@ -173,7 +173,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white flex items-center gap-1.5 text-lg cursor-pointer"
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white flex items-center gap-1.5 text-lg border border-white/20 dark:border-slate-600 cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>ซิงค์ชีต</span>
@@ -186,7 +186,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
         {/* 3 Key Metric Blocks */}
         <div className="grid grid-cols-3 gap-2 relative z-10">
-          <div className="bg-white/10 dark:bg-slate-800/60 backdrop-blur-md rounded-xl p-2.5 border border-white/10 dark:border-slate-700/50 text-center">
+          <div className="bg-white/10 dark:bg-slate-800/80 backdrop-blur-md rounded-xl p-2.5 border border-white/25 dark:border-slate-600/80 text-center shadow-xs">
             <span className="text-xs text-slate-300 uppercase tracking-wider block">สินค้าทั้งหมด</span>
             <span className="text-lg font-extrabold text-white">{summary?.totalItems || items.length}</span>
             <span className="text-sm text-slate-400 block">SKUs</span>
@@ -194,7 +194,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
           <div 
             onClick={onFilterLowStock}
-            className="bg-amber-500/20 dark:bg-amber-950/40 backdrop-blur-md rounded-xl p-2.5 border border-amber-400/30 dark:border-amber-500/40 text-center cursor-pointer active:scale-95 transition-transform"
+            className="bg-amber-500/20 dark:bg-amber-950/60 backdrop-blur-md rounded-xl p-2.5 border border-amber-400/50 dark:border-amber-500/70 text-center cursor-pointer active:scale-95 transition-transform shadow-xs"
           >
             <span className="text-[11px] sm:text-xs text-amber-200 dark:text-amber-300 font-semibold uppercase tracking-tight block truncate">
               สต๊อกใกล้หมดและหมดแล้ว
@@ -205,7 +205,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
             <span className="text-xs text-amber-200/80 dark:text-amber-300/80 block">กดดูรายการ &gt;</span>
           </div>
 
-          <div className="bg-white/10 dark:bg-slate-800/60 backdrop-blur-md rounded-xl p-2.5 border border-white/10 dark:border-slate-700/50 text-center">
+          <div className="bg-white/10 dark:bg-slate-800/80 backdrop-blur-md rounded-xl p-2.5 border border-white/25 dark:border-slate-600/80 text-center shadow-xs">
             <span className="text-xs text-slate-300 uppercase tracking-wider block">จำนวนรวม</span>
             <span className="text-lg font-extrabold text-white">{summary?.totalQty || 0}</span>
             <span className="text-sm text-slate-400 block">หน่วย</span>
@@ -217,16 +217,16 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
       <div className="flex flex-col gap-2">
       <div 
         onClick={handleInlineAnalysis}
-        className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-3xl p-5 flex items-center justify-between cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 active:scale-[0.99] transition-all shadow-sm"
+        className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-blue-950/40 border border-blue-300 dark:border-blue-700/80 rounded-3xl p-5 flex items-center justify-between cursor-pointer hover:border-blue-400 dark:hover:border-blue-600 active:scale-[0.99] transition-all shadow-sm"
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm border border-blue-500">
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-xl">AI Smart Analysis</h3>
-              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
+              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/70 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-700">
                 Antigravity
               </span>
             </div>
@@ -237,10 +237,10 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
       </div>
       
       {showAnalysis && (
-        <div className="bg-white dark:bg-slate-900 border border-blue-200/90 dark:border-blue-900/60 rounded-3xl p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-700/80 rounded-3xl p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-200 dark:border-blue-800">
                 AI
               </div>
               <div>
@@ -255,7 +255,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                 setTimeout(() => handleInlineAnalysis(), 50);
               }}
               disabled={isAnalyzing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-900/60 hover:bg-blue-100 dark:hover:bg-blue-900/80 transition-colors disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/80 transition-colors disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzing ? 'animate-spin' : ''}`} />
               <span>วิเคราะห์ใหม่</span>
@@ -281,7 +281,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
       {/* Low Stock Alert Section */}
       {lowStockItems.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs dark:shadow-none">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-700 p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-amber-500" />
@@ -300,7 +300,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
               <div
                 key={item.id}
                 onClick={() => onSelectItem(item)}
-                className="bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 rounded-xl p-2.5 flex items-center justify-between cursor-pointer transition-colors"
+                className="bg-amber-50/70 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 border border-amber-300 dark:border-amber-700/70 rounded-xl p-2.5 flex items-center justify-between cursor-pointer transition-colors shadow-2xs"
               >
                 <div className="min-w-0 pr-2">
                   <p className="font-bold text-slate-800 dark:text-slate-100 text-lg truncate">{item.name}</p>
@@ -321,7 +321,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
       )}
 
       {/* Category Breakdown Section */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs dark:shadow-none">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-700 p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <Layers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
           <h2 className="font-bold text-slate-800 dark:text-slate-100 text-lg">สัดส่วนสินค้าตามหมวดหมู่</h2>
@@ -334,7 +334,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
               <div
                 key={cat.name}
                 onClick={() => onSelectCategory(cat.name)}
-                className="p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer transition-colors"
+                className="p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer transition-colors"
               >
                 <div className="flex items-center justify-between text-lg mb-1">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">{cat.name}</span>
@@ -342,7 +342,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                     {cat.count} รายการ ({cat.totalQty} ชิ้น)
                   </span>
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-200 dark:border-slate-700/60">
                   <div
                     className="bg-blue-600 h-full rounded-full transition-all duration-500"
                     style={{ width: `${Math.max(percentage, 5)}%` }}
@@ -357,7 +357,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
       {/* Analytics: Top Items This Month */}
       {topItemsThisMonth.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs dark:shadow-none">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-700 p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
             <h2 className="font-bold text-slate-800 dark:text-slate-100 text-lg">รายการเบิกสูงสุดเดือนนี้</h2>
@@ -368,7 +368,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.3} />
                 <XAxis type="number" stroke="#94a3b8" />
                 <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
+                <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
                 <Bar dataKey="qty" name="จำนวนที่เบิก" fill="#10B981" radius={[0, 4, 4, 0]}>
                   {topItemsThisMonth.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'][index % 5]} />
@@ -382,7 +382,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
       {/* Analytics: Monthly Trend */}
       {monthlyTrend.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs dark:shadow-none">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-700 p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <ArrowUpRight className="w-5 h-5 text-blue-500 dark:text-blue-400" />
             <h2 className="font-bold text-slate-800 dark:text-slate-100 text-lg">แนวโน้มการเบิกจ่าย (ยอดรวม)</h2>
@@ -393,7 +393,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
                 <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.1)'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
+                <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.1)'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
                 <Bar dataKey="qty" name="จำนวนรวม" fill="#3B82F6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -403,7 +403,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
       {/* Analytics: Out of Stock Duration */}
       {outOfStockDurations.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs dark:shadow-none">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-700 p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-red-500 dark:text-red-400" />
             <h2 className="font-bold text-slate-800 dark:text-slate-100 text-lg">สินค้าหมดสต๊อกนานที่สุด (วัน)</h2>
@@ -414,7 +414,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.3} />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={60} stroke="#94a3b8" />
                 <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.1)'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
+                <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.1)'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
                 <Bar dataKey="days" name="จำนวนวัน" fill="#EF4444" radius={[4, 4, 0, 0]}>
                   {outOfStockDurations.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.days > 7 ? '#EF4444' : '#F87171'} />

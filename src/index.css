@@ -58,3 +58,8 @@ input, textarea, select {
 body, input, textarea, select, button, p, span, div, h1, h2, h3, h4, h5, h6, a, li, th, td {
   font-size: 13.5px !important;
 }
+
+code, pre {
+  background-color: #020617 !important;
+  color: #ffffff !important;
+}

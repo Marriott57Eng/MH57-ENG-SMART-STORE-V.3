@@ -133,12 +133,12 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/80 dark:border-slate-800 animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 transition-colors">
+      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 transition-colors">
         
         {/* Modal Header */}
-        <div className="px-4 pt-safe-header pb-3 sm:py-4 bg-slate-50 dark:bg-slate-850 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
+        <div className="px-4 pt-safe-header pb-3 sm:py-4 bg-slate-50 dark:bg-slate-850 flex items-center justify-between border-b border-slate-200 dark:border-slate-750 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs border border-blue-500">
               <Package className="w-4 h-4" />
             </div>
             <div>
@@ -148,7 +148,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-650"
           >
             <X className="w-4 h-4" />
           </button>
@@ -157,7 +157,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
         {/* Modal Form */}
         <form onSubmit={handleSubmit} className="p-4 overflow-y-auto space-y-4 flex-1">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-xs font-medium">
+            <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-300 dark:border-red-700 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-xs font-medium shadow-2xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -175,7 +175,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 required
                 value={id}
                 onChange={(e) => setId(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
                 placeholder="เช่น A000000166"
               />
             </div>
@@ -194,7 +194,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                     setCategory(e.target.value);
                   }
                 }}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               >
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -207,7 +207,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   placeholder="ระบุชื่อหมวดหมู่ใหม่..."
-                  className="w-full mt-1 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none"
+                  className="w-full mt-1 bg-white dark:bg-slate-800 border border-blue-400 dark:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none shadow-2xs"
                 />
               )}
             </div>
@@ -224,13 +224,13 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               placeholder="ระบุชื่อสินค้า..."
             />
           </div>
 
           {/* Stock Quantity, Unit, Min Stock */}
-          <div className="bg-slate-50/80 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-3">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-300 dark:border-slate-700 space-y-3 shadow-2xs">
             <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">การจัดการสต็อกและหน่วยนับ</h4>
             <div className="grid grid-cols-3 gap-2.5">
               <div className="space-y-1">
@@ -240,7 +240,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   min="0"
                   value={qty}
                   onChange={(e) => setQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-extrabold text-blue-700 dark:text-blue-400 focus:border-blue-500 outline-none"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-extrabold text-blue-700 dark:text-blue-400 focus:border-blue-500 outline-none shadow-2xs"
                 />
               </div>
 
@@ -251,7 +251,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="เช่น ชิ้น, กล่อง"
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none shadow-2xs"
                 />
               </div>
 
@@ -262,7 +262,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   min="0"
                   value={minStock}
                   onChange={(e) => setMinStock(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-amber-700 dark:text-amber-400 focus:border-blue-500 outline-none"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-bold text-amber-700 dark:text-amber-400 focus:border-blue-500 outline-none shadow-2xs"
                 />
               </div>
             </div>
@@ -278,7 +278,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               placeholder="เช่น Store FL.6 / ตู้ A ชั้น 2"
             />
           </div>
@@ -293,7 +293,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none resize-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none resize-none shadow-2xs"
               placeholder="หมายเหตุเพิ่มเติมสำหรับสินค้านี้..."
             />
           </div>
@@ -307,7 +307,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 value={ordered}
                 onChange={(e) => setOrdered(e.target.value)}
                 placeholder="เช่น 10 กล่อง (PR#1234)"
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               />
             </div>
             <div className="space-y-1">
@@ -317,14 +317,14 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 value={orderedDate}
                 onChange={(e) => setOrderedDate(e.target.value)}
                 placeholder="เช่น 10/08/2026"
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               />
             </div>
           </div>
         </form>
 
         {/* Modal Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
           {onDelete && (
             <div>
               {showDeleteConfirm ? (
@@ -334,14 +334,14 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                     type="button"
                     disabled={isSaving}
                     onClick={handleDelete}
-                    className="px-2.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 cursor-pointer"
+                    className="px-2.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 cursor-pointer border border-red-500 shadow-2xs"
                   >
                     ยืนยัน
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-2 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium cursor-pointer"
+                    className="px-2 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium cursor-pointer border border-slate-300 dark:border-slate-600"
                   >
                     ยกเลิก
                   </button>
@@ -350,7 +350,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                  className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer border border-red-200 dark:border-red-900/50"
                   title="ลบสินค้านี้ออกจากระบบ"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -365,7 +365,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               type="button"
               disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-300 dark:border-slate-700 shadow-2xs"
             >
               ยกเลิก
             </button>
@@ -373,7 +373,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               type="button"
               disabled={isSaving}
               onClick={handleSubmit}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-1.5 cursor-pointer border border-blue-500"
             >
               <Save className="w-4 h-4" />
               <span>{isSaving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}</span>

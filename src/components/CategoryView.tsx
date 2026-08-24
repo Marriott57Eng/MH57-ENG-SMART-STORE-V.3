@@ -100,7 +100,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
             <div
               key={cat.name}
               onClick={() => onSelectCategory(cat.name)}
-              className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
             >
               {/* Category Image Banner with Overlay */}
               <div className="relative h-28 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -114,12 +114,12 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
                       'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80';
                   }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
                 
                 {/* Category Badge & Icon */}
                 <div className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs flex items-center justify-center shrink-0 shadow-xs">
+                    <div className="w-8 h-8 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs flex items-center justify-center shrink-0 shadow-xs border border-white/40 dark:border-slate-700">
                       {getCategoryIcon(cat.name)}
                     </div>
                     <div className="min-w-0">
@@ -135,14 +135,14 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
                   {/* Stock status pills (Red for out of stock, Amber for low stock) */}
                   <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 shrink-0">
                     {outOfStockItemsInCat > 0 && (
-                      <span className="bg-red-600/95 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-red-400/30">
+                      <span className="bg-red-600/95 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-red-400/40">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                         <span>หมดจากคลัง {outOfStockItemsInCat}</span>
                       </span>
                     )}
 
                     {lowStockItemsInCat > 0 && (
-                      <span className="bg-amber-500/95 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-amber-300/30">
+                      <span className="bg-amber-500/95 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-amber-300/40">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>ใกล้หมด {lowStockItemsInCat}</span>
                       </span>
@@ -152,7 +152,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
               </div>
 
               {/* Bottom Details */}
-              <div className="p-3 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="p-3 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-750">
                 <div className="flex-1 min-w-0 pr-2">
                   <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1 leading-normal">
                     {getCategoryDescription(cat.name)}
@@ -162,7 +162,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
                   </p>
                 </div>
 
-                <div className="w-6 h-6 rounded-lg bg-slate-50 dark:bg-slate-800 group-hover:bg-blue-50 dark:group-hover:bg-slate-700 text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center justify-center shrink-0 transition-colors">
+                <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-blue-50 dark:group-hover:bg-slate-700 text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center justify-center shrink-0 transition-colors border border-slate-200 dark:border-slate-700">
                   <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
