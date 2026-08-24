@@ -5,10 +5,12 @@ import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import fs from "fs";
 import { WebSocketServer } from "ws";
 import http from "http";
+import { initializeApp } from 'firebase/app';
+import { getFirestore, getDocs, collection, doc, setDoc } from 'firebase/firestore';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-let firebaseConfig = { projectId: "", firestoreDatabaseId: "(default)" };
+let firebaseConfig: any = { projectId: "", firestoreDatabaseId: "(default)" };
 try {
   if (fs.existsSync('firebase-applet-config.json')) {
     firebaseConfig = JSON.parse(fs.readFileSync('firebase-applet-config.json', 'utf-8'));
@@ -16,6 +18,9 @@ try {
 } catch (err) {
   console.warn("Could not load firebase-applet-config.json");
 }
+
+const firebaseApp = initializeApp(firebaseConfig);
+const firestoreDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
 
 
@@ -88,51 +93,39 @@ let cacheTimestamp = 0;
 const CACHE_TTL_MS = 120 * 1000; // 2 minutes cache
 
 async function fetchInventoryFromFirestore(): Promise<Item[]> {
-  const items: Item[] = [];
-  if (!firebaseConfig.projectId) return items;
-
   try {
-    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-    let pageToken = "";
-    do {
-      const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
-      const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbId}/documents/inventory?pageSize=300${pageParam}`;
-      const res = await fetch(url);
-      if (!res.ok) break;
-      const data = await res.json();
-      if (data.documents && data.documents.length > 0) {
-        for (const doc of data.documents) {
-          const fields = doc.fields || {};
-          const qty = Number(fields.qty?.integerValue ?? fields.qty?.doubleValue ?? fields.qty?.stringValue ?? 0);
-          const minStock = Number(fields.minStock?.integerValue ?? fields.minStock?.doubleValue ?? fields.minStock?.stringValue ?? 1);
-          let status: 'normal' | 'low' | 'out' = 'normal';
-          if (qty <= 0) status = 'out';
-          else if (qty <= minStock) status = 'low';
+    const snap = await getDocs(collection(firestoreDb, 'inventory'));
+    if (!snap.empty) {
+      const items: Item[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const qty = Number(data.qty) || 0;
+        const minStock = Number(data.minStock) || 1;
+        let status: 'normal' | 'low' | 'out' = data.status || 'normal';
+        if (qty <= 0) status = 'out';
+        else if (qty <= minStock) status = 'low';
 
-          items.push({
-            id: fields.id?.stringValue || '',
-            name: fields.name?.stringValue || '',
-            category: fields.category?.stringValue || 'ทั่วไป',
-            unit: fields.unit?.stringValue || 'ชิ้น',
-            qty,
-            minStock,
-            location: fields.location?.stringValue || 'Store FL.6',
-            note: fields.note?.stringValue || '',
-            ordered: fields.ordered?.stringValue || '',
-            orderedDate: fields.orderedDate?.stringValue || '',
-            outOfStockDate: fields.outOfStockDate?.stringValue || '',
-            status
-          });
-        }
-      }
-      pageToken = data.nextPageToken || "";
-    } while (pageToken);
-
-    return items;
+        items.push({
+          id: data.id || d.id,
+          name: data.name || '',
+          category: data.category || 'ทั่วไป',
+          unit: data.unit || 'ชิ้น',
+          qty,
+          minStock,
+          location: data.location || 'Store FL.6',
+          note: data.note || '',
+          ordered: data.ordered || '',
+          orderedDate: data.orderedDate || '',
+          outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date().toISOString() : ''),
+          status,
+        });
+      });
+      return items;
+    }
   } catch (err) {
     console.warn("Failed to fetch inventory from Firestore:", err);
-    return [];
   }
+  return [];
 }
 
 async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
@@ -285,22 +278,29 @@ async function startServer() {
       const { qty, minStock, location, note } = req.body;
       const items = await fetchInventoryFromSheet();
       const targetItem = items.find(i => i.id === id);
-      if (targetItem) {
-        
-      }
       if (!targetItem) {
         return res.status(404).json({ error: "Item not found" });
       }
 
       if (typeof qty === 'number') {
         targetItem.qty = Math.max(0, qty);
-        if (targetItem.qty <= 0) targetItem.status = 'out';
-        else if (targetItem.qty <= targetItem.minStock) targetItem.status = 'low';
-        else targetItem.status = 'normal';
+        if (targetItem.qty <= 0) {
+          targetItem.status = 'out';
+          if (!targetItem.outOfStockDate) targetItem.outOfStockDate = new Date().toISOString();
+        } else if (targetItem.qty <= (targetItem.minStock || 1)) {
+          targetItem.status = 'low';
+          targetItem.outOfStockDate = '';
+        } else {
+          targetItem.status = 'normal';
+          targetItem.outOfStockDate = '';
+        }
       }
       if (typeof minStock === 'number') targetItem.minStock = minStock;
       if (typeof location === 'string') targetItem.location = location;
       if (typeof note === 'string') targetItem.note = note;
+
+      await setDoc(doc(firestoreDb, 'inventory', targetItem.id), targetItem);
+      cacheTimestamp = 0; // force refresh cache
 
       res.json({ success: true, item: targetItem });
     } catch (error: any) {

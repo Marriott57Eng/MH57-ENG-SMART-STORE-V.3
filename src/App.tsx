@@ -220,9 +220,7 @@ export default function App() {
   const fetchRequisitions = async () => {
     try {
       const q = query(collection(db, 'requisitions'), orderBy('isoDate', 'desc'), limit(500));
-      const fetchPromise = getDocs(q);
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
-      const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
+      const querySnapshot = await getDocs(q);
 
       if (querySnapshot && !querySnapshot.empty) {
         const data = querySnapshot.docs.map(d => {
@@ -245,7 +243,7 @@ export default function App() {
     }
   };
 
-  // Fetch Inventory Data from Firestore / Google Sheet backend
+  // Fetch Inventory Data from Firestore / backend
   const fetchInventory = async (forceRefresh = false) => {
     try {
       if (forceRefresh) setRefreshing(true);
@@ -253,42 +251,38 @@ export default function App() {
 
       let inventoryData: InventoryItem[] = [];
 
-      // 1. Try pulling directly from Firestore with a 3.5s timeout (never hangs)
+      // 1. Fetch from Firestore (Source of Truth)
       try {
-        const fetchPromise = getDocs(collection(db, 'inventory'));
-        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
-        const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
-
+        const snapshot = await getDocs(collection(db, 'inventory'));
         if (snapshot && !snapshot.empty) {
           inventoryData = snapshot.docs.map((docSnap) => {
             const data = docSnap.data() as InventoryItem;
-            if (data.status === 'out' && !data.outOfStockDate) {
-              data.outOfStockDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-            }
-            return data;
+            const qty = Number(data.qty) || 0;
+            const minStock = Number(data.minStock) || 1;
+            let status: 'normal' | 'low' | 'out' = data.status || 'normal';
+            if (qty <= 0) status = 'out';
+            else if (qty <= minStock) status = 'low';
+
+            return {
+              ...data,
+              qty,
+              minStock,
+              status,
+              outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() : '')
+            };
           });
         }
       } catch (firestoreErr) {
-        console.warn('Firestore fetch failed or timed out:', firestoreErr);
+        console.warn('Firestore fetch error:', firestoreErr);
       }
 
-      // 2. If Firestore is empty or timed out, fetch quickly from /api/inventory
+      // 2. If Firestore is completely empty (initial setup only), fetch from server
       if (inventoryData.length === 0) {
         try {
-          const res = await fetch(`/api/inventory?refresh=true`);
+          const res = await fetch(`/api/inventory`);
           if (res.ok) {
             const data = await res.json();
             inventoryData = data.items || [];
-
-            // Seed Firestore in background without blocking UI
-            if (inventoryData.length > 0) {
-              setTimeout(() => {
-                inventoryData.forEach((item) => {
-                  const cleanItem = cleanForFirestore(item);
-                  setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(() => {});
-                });
-              }, 100);
-            }
           }
         } catch (apiErr) {
           console.warn('API inventory fetch failed:', apiErr);
@@ -311,7 +305,7 @@ export default function App() {
           }
         }
       } else {
-        // If both network sources failed or timed out, ensure local cached inventory is activated
+        // Fallback to local cache if offline
         const cached = getInitialInventory();
         if (cached.length > 0) {
           setItems(cached);
@@ -320,7 +314,6 @@ export default function App() {
         }
       }
       
-      // Fetch requisitions in background non-blocking
       fetchRequisitions().catch(console.warn);
     } catch (err: any) {
       console.error('Error fetching inventory:', err);
@@ -342,6 +335,64 @@ export default function App() {
       } catch (e) {}
     }
     fetchInventory();
+
+    // Real-time Firestore Inventory Listener
+    const unsubInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
+      if (!snapshot.empty) {
+        const realTimeItems: InventoryItem[] = snapshot.docs.map(docSnap => {
+          const data = docSnap.data() as InventoryItem;
+          const qty = Number(data.qty) || 0;
+          const minStock = Number(data.minStock) || 1;
+          let status: 'normal' | 'low' | 'out' = data.status || 'normal';
+          if (qty <= 0) status = 'out';
+          else if (qty <= minStock) status = 'low';
+
+          return {
+            ...data,
+            qty,
+            minStock,
+            status,
+            outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() : '')
+          };
+        });
+
+        if (realTimeItems.length > 0) {
+          setItems(realTimeItems);
+          recalculateSummary(realTimeItems);
+          try {
+            localStorage.setItem('warehouse_inventory', JSON.stringify(realTimeItems));
+          } catch (_) {}
+          setLoading(false);
+        }
+      }
+    }, (err) => {
+      console.warn('Real-time inventory snapshot warning:', err);
+    });
+
+    // Real-time Firestore Requisitions Listener
+    const qReqs = query(collection(db, 'requisitions'), orderBy('isoDate', 'desc'), limit(500));
+    const unsubReqs = onSnapshot(qReqs, (snapshot) => {
+      if (!snapshot.empty) {
+        const realTimeReqs = snapshot.docs.map(d => {
+          const req = d.data() as RequisitionRecord;
+          return {
+            ...req,
+            id: (req.id || d.id).replace(/^REQ-?/i, '')
+          };
+        });
+        setRequisitions(realTimeReqs);
+        try {
+          localStorage.setItem('warehouse_requisitions', JSON.stringify(realTimeReqs));
+        } catch (_) {}
+      }
+    }, (err) => {
+      console.warn('Real-time requisitions snapshot warning:', err);
+    });
+
+    return () => {
+      unsubInventory();
+      unsubReqs();
+    };
   }, []);
 
   // Real-time listener for device lock and role changes
