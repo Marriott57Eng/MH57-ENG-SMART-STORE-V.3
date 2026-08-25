@@ -174,7 +174,7 @@ export function useLiveAudio(
     }
   }, []);
 
-  const startLive = useCallback(async (userName?: string, userRole?: string, currentItems?: any[]) => {
+  const startLive = useCallback(async (userName?: string, userRole?: string, currentItems?: any[], currentRequisitions?: any[], userNickname?: string) => {
     if (isConnectingRef.current || isLiveConnected) return;
     isConnectingRef.current = true;
     try {
@@ -182,6 +182,7 @@ export function useLiveAudio(
       const url = new URL(`${protocol}//${window.location.host}/live`);
       if (userName) url.searchParams.set('userName', userName);
       if (userRole) url.searchParams.set('userRole', userRole);
+      if (userNickname) url.searchParams.set('userNickname', userNickname);
 
       const ws = new WebSocket(url.toString());
       wsRef.current = ws;
@@ -196,7 +197,9 @@ export function useLiveAudio(
           type: 'init', 
           userName, 
           userRole, 
-          items: Array.isArray(currentItems) ? currentItems : [] 
+          userNickname,
+          items: Array.isArray(currentItems) ? currentItems : [],
+          requisitions: Array.isArray(currentRequisitions) ? currentRequisitions : [] 
         }));
 
         const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });

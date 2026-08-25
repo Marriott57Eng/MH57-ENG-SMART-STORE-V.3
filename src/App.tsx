@@ -1,6 +1,7 @@
 import { db } from './firebase';
 import { collection, query, orderBy, limit, getDocs, setDoc, doc, deleteDoc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { InventoryItem, InventorySummary, ChatMessage, RequisitionRecord, DbActionPayload } from './types';
 import { ItemCard } from './components/ItemCard';
 import { ItemDetailModal } from './components/ItemDetailModal';
@@ -17,6 +18,8 @@ import { LoginView } from './components/LoginView';
 import { UserManagementView } from './components/UserManagementView';
 import { ThemeToggle } from './components/ThemeToggle';
 import { EngLogo } from './components/EngLogo';
+import { GlobalProgressBar } from './components/GlobalProgressBar';
+import { InventorySkeleton } from './components/InventorySkeleton';
 import { 
   Package, Search, RefreshCw, Filter, ClipboardList, Plus,
   AlertTriangle, CheckCircle2, XCircle, Bot, X, FileDown, Loader2, LogOut, User as UserIcon
@@ -837,6 +840,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen min-h-[100dvh] bg-slate-900 flex justify-center selection:bg-blue-500 selection:text-white">
+      {/* Global sleek loading progress bar */}
+      <GlobalProgressBar isLoading={refreshing || loading} triggerKey={activeTab} />
+
       {/* Mobile-First Shell */}
       <div 
         className={`w-full max-w-2xl bg-[#F8FAFC] dark:bg-slate-950 flex flex-col shadow-2xl relative font-sans border-x border-slate-200 dark:border-slate-800 transition-colors duration-200 ${
@@ -846,246 +852,332 @@ export default function App() {
         }`}
       >
         
-        {/* TAB 1: Inventory List */}
-        {activeTab === 'inventory' && (
-          <div className="flex-1 flex flex-col pb-28 sm:pb-24">
-            {/* Sticky Mobile Topbar */}
-            <header className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700/90 sticky top-0 z-30 px-4 pt-safe-header pb-2.5 shadow-sm dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors duration-200">
-              <div className="flex items-center justify-between gap-2 mb-2.5">
-                {/* Brand Logo & User Info Badge (Left) */}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  {/* 3D Official App Logo */}
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-xl overflow-hidden shadow-xs border border-slate-300 dark:border-slate-650 bg-slate-950 flex items-center justify-center p-0.5">
-                    <EngLogo alt="ENG Smart Store Logo" className="w-full h-full object-contain" />
+        <AnimatePresence mode="wait" initial={false}>
+          {/* TAB 1: Inventory List */}
+          {activeTab === 'inventory' && (
+            <motion.div
+              key="inventory"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 flex flex-col pb-28 sm:pb-24"
+            >
+              {/* Sticky Mobile Topbar */}
+              <header className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700/90 sticky top-0 z-30 px-4 pt-safe-header pb-2.5 shadow-sm dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors duration-200">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  {/* Brand Logo & User Info Badge (Left) */}
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {/* 3D Official App Logo */}
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-xl overflow-hidden shadow-xs border border-slate-300 dark:border-slate-650 bg-slate-950 flex items-center justify-center p-0.5">
+                      <EngLogo alt="ENG Smart Store Logo" className="w-full h-full object-contain" />
+                    </div>
+
+                    {/* User Info Badge */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 px-2 py-1 rounded-xl shadow-2xs min-w-0">
+                      <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/70 border border-blue-200 dark:border-blue-700/60 flex items-center justify-center shrink-0 shadow-xs">
+                        <UserIcon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[110px] sm:max-w-[150px]" title={currentUser.name}>
+                          {currentUser.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold truncate">
+                          {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* User Info Badge */}
-                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 px-2 py-1 rounded-xl shadow-2xs min-w-0">
-                    <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/70 border border-blue-200 dark:border-blue-700/60 flex items-center justify-center shrink-0 shadow-xs">
-                      <UserIcon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[110px] sm:max-w-[150px]" title={currentUser.name}>
-                        {currentUser.name}
-                      </span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold truncate">
-                        {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  {/* Header Action Buttons (Right) */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Dark Mode Toggle */}
+                    <ThemeToggle />
 
-                {/* Header Action Buttons (Right) */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Dark Mode Toggle */}
-                  <ThemeToggle />
+                    <button
+                      onClick={() => setShowLogoutConfirm(true)}
+                      className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-95 transition-all flex items-center border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
+                      title="ออกจากระบบ"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
 
-                  <button
-                    onClick={() => setShowLogoutConfirm(true)}
-                    className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-95 transition-all flex items-center border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
-                    title="ออกจากระบบ"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
+                    <button
+                      onClick={() => fetchInventory(true)}
+                      disabled={refreshing}
+                      className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-750 active:scale-95 transition-all text-lg flex items-center gap-1 border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
+                      title="ซิงค์ข้อมูลล่าสุด"
+                    >
+                      <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
+                    </button>
 
-                  <button
-                    onClick={() => fetchInventory(true)}
-                    disabled={refreshing}
-                    className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-750 active:scale-95 transition-all text-lg flex items-center gap-1 border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
-                    title="ซิงค์ข้อมูลล่าสุด"
-                  >
-                    <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
-                  </button>
+                    {currentUser.role === 'admin' && (
+                      <button
+                        onClick={() => {
+                          setItemToEdit({
+                            id: `A${Date.now().toString().slice(-9)}`,
+                            name: '',
+                            category: categoryList[0] || 'เคมี',
+                            unit: 'ชิ้น',
+                            qty: 0,
+                            minStock: 5,
+                            location: 'Store FL.6',
+                            note: '',
+                            ordered: '',
+                            orderedDate: '',
+                            status: 'out',
+                          });
+                          setIsEditItemModalOpen(true);
+                        }}
+                        className="p-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500 text-white active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-amber-400 dark:border-amber-500 shadow-xs cursor-pointer"
+                        title="เพิ่มสินค้าใหม่ (Admin)"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">เพิ่มสินค้า</span>
+                      </button>
+                    )}
 
-                  {currentUser.role === 'admin' && (
                     <button
                       onClick={() => {
-                        setItemToEdit({
-                          id: `A${Date.now().toString().slice(-9)}`,
-                          name: '',
-                          category: categoryList[0] || 'เคมี',
-                          unit: 'ชิ้น',
-                          qty: 0,
-                          minStock: 5,
-                          location: 'Store FL.6',
-                          note: '',
-                          ordered: '',
-                          orderedDate: '',
-                          status: 'out',
-                        });
-                        setIsEditItemModalOpen(true);
+                        setItemForRequisition(null);
+                        setIsRequisitionModalOpen(true);
                       }}
-                      className="p-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500 text-white active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-amber-400 dark:border-amber-500 shadow-xs cursor-pointer"
-                      title="เพิ่มสินค้าใหม่ (Admin)"
+                      className="p-2 px-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-blue-500 dark:border-blue-400 shadow-xs cursor-pointer"
                     >
-                      <Plus className="w-4 h-4" />
-                      <span className="hidden sm:inline">เพิ่มสินค้า</span>
+                      <ClipboardList className="w-4 h-4" />
+                      <span>เบิกของ</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative mb-2">
+                  <Search className="w-5 h-5 text-slate-400 dark:text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="ค้นหาชื่อสินค้า, รหัส, หมวดหมู่, ตำแหน่ง..."
+                    className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-8 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 transition-all shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="w-5 h-5" />
                     </button>
                   )}
+                </div>
 
+                {/* Status Filter Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-lg">
                   <button
-                    onClick={() => {
-                      setItemForRequisition(null);
-                      setIsRequisitionModalOpen(true);
-                    }}
-                    className="p-2 px-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-blue-500 dark:border-blue-400 shadow-xs cursor-pointer"
+                    onClick={() => setStatusFilter('all')}
+                    className={`px-3 py-1 rounded-full font-medium shrink-0 transition-all shadow-2xs ${
+                      statusFilter === 'all'
+                        ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500 font-bold'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-650 hover:bg-slate-100 dark:hover:bg-slate-750'
+                    }`}
                   >
-                    <ClipboardList className="w-4 h-4" />
-                    <span>เบิกของ</span>
+                    ทั้งหมด ({items.length})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('low')}
+                    className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
+                      statusFilter === 'low'
+                        ? 'bg-amber-500 text-white font-bold border border-amber-600 dark:border-amber-400'
+                        : 'bg-amber-50/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/90 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                    }`}
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    ใกล้หมด ({summary?.lowStockCount || 0})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('out')}
+                    className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
+                      statusFilter === 'out'
+                        ? 'bg-red-600 text-white font-bold border border-red-700 dark:border-red-500'
+                        : 'bg-red-50/80 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700/90 hover:bg-red-100 dark:hover:bg-red-900/60'
+                    }`}
+                  >
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    หมดสต็อก ({summary?.outOfStockCount || 0})
                   </button>
                 </div>
-              </div>
 
-              {/* Search Bar */}
-              <div className="relative mb-2">
-                <Search className="w-5 h-5 text-slate-400 dark:text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ค้นหาชื่อสินค้า, รหัส, หมวดหมู่, ตำแหน่ง..."
-                  className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-8 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 transition-all shadow-2xs"
-                />
-                {searchQuery && (
+                {/* Category Horizontal Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1.5 text-sm">
                   <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Status Filter Chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-lg">
-                <button
-                  onClick={() => setStatusFilter('all')}
-                  className={`px-3 py-1 rounded-full font-medium shrink-0 transition-all shadow-2xs ${
-                    statusFilter === 'all'
-                      ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500 font-bold'
-                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-650 hover:bg-slate-100 dark:hover:bg-slate-750'
-                  }`}
-                >
-                  ทั้งหมด ({items.length})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('low')}
-                  className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
-                    statusFilter === 'low'
-                      ? 'bg-amber-500 text-white font-bold border border-amber-600 dark:border-amber-400'
-                      : 'bg-amber-50/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/90 hover:bg-amber-100 dark:hover:bg-amber-900/60'
-                  }`}
-                >
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
-                  ใกล้หมด ({summary?.lowStockCount || 0})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('out')}
-                  className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
-                    statusFilter === 'out'
-                      ? 'bg-red-600 text-white font-bold border border-red-700 dark:border-red-500'
-                      : 'bg-red-50/80 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700/90 hover:bg-red-100 dark:hover:bg-red-900/60'
-                  }`}
-                >
-                  <XCircle className="w-4 h-4 text-red-500" />
-                  หมดสต็อก ({summary?.outOfStockCount || 0})
-                </button>
-              </div>
-
-              {/* Category Horizontal Filter Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1.5 text-sm">
-                <button
-                  onClick={() => setSelectedCategory('ทั้งหมด')}
-                  className={`px-2.5 py-1 rounded-lg shrink-0 transition-all shadow-2xs ${
-                    selectedCategory === 'ทั้งหมด'
-                      ? 'bg-blue-50 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold border border-blue-300 dark:border-blue-600'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-                  }`}
-                >
-                  ทุกหมวด
-                </button>
-                {categoryList.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
+                    onClick={() => setSelectedCategory('ทั้งหมด')}
                     className={`px-2.5 py-1 rounded-lg shrink-0 transition-all shadow-2xs ${
-                      selectedCategory === cat
+                      selectedCategory === 'ทั้งหมด'
                         ? 'bg-blue-50 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold border border-blue-300 dark:border-blue-600'
                         : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
-                    {cat}
+                    ทุกหมวด
                   </button>
-                ))}
-              </div>
-            </header>
+                  {categoryList.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-2.5 py-1 rounded-lg shrink-0 transition-all shadow-2xs ${
+                        selectedCategory === cat
+                          ? 'bg-blue-50 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold border border-blue-300 dark:border-blue-600'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </header>
 
-            {/* Inventory List Body */}
-            <main className="p-3 space-y-2.5 flex-1">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
-                  <RefreshCw className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin mb-3" />
-                  <p className="text-lg font-medium text-slate-600 dark:text-slate-300">กำลังโหลดข้อมูลจาก Store Data...</p>
-                </div>
-              ) : error ? (
-                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 text-red-700 dark:text-red-300 p-4 rounded-xl text-lg space-y-2">
-                  <p className="font-bold">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
-                  <p>{error}</p>
-                  <button
-                    onClick={() => fetchInventory(true)}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg font-semibold text-lg hover:bg-red-700 transition-colors cursor-pointer"
-                  >
-                    ลองใหม่อีกครั้ง
-                  </button>
-                </div>
-              ) : filteredItems.length === 0 ? (
-                <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-                  <Package className="w-6 h-6 mx-auto mb-2 opacity-40" />
-                  <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">ไม่พบรายการสินค้าที่ค้นหา</p>
-                  <p className="text-lg text-slate-400 dark:text-slate-500 mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรองหมวดหมู่</p>
-                  <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedCategory('ทั้งหมด');
-                      setStatusFilter('all');
-                    }}
-                    className="mt-3 text-lg text-blue-600 dark:text-blue-400 font-semibold underline cursor-pointer"
-                  >
-                    ล้างการค้นหาทั้งหมด
-                  </button>
-                </div>
-              ) : (
-                filteredItems.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    onClick={() => setSelectedItem(item)}
-                  />
-                ))
-              )}
-            </main>
-          </div>
-        )}
+              {/* Inventory List Body */}
+              <main className="p-3 space-y-2.5 flex-1">
+                {loading ? (
+                  <InventorySkeleton count={6} />
+                ) : error ? (
+                  <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 text-red-700 dark:text-red-300 p-4 rounded-xl text-lg space-y-2">
+                    <p className="font-bold">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+                    <p>{error}</p>
+                    <button
+                      onClick={() => fetchInventory(true)}
+                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg font-semibold text-lg hover:bg-red-700 transition-colors cursor-pointer"
+                    >
+                      ลองใหม่อีกครั้ง
+                    </button>
+                  </div>
+                ) : filteredItems.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400 dark:text-slate-500">
+                    <Package className="w-6 h-6 mx-auto mb-2 opacity-40" />
+                    <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">ไม่พบรายการสินค้าที่ค้นหา</p>
+                    <p className="text-lg text-slate-400 dark:text-slate-500 mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรองหมวดหมู่</p>
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSelectedCategory('ทั้งหมด');
+                        setStatusFilter('all');
+                      }}
+                      className="mt-3 text-lg text-blue-600 dark:text-blue-400 font-semibold underline cursor-pointer"
+                    >
+                      ล้างการค้นหาทั้งหมด
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {filteredItems.map((item, index) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        onClick={() => setSelectedItem(item)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </main>
+            </motion.div>
+          )}
 
-        {/* TAB 2: Requisition History (หน้าประวัติการเบิกของ) */}
-        {activeTab === 'history' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <RequisitionView
-              records={requisitions}
-              items={items}
-              isAdmin={currentUser?.role === 'admin'}
-              onOpenNewRequisition={() => {
-                setItemForRequisition(null);
-                setIsRequisitionModalOpen(true);
-              }}
-              onDeleteRecord={handleDeleteRequisition}
-              onEditRecord={(record) => {
-                setRequisitionToEdit(record);
-                setIsEditRequisitionModalOpen(true);
-              }}
-            />
-          </div>
-        )}
+          {/* TAB 2: Requisition History (หน้าประวัติการเบิกของ) */}
+          {activeTab === 'history' && (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <RequisitionView
+                records={requisitions}
+                items={items}
+                isAdmin={currentUser?.role === 'admin'}
+                onOpenNewRequisition={() => {
+                  setItemForRequisition(null);
+                  setIsRequisitionModalOpen(true);
+                }}
+                onDeleteRecord={handleDeleteRequisition}
+                onEditRecord={(record) => {
+                  setRequisitionToEdit(record);
+                  setIsEditRequisitionModalOpen(true);
+                }}
+              />
+            </motion.div>
+          )}
+
+          {/* TAB 4: Dashboard Stats */}
+          {activeTab === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 overflow-y-auto pb-28 sm:pb-24"
+            >
+              <StatsDashboard
+                summary={summary}
+                items={items}
+                requisitions={requisitions}
+                onSelectCategory={(cat) => {
+                  setSelectedCategory(cat);
+                  setActiveTab('inventory');
+                }}
+                onFilterLowStock={() => {
+                  setStatusFilter('low_or_out');
+                  setActiveTab('inventory');
+                }}
+                onSelectItem={(item) => setSelectedItem(item)}
+                onAskAI={(prompt) => handleAskAIQuery(prompt)}
+                onRefresh={() => fetchInventory(true)}
+                loading={refreshing}
+              />
+            </motion.div>
+          )}
+
+          {/* TAB 5: Categories View */}
+          {activeTab === 'categories' && (
+            <motion.div
+              key="categories"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 overflow-y-auto pb-28 sm:pb-24"
+            >
+              <CategoryView
+                summary={summary}
+                items={items}
+                onSelectCategory={(cat) => {
+                  setSelectedCategory(cat);
+                  setActiveTab('inventory');
+                }}
+                onExportPdf={handleExportInventoryPdf}
+                isExporting={isExportingInventoryPdf}
+              />
+            </motion.div>
+          )}
+
+          {/* TAB 6: Users Management */}
+          {activeTab === 'users' && currentUser?.role === 'admin' && (
+            <motion.div
+              key="users"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 overflow-y-auto pb-28 sm:pb-24"
+            >
+              <UserManagementView 
+                currentUser={currentUser} 
+                onUpdateCurrentUser={handleUpdateCurrentUser}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Floating indicator when Live speech is active in background */}
         {isLiveActive && activeTab !== 'voice' && (
@@ -1115,210 +1207,228 @@ export default function App() {
           />
         </div>
 
-        {/* TAB 4: Dashboard Stats */}
-        {activeTab === 'dashboard' && (
-          <div className="flex-1 overflow-y-auto pb-28 sm:pb-24">
-            <StatsDashboard
-              summary={summary}
-              items={items}
-              requisitions={requisitions}
-              onSelectCategory={(cat) => {
-                setSelectedCategory(cat);
-                setActiveTab('inventory');
-              }}
-              onFilterLowStock={() => {
-                setStatusFilter('low_or_out');
-                setActiveTab('inventory');
-              }}
-              onSelectItem={(item) => setSelectedItem(item)}
-              onAskAI={(prompt) => handleAskAIQuery(prompt)}
-              onRefresh={() => fetchInventory(true)}
-              loading={refreshing}
-            />
-          </div>
-        )}
-
-        {/* TAB 5: Categories View */}
-        {activeTab === 'categories' && (
-          <div className="flex-1 overflow-y-auto pb-28 sm:pb-24">
-            <CategoryView
-              summary={summary}
-              items={items}
-              onSelectCategory={(cat) => {
-                setSelectedCategory(cat);
-                setActiveTab('inventory');
-              }}
-              onExportPdf={handleExportInventoryPdf}
-              isExporting={isExportingInventoryPdf}
-            />
-          </div>
-        )}
-
-        {/* TAB 6: Users Management */}
-        {activeTab === 'users' && currentUser?.role === 'admin' && (
-          <div className="flex-1 overflow-y-auto pb-28 sm:pb-24">
-            <UserManagementView 
-              currentUser={currentUser} 
-              onUpdateCurrentUser={handleUpdateCurrentUser}
-            />
-          </div>
-        )}
-
         {/* Item Detail Modal */}
-        <ItemDetailModal
-          item={selectedItem}
-          isAdmin={currentUser?.role === 'admin'}
-          onClose={() => setSelectedItem(null)}
-          onAskAI={handleAskAIAboutItem}
-          onStartRequisition={(item) => {
-            setItemForRequisition(item);
-            setIsRequisitionModalOpen(true);
-          }}
-          onEditItem={(item) => {
-            setItemToEdit(item);
-            setIsEditItemModalOpen(true);
-          }}
-        />
+        <AnimatePresence>
+          {selectedItem && (
+            <ItemDetailModal
+              key={`item-detail-${selectedItem.id}`}
+              item={selectedItem}
+              isAdmin={currentUser?.role === 'admin'}
+              onClose={() => setSelectedItem(null)}
+              onAskAI={handleAskAIAboutItem}
+              onStartRequisition={(item) => {
+                setItemForRequisition(item);
+                setIsRequisitionModalOpen(true);
+              }}
+              onEditItem={(item) => {
+                setItemToEdit(item);
+                setIsEditItemModalOpen(true);
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Requisition Modal (บันทึกการเบิกของ) */}
-        <RequisitionModal
-          isOpen={isRequisitionModalOpen}
-          preselectedItem={itemForRequisition}
-          items={items}
-          currentUser={currentUser}
-          onClose={() => {
-            setIsRequisitionModalOpen(false);
-            setItemForRequisition(null);
-          }}
-          onSubmit={handleAddRequisition}
-        />
+        <AnimatePresence>
+          {isRequisitionModalOpen && (
+            <RequisitionModal
+              key="requisition-modal"
+              isOpen={isRequisitionModalOpen}
+              preselectedItem={itemForRequisition}
+              items={items}
+              currentUser={currentUser}
+              onClose={() => {
+                setIsRequisitionModalOpen(false);
+                setItemForRequisition(null);
+              }}
+              onSubmit={handleAddRequisition}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Edit Item Modal (สำหรับ Admin แก้ไขข้อมูลสินค้า) */}
-        <EditItemModal
-          isOpen={isEditItemModalOpen}
-          item={itemToEdit}
-          categories={categoryList}
-          onClose={() => {
-            setIsEditItemModalOpen(false);
-            setItemToEdit(null);
-          }}
-          onSave={handleSaveEditedItem}
-          onDelete={handleDeleteItem}
-        />
+        <AnimatePresence>
+          {isEditItemModalOpen && itemToEdit && (
+            <EditItemModal
+              key={`edit-item-${itemToEdit.id}`}
+              isOpen={isEditItemModalOpen}
+              item={itemToEdit}
+              categories={categoryList}
+              onClose={() => {
+                setIsEditItemModalOpen(false);
+                setItemToEdit(null);
+              }}
+              onSave={handleSaveEditedItem}
+              onDelete={handleDeleteItem}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Edit Requisition Modal (สำหรับ Admin แก้ไขประวัติการเบิก/รับเข้า) */}
-        <EditRequisitionModal
-          isOpen={isEditRequisitionModalOpen}
-          record={requisitionToEdit}
-          items={items}
-          onClose={() => {
-            setIsEditRequisitionModalOpen(false);
-            setRequisitionToEdit(null);
-          }}
-          onSave={handleSaveEditedRequisition}
-          onDelete={handleDeleteRequisition}
-        />
+        <AnimatePresence>
+          {isEditRequisitionModalOpen && requisitionToEdit && (
+            <EditRequisitionModal
+              key={`edit-req-${requisitionToEdit.id}`}
+              isOpen={isEditRequisitionModalOpen}
+              record={requisitionToEdit}
+              items={items}
+              onClose={() => {
+                setIsEditRequisitionModalOpen(false);
+                setRequisitionToEdit(null);
+              }}
+              onSave={handleSaveEditedRequisition}
+              onDelete={handleDeleteRequisition}
+            />
+          )}
+        </AnimatePresence>
 
-        {dbErrorAlert && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-             <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
-               <div className="bg-red-600 p-4 text-white flex items-center gap-3">
-                 <XCircle className="w-6 h-6" />
-                 <h2 className="font-bold text-lg">รายการไม่สำเร็จ</h2>
-               </div>
-               <div className="p-5">
-                 <p className="text-lg text-slate-600 dark:text-slate-300 mb-4 font-medium">
-                   {dbErrorAlert}
-                 </p>
-                 <div className="flex justify-end mt-4">
-                   <button 
-                     onClick={() => setDbErrorAlert(null)}
-                     className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                   >
-                     ปิดหน้าต่าง
-                   </button>
-                 </div>
-               </div>
-             </div>
-          </div>
-        )}
+        {/* Error Alert Modal */}
+        <AnimatePresence>
+          {dbErrorAlert && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setDbErrorAlert(null)}
+                className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800"
+              >
+                <div className="bg-red-600 p-4 text-white flex items-center gap-3">
+                  <XCircle className="w-6 h-6" />
+                  <h2 className="font-bold text-lg">รายการไม่สำเร็จ</h2>
+                </div>
+                <div className="p-5">
+                  <p className="text-lg text-slate-600 dark:text-slate-300 mb-4 font-medium">
+                    {dbErrorAlert}
+                  </p>
+                  <div className="flex justify-end mt-4">
+                    <button 
+                      onClick={() => setDbErrorAlert(null)}
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    >
+                      ปิดหน้าต่าง
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
-        {showLowStockAlert && summary && (summary.lowStockCount > 0 || summary.outOfStockCount > 0) && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-             <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
-               <div className="bg-amber-500 p-4 text-white flex items-center gap-3">
-                 <AlertTriangle className="w-6 h-6" />
-                 <h2 className="font-bold text-lg">แจ้งเตือนสินค้าสต็อกต่ำ!</h2>
-               </div>
-               <div className="p-5">
-                 <p className="text-lg text-slate-600 dark:text-slate-300 mb-4">
-                   พบว่ามีสินค้า <b className="text-amber-600 dark:text-amber-400">{summary.lowStockCount || 0}</b> รายการใกล้หมด และ <b className="text-red-600 dark:text-red-400">{summary.outOfStockCount || 0}</b> รายการหมดสต็อกแล้ว<br/><br/>
-                   <span className="text-red-600 dark:text-red-400 font-semibold">กรุณาตรวจสอบและดำเนินการเขียนใบสั่งซื้อ (PR) เพื่อเติมสต็อกโดยด่วน</span>
-                 </p>
-                 <div className="flex justify-end gap-2 mt-4">
-                   <button 
-                     onClick={() => setShowLowStockAlert(false)}
-                     className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                   >
-                     ปิดหน้าต่าง
-                   </button>
-                   <button 
-                     onClick={() => {
-                       setShowLowStockAlert(false);
-                       setStatusFilter('low');
-                       setActiveTab('inventory');
-                     }}
-                     className="px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold text-lg hover:bg-amber-600 transition-colors cursor-pointer"
-                   >
-                     ดูรายการสินค้า
-                   </button>
-                 </div>
-               </div>
-             </div>
-          </div>
-        )}
+        {/* Low Stock Alert Modal */}
+        <AnimatePresence>
+          {showLowStockAlert && summary && (summary.lowStockCount > 0 || summary.outOfStockCount > 0) && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowLowStockAlert(false)}
+                className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800"
+              >
+                <div className="bg-amber-500 p-4 text-white flex items-center gap-3">
+                  <AlertTriangle className="w-6 h-6" />
+                  <h2 className="font-bold text-lg">แจ้งเตือนสินค้าสต็อกต่ำ!</h2>
+                </div>
+                <div className="p-5">
+                  <p className="text-lg text-slate-600 dark:text-slate-300 mb-4">
+                    พบว่ามีสินค้า <b className="text-amber-600 dark:text-amber-400">{summary.lowStockCount || 0}</b> รายการใกล้หมด และ <b className="text-red-600 dark:text-red-400">{summary.outOfStockCount || 0}</b> รายการหมดสต็อกแล้ว<br/><br/>
+                    <span className="text-red-600 dark:text-red-400 font-semibold">กรุณาตรวจสอบและดำเนินการเขียนใบสั่งซื้อ (PR) เพื่อเติมสต็อกโดยด่วน</span>
+                  </p>
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button 
+                      onClick={() => setShowLowStockAlert(false)}
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    >
+                      ปิดหน้าต่าง
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowLowStockAlert(false);
+                        setStatusFilter('low');
+                        setActiveTab('inventory');
+                      }}
+                      className="px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold text-lg hover:bg-amber-600 transition-colors cursor-pointer"
+                    >
+                      ดูรายการสินค้า
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Logout Confirmation Popup */}
-        {showLogoutConfirm && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
-              <div className="p-6 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center mb-4 shadow-xs">
-                  <LogOut className="w-7 h-7" />
+        <AnimatePresence>
+          {showLogoutConfirm && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowLogoutConfirm(false)}
+                className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800"
+              >
+                <div className="p-6 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center mb-4 shadow-xs">
+                    <LogOut className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">ยืนยันการออกจากระบบ</h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm mb-6 leading-relaxed">
+                    คุณต้องการออกจากระบบบัญชี <span className="font-bold text-slate-900 dark:text-white">{currentUser.name}</span> ใช่หรือไม่?
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={isLoggingOut}
+                      onClick={() => setShowLogoutConfirm(false)}
+                      className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isLoggingOut}
+                      onClick={handleConfirmLogout}
+                      className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-600/20 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isLoggingOut ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>กำลังออก...</span>
+                        </>
+                      ) : (
+                        <span>ออกจากระบบ</span>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">ยืนยันการออกจากระบบ</h3>
-                <p className="text-slate-600 dark:text-slate-400 text-sm mb-6 leading-relaxed">
-                  คุณต้องการออกจากระบบบัญชี <span className="font-bold text-slate-900 dark:text-white">{currentUser.name}</span> ใช่หรือไม่?
-                </p>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={isLoggingOut}
-                    onClick={() => setShowLogoutConfirm(false)}
-                    className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isLoggingOut}
-                    onClick={handleConfirmLogout}
-                    className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm transition-all shadow-md shadow-red-600/20 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {isLoggingOut ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>กำลังออก...</span>
-                      </>
-                    ) : (
-                      <span>ออกจากระบบ</span>
-                    )}
-                  </button>
-                </div>
-              </div>
+              </motion.div>
             </div>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
 
         {/* Mobile Bottom Navigation Bar */}
         <MobileNavbar

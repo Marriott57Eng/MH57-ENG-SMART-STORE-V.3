@@ -1,7 +1,8 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { InventoryItem } from '../types';
 import { 
-  X, MapPin, Layers, FileText, ShoppingCart, MessageSquare, ClipboardList, AlertTriangle, CheckCircle2, XCircle, Edit3
+  X, MapPin, Layers, FileText, ShoppingCart, MessageSquare, ClipboardList, AlertTriangle, CheckCircle2, XCircle, Edit3, Globe
 } from 'lucide-react';
 
 interface ItemDetailModalProps {
@@ -53,12 +54,27 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div 
-        className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-300 dark:border-slate-700 animate-in zoom-in-95 duration-200 transition-colors"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
+      {/* Smooth Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+      />
+
+      {/* Smooth Modal Dialog */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-300 dark:border-slate-700 transition-colors"
       >
         {/* Header Badges & Close Button */}
-        <div className="p-3.5 pb-2.5 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-750">
+        <div className="p-3.5 pb-2.5 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2.5 py-0.5 rounded-md shadow-xs border border-slate-700 dark:border-slate-800">
               {item.id}
@@ -90,8 +106,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
 
         {/* Item Title */}
-        <div className="px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-850">
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 leading-snug">
+        <div className="px-4 py-3 border-b border-slate-800 dark:border-slate-800 bg-slate-950 dark:bg-black shadow-inner">
+          <h2 className="text-base sm:text-lg font-bold text-white leading-snug tracking-wide">
             {item.name}
           </h2>
         </div>
@@ -207,18 +223,18 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions (2 Columns) */}
-        <div className="p-3.5 pt-2 pb-3.5 border-t border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2.5">
+        {/* Footer Actions (3 Columns for fast actions) */}
+        <div className="p-3.5 pt-2 pb-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => {
                 onStartRequisition(item);
                 onClose();
               }}
-              className="w-full bg-[#0f172a] hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white py-2.5 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xs active:scale-98 transition-all cursor-pointer border border-slate-800 dark:border-blue-500"
+              className="w-full bg-[#0f172a] hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs active:scale-98 transition-all cursor-pointer border border-slate-800 dark:border-blue-500"
             >
-              <ClipboardList className="w-4 h-4" />
-              เบิก / รับเข้า
+              <ClipboardList className="w-4 h-4 shrink-0" />
+              <span className="truncate">เบิก/รับเข้า</span>
             </button>
 
             <button
@@ -226,10 +242,20 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 onAskAI(item);
                 onClose();
               }}
-              className="w-full bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-400 dark:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-750 py-2.5 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer shadow-2xs"
+              className="w-full bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-400 dark:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-750 py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 active:scale-98 transition-all cursor-pointer shadow-2xs"
             >
-              <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              ถาม AI
+              <MessageSquare className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span className="truncate">ถาม AI</span>
+            </button>
+
+            <button
+              onClick={() => {
+                window.open(`https://www.google.com/search?q=${encodeURIComponent(item.name)}`, '_blank', 'noopener,noreferrer');
+              }}
+              className="w-full bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-emerald-400 dark:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-slate-750 py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 active:scale-98 transition-all cursor-pointer shadow-2xs"
+            >
+              <Globe className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span className="truncate">ถาม Google</span>
             </button>
           </div>
 
@@ -246,7 +272,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

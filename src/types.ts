@@ -43,6 +43,7 @@ export interface ReportAction {
   type: 'inventory_all' | 'requisition_history' | 'low_stock' | 'category';
   title: string;
   categoryFilter?: string;
+  userFilter?: string;
 }
 
 export interface DbActionPayload {

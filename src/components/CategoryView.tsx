@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { InventorySummary, InventoryItem } from '../types';
 import { 
   Layers, Package, Zap, Droplet, Flame,
@@ -87,7 +88,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
 
       {/* Category Grid with Real Photos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {summary?.categories.map((cat) => {
+        {summary?.categories.map((cat, idx) => {
           const catImg = getCategoryImageUrl(cat.name);
           const outOfStockItemsInCat = items.filter(
             i => i.category === cat.name && (i.status === 'out' || i.qty <= 0)
@@ -97,10 +98,19 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
           ).length;
 
           return (
-            <div
+            <motion.div
               key={cat.name}
+              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{
+                duration: 0.22,
+                ease: [0.22, 1, 0.36, 1],
+                delay: Math.min(idx * 0.03, 0.25),
+              }}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+              whileTap={{ scale: 0.985 }}
               onClick={() => onSelectCategory(cat.name)}
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer group flex flex-col justify-between"
             >
               {/* Category Image Banner with Overlay */}
               <div className="relative h-28 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -166,7 +176,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
                   <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>

@@ -36,28 +36,28 @@ export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
   };
 
   const bgs = {
-    success: 'bg-emerald-50 border-emerald-200',
-    error: 'bg-red-50 border-red-200',
-    warning: 'bg-amber-50 border-amber-200',
-    info: 'bg-blue-50 border-blue-200'
+    success: 'bg-emerald-50 dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/80',
+    error: 'bg-red-50 dark:bg-slate-900 border-red-200 dark:border-red-800/80',
+    warning: 'bg-amber-50 dark:bg-slate-900 border-amber-200 dark:border-amber-800/80',
+    info: 'bg-blue-50 dark:bg-slate-900 border-blue-200 dark:border-blue-800/80'
   };
 
   return (
     <div className={`flex items-start gap-3 p-4 mb-3 border rounded-xl shadow-lg w-full max-w-sm mx-auto backdrop-blur-md transition-all animate-in fade-in slide-in-from-top-5 ${bgs[toast.type]}`}>
       <div className="shrink-0 mt-0.5">{icons[toast.type]}</div>
       <div className="flex-1">
-        <h4 className="font-bold text-slate-800 text-[13.5px] leading-tight">{toast.title}</h4>
-        {toast.message && <p className="text-slate-600 text-xs mt-1 leading-snug">{toast.message}</p>}
+        <h4 className="font-bold text-slate-800 dark:text-white text-[13.5px] leading-tight">{toast.title}</h4>
+        {toast.message && <p className="text-slate-600 dark:text-slate-300 text-xs mt-1 leading-snug">{toast.message}</p>}
         {toast.actionText && toast.onClick && (
           <button 
             onClick={() => { toast.onClick!(); onClose(toast.id); }} 
-            className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-colors border border-blue-200"
+            className="mt-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-2.5 py-1.5 rounded-lg transition-colors border border-blue-200 dark:border-blue-800"
           >
             {toast.actionText}
           </button>
         )}
       </div>
-      <button onClick={() => onClose(toast.id)} className="text-slate-400 hover:text-slate-600 active:scale-95 transition-transform">
+      <button onClick={() => onClose(toast.id)} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 active:scale-95 transition-transform">
         <X className="w-5 h-5" />
       </button>
     </div>

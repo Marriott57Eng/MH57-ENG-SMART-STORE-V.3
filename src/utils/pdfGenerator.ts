@@ -7,6 +7,7 @@ export interface GeneratePdfOptions {
   type: 'inventory_all' | 'requisition_history' | 'low_stock' | 'category';
   title?: string;
   categoryFilter?: string;
+  userFilter?: string;
   items: InventoryItem[];
   requisitions: RequisitionRecord[];
 }
@@ -50,15 +51,22 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
     reportTitle = 'รายงานประวัติการเบิก / รับเข้าสินค้า (Stock In-Out History)';
     filename = `Requisition_History_${now.toISOString().slice(0, 10)}.pdf`;
     
-    const totalOut = requisitions.filter(r => r.type === 'out' || !r.type).reduce((sum, r) => sum + r.qty, 0);
-    const totalIn = requisitions.filter(r => r.type === 'in').reduce((sum, r) => sum + r.qty, 0);
-    const uniquePeople = new Set(requisitions.map(r => r.requestedBy)).size;
+    let reqs = requisitions;
+    if (options.userFilter) {
+      const lowerFilter = options.userFilter.toLowerCase();
+      reqs = reqs.filter(r => (r.requestedBy && r.requestedBy.toLowerCase().includes(lowerFilter)));
+      subtitle = 'คลังสินค้า Store FL.6 | ผู้ทำรายการ: ' + options.userFilter;
+      filename = `Requisition_History_${options.userFilter.replace(/\s+/g, '_')}_${now.toISOString().slice(0, 10)}.pdf`;
+    }
+    const totalOut = reqs.filter(r => r.type === 'out' || !r.type).reduce((sum, r) => sum + r.qty, 0);
+    const totalIn = reqs.filter(r => r.type === 'in').reduce((sum, r) => sum + r.qty, 0);
+    const uniquePeople = new Set(reqs.map(r => r.requestedBy)).size;
 
     summaryCardsHtml = `
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
           <div style="font-size: 10px; color: #64748b;">รายการทั้งหมด</div>
-          <div style="font-size: 16px; font-weight: bold; color: #0f172a;">${requisitions.length} รายการ</div>
+          <div style="font-size: 16px; font-weight: bold; color: #0f172a;">${reqs.length} รายการ</div>
         </div>
         <div style="background-color: #eff6ff; border: 1px solid #dbeafe; border-radius: 8px; padding: 10px;">
           <div style="font-size: 10px; color: #2563eb;">ยอดเบิกออกรวม</div>
@@ -92,9 +100,9 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
         </thead>
         <tbody>
           ${
-            requisitions.length === 0
+            reqs.length === 0
               ? `<tr><td colspan="9" style="padding: 24px; text-align: center; color: #94a3b8;">ยังไม่มีประวัติการเบิกหรือรับเข้าสินค้า</td></tr>`
-              : requisitions
+              : reqs
                   .map((rec, idx) => {
                     const isStockIn = rec.type === 'in';
                     const typeBadge = isStockIn

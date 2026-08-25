@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { InventoryItem } from '../types';
 import { X, Save, AlertCircle, Trash2, Package, MapPin, Layers, Hash, FileText } from 'lucide-react';
 
@@ -132,30 +133,47 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Smooth Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+      />
+
+      {/* Smooth Modal Dialog */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 transition-colors"
+      >
         
         {/* Modal Header */}
-        <div className="px-4 pt-safe-header pb-3 sm:py-4 bg-slate-50 dark:bg-slate-850 flex items-center justify-between border-b border-slate-200 dark:border-slate-750 shrink-0">
+        <div className="px-4 pt-safe-header pb-3 sm:py-4 bg-slate-50 dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs border border-blue-500">
               <Package className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">แก้ไขรายละเอียดสินค้า (Admin)</h2>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">แก้ไขรายละเอียดสินค้า (Admin)</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">ปรับปรุงข้อมูลสินค้าและสต็อกคงเหลือ</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-650"
+            className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="p-4 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="p-4 overflow-y-auto space-y-4 flex-1 bg-white dark:bg-slate-900">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-300 dark:border-red-700 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-xs font-medium shadow-2xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -166,7 +184,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
           {/* Code (ID) & Category */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                 <Hash className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 รหัสสินค้า (Item Code) *
               </label>
@@ -175,13 +193,13 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 required
                 value={id}
                 onChange={(e) => setId(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
                 placeholder="เช่น A000000166"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                 <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                 หมวดหมู่สินค้า *
               </label>
@@ -194,7 +212,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                     setCategory(e.target.value);
                   }
                 }}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               >
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -207,7 +225,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   placeholder="ระบุชื่อหมวดหมู่ใหม่..."
-                  className="w-full mt-1 bg-white dark:bg-slate-800 border border-blue-400 dark:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none shadow-2xs"
+                  className="w-full mt-1 bg-white dark:bg-slate-800 border border-blue-400 dark:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:border-blue-500 outline-none shadow-2xs"
                 />
               )}
             </div>
@@ -215,7 +233,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
           {/* Item Name */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <Package className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               ชื่อสินค้า (Item Name) *
             </label>
@@ -224,45 +242,45 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               placeholder="ระบุชื่อสินค้า..."
             />
           </div>
 
           {/* Stock Quantity, Unit, Min Stock */}
           <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-300 dark:border-slate-700 space-y-3 shadow-2xs">
-            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">การจัดการสต็อกและหน่วยนับ</h4>
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">การจัดการสต็อกและหน่วยนับ</h4>
             <div className="grid grid-cols-3 gap-2.5">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">จำนวนคงเหลือ</label>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">จำนวนคงเหลือ</label>
                 <input
                   type="number"
                   min="0"
                   value={qty}
                   onChange={(e) => setQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-extrabold text-blue-700 dark:text-blue-400 focus:border-blue-500 outline-none shadow-2xs"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-extrabold text-blue-700 dark:text-blue-400 focus:border-blue-500 outline-none shadow-2xs"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">หน่วยนับ</label>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">หน่วยนับ</label>
                 <input
                   type="text"
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="เช่น ชิ้น, กล่อง"
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none shadow-2xs"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white focus:border-blue-500 outline-none shadow-2xs"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">เกณฑ์ขั้นต่ำ</label>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">เกณฑ์ขั้นต่ำ</label>
                 <input
                   type="number"
                   min="0"
                   value={minStock}
                   onChange={(e) => setMinStock(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-bold text-amber-700 dark:text-amber-400 focus:border-blue-500 outline-none shadow-2xs"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-amber-700 dark:text-amber-400 focus:border-blue-500 outline-none shadow-2xs"
                 />
               </div>
             </div>
@@ -270,7 +288,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
           {/* Location */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               ตำแหน่งจัดเก็บ (Location)
             </label>
@@ -278,14 +296,14 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               placeholder="เช่น Store FL.6 / ตู้ A ชั้น 2"
             />
           </div>
 
           {/* Note */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <FileText className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               หมายเหตุ (Note)
             </label>
@@ -293,7 +311,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none resize-none shadow-2xs"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none resize-none shadow-2xs"
               placeholder="หมายเหตุเพิ่มเติมสำหรับสินค้านี้..."
             />
           </div>
@@ -301,30 +319,30 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
           {/* Ordered / OrderedDate */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">สถานะสั่งซื้อล่าสุด</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">สถานะสั่งซื้อล่าสุด</label>
               <input
                 type="text"
                 value={ordered}
                 onChange={(e) => setOrdered(e.target.value)}
                 placeholder="เช่น 10 กล่อง (PR#1234)"
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">วันที่สั่งซื้อล่าสุด</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">วันที่สั่งซื้อล่าสุด</label>
               <input
                 type="text"
                 value={orderedDate}
                 onChange={(e) => setOrderedDate(e.target.value)}
                 placeholder="เช่น 10/08/2026"
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none shadow-2xs"
               />
             </div>
           </div>
         </form>
 
         {/* Modal Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between gap-2 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
           {onDelete && (
             <div>
               {showDeleteConfirm ? (
@@ -341,7 +359,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-2 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium cursor-pointer border border-slate-300 dark:border-slate-600"
+                    className="px-2 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white rounded-lg text-xs font-medium cursor-pointer border border-slate-300 dark:border-slate-600"
                   >
                     ยกเลิก
                   </button>
@@ -365,7 +383,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               type="button"
               disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-300 dark:border-slate-700 shadow-2xs"
+              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-300 dark:border-slate-700 shadow-2xs"
             >
               ยกเลิก
             </button>
@@ -381,7 +399,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
           </div>
         </div>
 
-      </div>
+      </motion.div>
     </div>
   );
 };

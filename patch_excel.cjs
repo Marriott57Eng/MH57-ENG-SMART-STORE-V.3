@@ -1,8 +1,13 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/utils/excelGenerator.ts', 'utf-8');
+let content = fs.readFileSync('src/utils/excelGenerator.ts', 'utf8');
 
-code = code.replace(/item\.quantity/g, "item.qty");
-code = code.replace(/req\.quantity/g, "req.qty");
-code = code.replace(/req\.person/g, "req.requestedBy");
-
-fs.writeFileSync('src/utils/excelGenerator.ts', code);
+content = content.replace(
+  'const sortedReqs = [...requisitions].sort((a, b) => {',
+  `let reqs = requisitions;
+    if (options.userFilter) {
+      const lowerFilter = options.userFilter.toLowerCase();
+      reqs = reqs.filter(r => (r.requestedBy && r.requestedBy.toLowerCase().includes(lowerFilter)));
+    }
+    const sortedReqs = [...reqs].sort((a, b) => {`
+);
+fs.writeFileSync('src/utils/excelGenerator.ts', content);

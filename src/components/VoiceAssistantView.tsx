@@ -5,7 +5,7 @@ import {
   Mic, MicOff, Send, Sparkles, 
   RotateCcw, Bot, User, ArrowRight, Loader2, FileDown, FileText, 
   ArrowDownRight, ArrowUpRight, Sliders, Trash2, ExternalLink, AlertCircle, Headset, Radio,
-  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2
+  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2, Globe
 } from 'lucide-react';
 import { generateAndDownloadPdf } from '../utils/pdfGenerator';
 import { generateAndDownloadExcel } from '../utils/excelGenerator';
@@ -90,7 +90,7 @@ interface VoiceAssistantViewProps {
   requisitions: RequisitionRecord[];
   chatHistory: ChatMessage[];
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
-  currentUser: { name: string; username?: string; role?: string };
+  currentUser: { name: string; username?: string; role?: string; nickname?: string; id?: string };
   onSelectItem: (item: InventoryItem) => void;
   onExecuteDbAction?: (action: DbActionPayload) => void;
   onOpenHistory?: () => void;
@@ -129,6 +129,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           type: report.type,
           title: report.title,
           categoryFilter: report.categoryFilter,
+          userFilter: report.userFilter,
           items,
           requisitions,
         });
@@ -137,6 +138,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           type: report.type,
           title: report.title,
           categoryFilter: report.categoryFilter,
+          userFilter: report.userFilter,
           items,
           requisitions,
         });
@@ -259,30 +261,20 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       const { searchTerm } = toolCall.args || {};
       const term = (searchTerm || '').trim().toLowerCase();
       const tokens = term.split(/\s+/).filter((t: string) => t.length > 0);
-      let matched = items.filter(i => {
+      const matched = items.filter(i => {
         const n = (i.name || '').toLowerCase();
         const id = (i.id || '').toLowerCase();
         const c = (i.category || '').toLowerCase();
         return tokens.length === 0 || tokens.every((t: string) => n.includes(t) || id.includes(t) || c.includes(t));
-      }).slice(0, 6);
+      });
 
-      let textOutput = `📦 พบรายการอะไหล่ตรงกับ "${searchTerm || 'คำค้นหา'}" (${matched.length} รายการ):`;
+      let textOutput = '';
       if (matched.length === 1) {
-        const target = matched[0];
-        const qty = Number(target.qty) || 0;
-        const minStock = Number(target.minStock) || 1;
-        const isOut = qty <= 0 || target.status === 'out';
-        const isLow = !isOut && (qty <= minStock || target.status === 'low');
-        
-        if (isOut) {
-          textOutput = `⛔ ข้อมูล **${target.name}** (\`${target.id}\`): สินค้า**หมดสต็อก** (คงเหลือ 0 ${target.unit})`;
-        } else if (isLow) {
-          textOutput = `⚠️ ข้อมูล **${target.name}** (\`${target.id}\`): สินค้า**ใกล้หมดสต็อก** (เหลือ ${qty} ${target.unit} / เกณฑ์สั่งซื้อ ${minStock} ${target.unit})`;
-        } else {
-          textOutput = `✅ ข้อมูล **${target.name}** (\`${target.id}\`): มีสต็อก**พร้อมใช้งาน** (คงเหลือ ${qty} ${target.unit})`;
-        }
-      } else if (matched.length === 0) {
-        textOutput = `🔍 ไม่พบรายการอะไหล่ตรงกับ "${searchTerm || 'คำค้นหา'}" ในคลัง Store FL.6`;
+        textOutput = `📦 พบรายการสินค้า 1 รายการ`;
+      } else if (matched.length > 1) {
+        textOutput = `📦 พบรายการสินค้า มีจำนวน ${matched.length} รายการ`;
+      } else {
+        textOutput = `🔍 ไม่พบรายการสินค้าที่ตรงกับ "${searchTerm || 'คำค้นหา'}" ในคลัง Store FL.6 ค่ะ`;
       }
 
       setChatHistory(prev => [...prev, {
@@ -298,13 +290,15 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     // 4. Out of stock items
     else if (toolCall.name === 'get_out_of_stock_items') {
       const outItems = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+      const text = outItems.length > 0 
+        ? `🚨 สินค้าหมดแล้ว มีจำนวน ${outItems.length} รายการ`
+        : `✅ ขณะนี้ไม่มีรายการสินค้าหมดสต็อกในคลัง ทุกรายการพร้อมใช้งานค่ะ`;
+
       setChatHistory(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
         source: 'live',
-        text: outItems.length > 0 
-          ? `⛔ พบรายการสินค้าหมดสต็อกทั้งหมด ${outItems.length} รายการ ดังนี้:`
-          : `✅ ยอดเยี่ยมมาก ขณะนี้ไม่มีรายการสินค้าหมดสต็อกในคลัง ทุกรายการพร้อมใช้งาน`,
+        text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedItems: outItems.length > 0 ? outItems : undefined
       }]);
@@ -313,13 +307,15 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     // 5. Low stock items
     else if (toolCall.name === 'get_low_stock_items') {
       const lowItems = items.filter(i => ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || (i.status === 'low' && (Number(i.qty) || 0) > 0));
+      const text = lowItems.length > 0 
+        ? `⚠️ สินค้าใกล้หมด มีจำนวน ${lowItems.length} รายการ`
+        : `✅ ขณะนี้ไม่มีสินค้าใกล้หมดสต็อกในคลังค่ะ`;
+
       setChatHistory(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
         source: 'live',
-        text: lowItems.length > 0 
-          ? `⚠️ พบรายการสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ ดังนี้:`
-          : `✅ ขณะนี้ไม่มีสินค้าใกล้หมดสต็อก ปริมาณสินค้าส่วนใหญ่เกินเกณฑ์ความปลอดภัย`,
+        text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedItems: lowItems.length > 0 ? lowItems : undefined
       }]);
@@ -329,19 +325,49 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     else if (toolCall.name === 'get_stock_extremes') {
       const sorted = [...items].sort((a, b) => (Number(a.qty) || 0) - (Number(b.qty) || 0));
       const extremeItems: InventoryItem[] = [];
+      let text = `📊 ข้อมูลสินค้าคงเหลือน้อยที่สุดและมากที่สุดในคลัง`;
       if (sorted.length > 0) {
         extremeItems.push(sorted[0]);
         if (sorted.length > 1 && sorted[sorted.length - 1].id !== sorted[0].id) {
           extremeItems.push(sorted[sorted.length - 1]);
         }
+        text = `📊 ข้อมูลสินค้าคงเหลือน้อยที่สุดและมากที่สุด มีจำนวน ${extremeItems.length} รายการ`;
+      } else {
+        text = `📊 ไม่พบข้อมูลสินค้าในระบบคลัง Store FL.6`;
       }
+
       setChatHistory(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
         source: 'live',
-        text: `📊 ข้อมูลสินค้าที่มีจำนวนน้อยที่สุดและมากที่สุดในคลัง:`,
+        text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedItems: extremeItems.length > 0 ? extremeItems : undefined
+      }]);
+    }
+
+    // 7. Stock summary
+    else if (toolCall.name === 'get_stock_summary') {
+      const totalItems = items.length;
+      const totalQty = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      const outCount = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out').length;
+      const lowCount = items.filter(i => 
+        ((Number(i.qty) || 0) > 0 && (Number(i.qty) || 0) <= (Number(i.minStock) || 1)) || 
+        (i.status === 'low' && (Number(i.qty) || 0) > 0)
+      ).length;
+
+      const text = `### 📊 สรุปภาพรวมคลังสินค้า Store FL.6\n\n` +
+        `• 📦 **จำนวนรายการสินค้าทั้งหมด:** **${totalItems} รายการ**  \n` +
+        `• 🔢 **ปริมาณสต็อกรวมทั้งหมด:** **${totalQty.toLocaleString()} หน่วย**  \n` +
+        `• 🚨 **สินค้าหมดสต็อก:** **${outCount} รายการ**  \n` +
+        `• ⚠️ **สินค้าใกล้หมดเกณฑ์:** **${lowCount} รายการ**`;
+
+      setChatHistory(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        source: 'live',
+        text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     }
   }, [items, currentUser, setChatHistory, handleDownloadReport]);
@@ -349,6 +375,52 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   // Handle live spoken transcripts from Gemini
   const handleTranscript = useCallback((textChunk: string, isDone?: boolean) => {
     if (isDone) {
+      if (liveMessageIdRef.current) {
+        const currentId = liveMessageIdRef.current;
+        setChatHistory(prev => prev.map(msg => {
+          if (msg.id === currentId) {
+            let suggestedItems = msg.suggestedItems;
+            let formattedText = msg.text;
+            const txtLower = msg.text.toLowerCase();
+
+            if (!suggestedItems || suggestedItems.length === 0) {
+              if (txtLower.includes('ใกล้หมด') || txtLower.includes('low stock') || txtLower.includes('เกณฑ์ขั้นต่ำ')) {
+                const low = items.filter(i => {
+                  const q = Number(i.qty) || 0;
+                  const min = Number(i.minStock) || 1;
+                  return q > 0 && (q <= min || i.status === 'low');
+                });
+                if (low.length > 0) suggestedItems = low.slice(0, 6);
+              } else if (txtLower.includes('หมดสต็อก') || txtLower.includes('out of stock') || txtLower.includes('หมดแล้ว') || txtLower.includes('ไม่มีของ')) {
+                const out = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+                if (out.length > 0) suggestedItems = out.slice(0, 6);
+              } else {
+                const matches = items.filter(i => {
+                  const idMatch = msg.text.includes(i.id);
+                  const nameMatch = i.name.length >= 3 && txtLower.includes(i.name.toLowerCase());
+                  return idMatch || nameMatch;
+                });
+                if (matches.length > 0) suggestedItems = matches.slice(0, 6);
+              }
+            }
+
+            // If voice transcript has low/out stock items, format as a clean short header
+            if (suggestedItems && suggestedItems.length > 0 && (txtLower.includes('ใกล้หมด') || txtLower.includes('หมดสต็อก') || txtLower.includes('หมดแล้ว') || txtLower.includes('low') || txtLower.includes('out'))) {
+              const isLow = txtLower.includes('ใกล้หมด') || txtLower.includes('low');
+              const isOut = txtLower.includes('หมดสต็อก') || txtLower.includes('out') || txtLower.includes('หมดแล้ว');
+              
+              if (isLow) {
+                formattedText = `⚠️ สินค้าใกล้หมด มีจำนวน ${suggestedItems.length} รายการ`;
+              } else if (isOut) {
+                formattedText = `🚨 สินค้าหมดแล้ว มีจำนวน ${suggestedItems.length} รายการ`;
+              }
+            }
+
+            return { ...msg, text: formattedText, suggestedItems };
+          }
+          return msg;
+        }));
+      }
       liveMessageIdRef.current = null;
       return;
     }
@@ -357,20 +429,63 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     if (!liveMessageIdRef.current) {
       const newId = `live-${Date.now()}`;
       liveMessageIdRef.current = newId;
+
+      // Realtime detection of items to show cards immediately
+      const txtLower = textChunk.toLowerCase();
+      let initSuggested: InventoryItem[] | undefined = undefined;
+      if (txtLower.includes('ใกล้หมด') || txtLower.includes('low stock')) {
+        const low = items.filter(i => {
+          const q = Number(i.qty) || 0;
+          const min = Number(i.minStock) || 1;
+          return q > 0 && (q <= min || i.status === 'low');
+        });
+        if (low.length > 0) initSuggested = low.slice(0, 6);
+      } else if (txtLower.includes('หมดสต็อก') || txtLower.includes('out of stock')) {
+        const out = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+        if (out.length > 0) initSuggested = out.slice(0, 6);
+      }
+
       setChatHistory(prev => [...prev, {
         id: newId,
         role: 'assistant',
         source: 'live',
         text: textChunk,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedItems: initSuggested
       }]);
     } else {
       const currentId = liveMessageIdRef.current;
-      setChatHistory(prev => prev.map(msg => 
-        msg.id === currentId ? { ...msg, text: msg.text + textChunk } : msg
-      ));
+      setChatHistory(prev => prev.map(msg => {
+        if (msg.id === currentId) {
+          const updatedText = msg.text + textChunk;
+          let suggestedItems = msg.suggestedItems;
+          if (!suggestedItems || suggestedItems.length === 0) {
+            const txtLower = updatedText.toLowerCase();
+            if (txtLower.includes('ใกล้หมด') || txtLower.includes('low stock')) {
+              const low = items.filter(i => {
+                const q = Number(i.qty) || 0;
+                const min = Number(i.minStock) || 1;
+                return q > 0 && (q <= min || i.status === 'low');
+              });
+              if (low.length > 0) suggestedItems = low.slice(0, 6);
+            } else if (txtLower.includes('หมดสต็อก') || txtLower.includes('out of stock')) {
+              const out = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+              if (out.length > 0) suggestedItems = out.slice(0, 6);
+            } else {
+              const matches = items.filter(i => {
+                const idMatch = updatedText.includes(i.id);
+                const nameMatch = i.name.length >= 3 && txtLower.includes(i.name.toLowerCase());
+                return idMatch || nameMatch;
+              });
+              if (matches.length > 0) suggestedItems = matches.slice(0, 6);
+            }
+          }
+          return { ...msg, text: updatedText, suggestedItems };
+        }
+        return msg;
+      }));
     }
-  }, [setChatHistory]);
+  }, [items, setChatHistory]);
 
   const { 
     isLiveConnected, 
@@ -591,9 +706,24 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                   onExecuteDbAction(data.dbAction);
                               }
 
+                              // Fallback client-side matching if server didn't provide suggestedItems
+                              let finalSuggestedItems = data.suggestedItems;
+                              if (!finalSuggestedItems && !data.dbAction && !data.fileReport && !data.fileReports) {
+                                const fullText = (queryText + ' ' + textBuffer).toLowerCase();
+                                const clientMatches = items.filter(item => {
+                                  const idMatch = queryText.includes(item.id) || textBuffer.includes(item.id);
+                                  const nameMatch = queryText.toLowerCase().includes(item.name.toLowerCase()) || 
+                                                    (item.name.length >= 4 && fullText.includes(item.name.toLowerCase()));
+                                  return idMatch || nameMatch;
+                                });
+                                if (clientMatches.length > 0) {
+                                  finalSuggestedItems = clientMatches.slice(0, 4);
+                                }
+                              }
+
                               setChatHistory(prev => prev.map(msg => msg.id === aiMessageId ? {
                                   ...msg,
-                                  suggestedItems: data.suggestedItems,
+                                  suggestedItems: finalSuggestedItems,
                                   fileReport: data.fileReport || data.pdfReport,
                                   fileReports: data.fileReports,
                                   dbAction: data.dbAction,
@@ -743,7 +873,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
             </div>
             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base sm:text-lg mb-0.5">ENG AI ผู้ช่วยคลังสินค้า</h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-3 max-w-xs mx-auto leading-relaxed">
-              แตะไมค์พูดสั่ง หรือพิมพ์คำสั่งด้านล่างได้ทันที
+              {currentUser?.nickname ? `สวัสดีคุณ${currentUser.nickname} ✨ ` : ''}แตะไมค์พูดสั่ง หรือพิมพ์คำสั่งด้านล่างได้ทันที
             </p>
 
             {/* Quick Prompts */}
@@ -807,7 +937,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 {msg.role === 'user' ? (
                   <div className="whitespace-pre-wrap">{msg.text}</div>
                 ) : (
-                  <div className="prose prose-slate dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed space-y-2 prose-p:my-1 prose-p:leading-relaxed prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-strong:font-extrabold prose-strong:text-slate-900 dark:prose-strong:text-white prose-code:text-white prose-code:bg-slate-950 dark:prose-code:bg-black prose-code:border prose-code:border-slate-800 prose-code:px-2 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono">
+                  <div className="prose prose-slate dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed space-y-2.5 prose-headings:font-bold prose-h3:text-base sm:prose-h3:text-lg prose-h3:mt-3 prose-h3:mb-1.5 prose-p:my-2 prose-p:leading-relaxed prose-ul:my-2.5 prose-ul:space-y-1.5 prose-ol:my-2.5 prose-ol:space-y-1.5 prose-li:my-1 prose-strong:font-extrabold prose-strong:text-slate-900 dark:prose-strong:text-white prose-code:text-white prose-code:bg-slate-950 dark:prose-code:bg-black prose-code:border prose-code:border-slate-800 prose-code:px-2 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono">
                     <ReactMarkdown>{msg.text}</ReactMarkdown>
                   </div>
                 )}
@@ -988,14 +1118,14 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               )}
 
               {/* Item Cards List (Shown when inquiring stock or checking parts) */}
-              {msg.suggestedItems && msg.suggestedItems.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              {!msg.dbAction && msg.suggestedItems && msg.suggestedItems.length > 0 && (
+                <div className="mt-4 pt-3.5 border-t border-slate-200/90 dark:border-slate-800 space-y-2.5">
                   <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold px-0.5">
-                    <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-                      <Package className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-100 font-bold">
+                      <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       การ์ดข้อมูลอะไหล่/สินค้า ({msg.suggestedItems.length} รายการ):
                     </span>
-                    <span className="text-[10px] sm:text-xs text-slate-400">แตะเพื่อดูรายละเอียดหรือเบิก</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">แตะการ์ดเพื่อดูหรือทำรายการ</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1005,6 +1135,18 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                       const minStock = Number(item.minStock) || 1;
                       const isOut = qty <= 0 || item.status === 'out';
                       const isLow = !isOut && (qty <= minStock || item.status === 'low');
+
+                      let outOfStockInfo = null;
+                      if (isOut) {
+                        const itemReqs = requisitions.filter(r => r.itemId === item.id && (r.type === "out" || !r.type));
+                        itemReqs.sort((a, b) => new Date(b.isoDate || b.timestamp).getTime() - new Date(a.isoDate || a.timestamp).getTime());
+                        const lastReq = itemReqs[0];
+                        if (lastReq) {
+                          const lastReqDate = new Date(lastReq.isoDate || lastReq.timestamp);
+                          const daysOut = Math.floor((new Date().getTime() - lastReqDate.getTime()) / (1000 * 60 * 60 * 24));
+                          outOfStockInfo = `หมดสต็อกตั้งแต่วันที่ ${lastReq.timestamp} (เมื่อ ${daysOut} วันก่อน)`;
+                        }
+                      }
 
                       return (
                         <div 
@@ -1017,7 +1159,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                               : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
                           }`}
                         >
-                          {/* Item Details (Without Image) */}
+                          {/* Item Details */}
                           <div>
                             <div className="flex flex-col gap-1">
                               <div className="flex items-start justify-between gap-2">
@@ -1031,7 +1173,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                               
                               <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                                 <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded font-medium">
-                                  {item.category}
+                                  {item.category || 'ทั่วไป'}
                                 </span>
                                 {item.location && (
                                   <div className="flex items-center gap-1">
@@ -1043,7 +1185,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                             </div>
 
                             {/* Stock Status Badge */}
-                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between">
                               <span className="text-[11px] text-slate-500 dark:text-slate-400">สถานะคงเหลือ:</span>
                               <div>
                                 {isOut ? (
@@ -1054,43 +1197,82 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                 ) : isLow ? (
                                   <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                    ใกล้หมด (เหลือ {qty}/{minStock} {item.unit})
+                                    ใกล้หมด ({qty}/{minStock} {item.unit})
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    มีสต็อก {qty} {item.unit}
+                                    คงเหลือ {qty} {item.unit}
                                   </span>
                                 )}
                               </div>
                             </div>
+                            {outOfStockInfo && (
+                              <div className="text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 px-2 py-1.5 rounded-lg text-right border border-red-100 dark:border-red-900/50 flex items-center justify-end gap-1.5 font-medium shadow-sm">
+                                <Clock className="w-3 h-3" />
+                                {outOfStockInfo}
+                              </div>
+                            )}
+                          </div>
                           </div>
 
                           {/* Quick Action Buttons */}
-                          <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <div className="grid grid-cols-3 gap-1.5 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                             <button
                               type="button"
                               onClick={() => onSelectItem(item)}
-                              className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-1.5 px-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                              title="เปิดดูรายละเอียดอะไหล่"
                             >
-                              <ExternalLink className="w-3 h-3" />
-                              ดูอะไหล่
+                              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">ดูข้อมูล</span>
                             </button>
+
                             <button
                               type="button"
                               onClick={() => {
-                                if (isLiveConnected) {
-                                  sendMessage(`ต้องการเบิก ${item.name} รหัส ${item.id} จำนวน 1 ${item.unit}`);
-                                } else {
-                                  sendQuery(`ขอเบิก ${item.name} จำนวน 1 ${item.unit}`);
-                                }
+                                window.open(`https://www.google.com/search?q=${encodeURIComponent(item.name)}`, '_blank', 'noopener,noreferrer');
                               }}
-                              disabled={isOut}
-                              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white disabled:text-slate-500 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs"
+                              className="bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 py-1.5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                              title={`ค้นหา "${item.name}" ใน Google`}
                             >
-                              <ArrowUpRight className="w-3 h-3" />
-                              เบิกทันที
+                              <Globe className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                              <span className="truncate">ถาม Google</span>
                             </button>
+
+                            {isOut ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isLiveConnected) {
+                                    sendMessage(`ต้องการรับเข้าสินค้า ${item.name} รหัส ${item.id} จำนวน 10 ${item.unit}`);
+                                  } else {
+                                    sendQuery(`ขอรับเข้าสินค้า ${item.name} จำนวน 10 ${item.unit}`);
+                                  }
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs"
+                                title="สั่งรับเข้าสต็อก"
+                              >
+                                <ArrowDownRight className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">สั่งรับเข้า</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isLiveConnected) {
+                                    sendMessage(`ต้องการเบิก ${item.name} รหัส ${item.id} จำนวน 1 ${item.unit}`);
+                                  } else {
+                                    sendQuery(`ขอเบิก ${item.name} จำนวน 1 ${item.unit}`);
+                                  }
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs"
+                                title="เบิกสินค้านี้"
+                              >
+                                <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">เบิกทันที</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1211,7 +1393,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
 
             <button
               type="button"
-              onClick={() => isLiveConnected ? stopLive() : startLive(currentUser?.name, currentUser?.role, items)}
+              onClick={() => isLiveConnected ? stopLive() : startLive(currentUser?.name, currentUser?.role, items, requisitions, currentUser?.nickname)}
               disabled={isProcessing || isConnecting}
               style={{
                 transform: isLiveConnected 

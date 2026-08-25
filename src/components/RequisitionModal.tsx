@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { InventoryItem, RequisitionRecord } from '../types';
 import { 
-  X, User, Calendar, Clock, MapPin, Package, Check, 
+  X, User, Calendar, Clock, MapPin, Check, 
   AlertCircle, FileText, Search, ArrowDownRight, ArrowUpRight,
-  ChevronDown, CheckCircle2
+  ChevronDown
 } from 'lucide-react';
 
 interface RequisitionModalProps {
@@ -94,29 +95,48 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
     setError('');
   };
 
+  // Haptic feedback trigger for mobile devices
+  const triggerHapticFeedback = (pattern: number | number[] = 50) => {
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(pattern);
+      } catch {
+        // Ignore vibration errors on unsupported platforms
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentItem) {
+      triggerHapticFeedback([40, 50, 40]);
       setError('กรุณาเลือกรายการสินค้า');
       return;
     }
     const finalQty = typeof qty === 'number' ? qty : 0;
     if (finalQty <= 0) {
+      triggerHapticFeedback([40, 50, 40]);
       setError(`จำนวนที่${transactionType === 'out' ? 'เบิก' : 'รับเข้า'}ต้องมากกว่า 0`);
       return;
     }
     if (transactionType === 'out' && finalQty > currentItem.qty) {
+      triggerHapticFeedback([40, 50, 40]);
       setError(`สินค้ามีคงเหลือเพียง ${currentItem.qty} ${currentItem.unit} (ไม่พอสำหรับการเบิก ${qty} ${currentItem.unit})`);
       return;
     }
     if (!requestedBy.trim()) {
+      triggerHapticFeedback([40, 50, 40]);
       setError(`กรุณาระบุชื่อผู้${transactionType === 'out' ? 'เบิก' : 'รับเข้า'}สินค้า`);
       return;
     }
     if (!purpose.trim()) {
+      triggerHapticFeedback([40, 50, 40]);
       setError(`กรุณาระบุ${transactionType === 'out' ? 'งานหรือสถานที่ที่นำไปใช้' : 'แหล่งที่มาหรือเหตุผลการรับเข้า'}`);
       return;
     }
+
+    // Physical haptic vibration confirmation for successful action
+    triggerHapticFeedback([50, 40, 60]);
 
     // Format human readable Thai timestamp
     let formattedTimestamp = '';
@@ -160,11 +180,28 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 animate-in slide-in-from-bottom-4 sm:zoom-in-95 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Smooth Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+      />
+
+      {/* Smooth Modal Dialog */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 transition-colors"
+      >
         
         {/* Header */}
-        <div className="px-3.5 sm:px-4 pt-safe-header pb-3 sm:py-4 border-b border-slate-200 dark:border-slate-750 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
+        <div className="px-3.5 sm:px-4 pt-safe-header pb-3 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-sm transition-colors border ${
               transactionType === 'out' ? 'bg-blue-600 border-blue-500 shadow-blue-500/20' : 'bg-emerald-600 border-emerald-500 shadow-emerald-500/20'
@@ -176,7 +213,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               )}
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 {transactionType === 'out' ? 'บันทึกการเบิกสินค้า' : 'บันทึกการรับเข้าสินค้า'}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -188,7 +225,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-650"
+            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
           >
             <X className="w-4 h-4" />
           </button>
@@ -196,7 +233,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
         {/* Transaction Type Switcher (เบิกออก vs รับเข้า) */}
         <div className="px-3.5 sm:px-4 pt-2.5 pb-1 bg-white dark:bg-slate-900 shrink-0">
-          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-850 rounded-xl sm:rounded-2xl border border-slate-300 dark:border-slate-700 shadow-2xs">
+          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl sm:rounded-2xl border border-slate-300 dark:border-slate-700 shadow-2xs">
             <button
               type="button"
               onClick={() => {
@@ -206,7 +243,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               className={`py-2 px-3 rounded-lg sm:rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 transactionType === 'out'
                   ? 'bg-blue-600 text-white shadow-xs border border-blue-500'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <ArrowUpRight className="w-4 h-4" />
@@ -222,7 +259,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               className={`py-2 px-3 rounded-lg sm:rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 transactionType === 'in'
                   ? 'bg-emerald-600 text-white shadow-xs border border-emerald-500'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <ArrowDownRight className="w-4 h-4" />
@@ -244,16 +281,16 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           {/* 1. Item Selection with Typing & Live Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 เลือกสินค้า ({transactionType === 'out' ? 'เบิก' : 'รับเข้า'}) <span className="text-red-500">*</span>
               </label>
-              <span className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="text-xs text-slate-400 dark:text-slate-400">
                 พิมพ์ค้นหาจากรหัส, ชื่อ, หรือหมวดหมู่
               </span>
             </div>
 
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 dark:text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -264,7 +301,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                   setIsDropdownOpen(true);
                 }}
                 placeholder="พิมพ์ชื่อสินค้า หรือรหัส (เช่น A0000001, แอลกอฮอล์, สายยาง)..."
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-8 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-800 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-sm font-semibold text-slate-800 dark:text-white outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-800 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
               />
               <button
                 type="button"
@@ -277,9 +314,9 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
             {/* Live Autocomplete Dropdown List */}
             {isDropdownOpen && (
-              <div className="absolute z-50 left-0 right-0 mt-1 max-h-56 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl shadow-xl overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/80 animate-in fade-in-50 zoom-in-95">
+              <div className="absolute z-50 left-0 right-0 mt-1 max-h-56 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700 animate-in fade-in-50 zoom-in-95">
                 {filteredDropdownItems.length === 0 ? (
-                  <div className="p-3 text-center text-sm text-slate-400 dark:text-slate-500">
+                  <div className="p-3 text-center text-sm text-slate-400 dark:text-slate-400">
                     ไม่พบสินค้าที่ตรงกับ "{itemSearchQuery}"
                   </div>
                 ) : (
@@ -288,7 +325,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => handleSelectItem(item)}
-                      className={`w-full text-left p-2.5 hover:bg-blue-50/70 dark:hover:bg-slate-700/60 transition-colors flex items-center justify-between gap-2.5 ${
+                      className={`w-full text-left p-2.5 hover:bg-blue-50/70 dark:hover:bg-slate-700 transition-colors flex items-center justify-between gap-2.5 ${
                         item.id === selectedItemId ? 'bg-blue-50 dark:bg-slate-700 font-medium' : ''
                       }`}
                     >
@@ -298,14 +335,14 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                             <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-1.5 py-0.2 rounded shadow-2xs">
                               {item.id}
                             </span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-850 px-1.5 py-0.2 rounded">
+                            <span className="text-xs text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.2 rounded">
                               {item.category}
                             </span>
                           </div>
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                          <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
                             {item.name}
                           </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                          <p className="text-xs text-slate-400 dark:text-slate-400 truncate">
                             ที่เก็บ: {item.location}
                           </p>
                         </div>
@@ -317,11 +354,11 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                             ? 'text-red-600 dark:text-red-400' 
                             : item.qty <= item.minStock 
                             ? 'text-amber-600 dark:text-amber-400' 
-                            : 'text-slate-700 dark:text-slate-300'
+                            : 'text-slate-700 dark:text-slate-200'
                         }`}>
                           {item.qty} {item.unit}
                         </span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">คงเหลือ</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-400">คงเหลือ</span>
                       </div>
                     </button>
                   ))
@@ -331,21 +368,21 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
             {/* Current Item Summary Card */}
             {currentItem && (
-              <div className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+              <div className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-mono font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
                         {currentItem.id}
                       </span>
-                      <span className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
                         {currentItem.name}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-                      <span>หมวด: <strong>{currentItem.category}</strong></span>
+                    <div className="text-xs text-slate-500 dark:text-slate-300 mt-1 flex items-center gap-2">
+                      <span>หมวด: <strong className="text-slate-700 dark:text-white">{currentItem.category}</strong></span>
                       <span>•</span>
-                      <span>ที่เก็บ: <strong>{currentItem.location}</strong></span>
+                      <span>ที่เก็บ: <strong className="text-slate-700 dark:text-white">{currentItem.location}</strong></span>
                     </div>
                   </div>
                 </div>
@@ -354,7 +391,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                   <div className="text-sm font-extrabold text-blue-700 dark:text-blue-400">
                     คงเหลือ {currentItem.qty} {currentItem.unit}
                   </div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                  <span className="text-xs text-slate-400 dark:text-slate-400">
                     (เกณฑ์ขั้นต่ำ: {currentItem.minStock} {currentItem.unit})
                   </span>
                 </div>
@@ -365,7 +402,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           {/* 2. Quantity & Requisitioner Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-1">
                 จำนวนที่{transactionType === 'out' ? 'เบิก' : 'รับเข้า'} <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-2">
@@ -382,16 +419,16 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                        setQty(isNaN(parsed) ? '' : Math.max(0, parsed));
                     }
                   }}
-                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
+                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-white outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
                 />
-                <span className="text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 px-3 py-2 rounded-xl min-w-[65px] text-center shadow-2xs">
+                <span className="text-sm font-semibold text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3 py-2 rounded-xl min-w-[65px] text-center shadow-2xs">
                   {currentItem?.unit || 'ชิ้น'}
                 </span>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1">
                 <User className={`w-4 h-4 ${transactionType === 'out' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
                 {transactionType === 'out' ? 'ชื่อผู้เบิกสินค้า' : 'ชื่อผู้รับเข้า / ตรวจรับ'}
               </label>
@@ -399,14 +436,14 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 type="text"
                 value={requestedBy}
                 readOnly
-                className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed font-medium shadow-2xs"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-500 dark:text-slate-300 outline-none cursor-not-allowed font-medium shadow-2xs"
               />
             </div>
           </div>
 
           {/* 3. Purpose / Location */}
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1">
               <MapPin className="w-4 h-4 text-red-500" />
               {transactionType === 'out' 
                 ? 'งานที่นำไปใช้ / สถานที่ติดตั้ง' 
@@ -421,14 +458,14 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                   ? 'เช่น ซ่อมระบบแอร์ชั้น 4, เปลี่ยนสวิตช์ไฟห้อง 201'
                   : 'เช่น สั่งซื้อเติมสต็อกประจำเดือน, ซัพพลายเออร์ส่งมอบ, คืนของเหลือ'
               }
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
             />
           </div>
 
           {/* 4. Date & Time */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1">
                 <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 วันที่ทำรายการ
               </label>
@@ -436,12 +473,12 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 type="date"
                 value={dateStr}
                 onChange={(e) => setDateStr(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1">
                 <Clock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 เวลา
               </label>
@@ -449,14 +486,14 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 type="time"
                 value={timeStr}
                 onChange={(e) => setTimeStr(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 shadow-2xs"
               />
             </div>
           </div>
 
           {/* 5. Note */}
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1">
               <FileText className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               หมายเหตุเพิ่มเติม (ถ้ามี)
             </label>
@@ -465,15 +502,16 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="เช่น ใบสั่งซื้อ PO-1029, งานด่วนรอบดึก"
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs"
             />
           </div>
         </div>
 
         {/* Sticky Fixed Bottom Action Button */}
-        <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-750 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
           <button
             type="submit"
+            onTouchStart={() => triggerHapticFeedback(25)}
             className={`w-full text-white font-bold py-3.5 rounded-xl shadow-md text-base flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer border ${
               transactionType === 'out'
                 ? 'bg-blue-600 hover:bg-blue-700 border-blue-500 shadow-blue-500/20'
@@ -485,8 +523,8 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           </button>
         </div>
       </form>
+      </motion.div>
     </div>
-  </div>
-);
+  );
 };
 

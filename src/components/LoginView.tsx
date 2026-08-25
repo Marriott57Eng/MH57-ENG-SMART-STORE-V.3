@@ -216,8 +216,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex justify-center selection:bg-blue-500 selection:text-white">
-      <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[auto] sm:rounded-3xl sm:my-10 sm:h-fit shadow-2xl flex flex-col p-8 pt-safe-content justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 dark:bg-slate-950 flex justify-center selection:bg-blue-500 selection:text-white transition-colors">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 min-h-screen sm:min-h-[auto] sm:rounded-3xl sm:my-10 sm:h-fit shadow-2xl flex flex-col p-8 pt-safe-content justify-center relative overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 transition-colors">
         {/* Decorative background */}
         <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-b-[40px] opacity-10 blur-xl"></div>
 
@@ -231,23 +231,23 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           </div>
           <h1
             style={{ fontSize: '20.5px', fontStyle: 'normal', fontFamily: "'Fredericka the Great', cursive", textDecorationLine: 'none', textAlign: 'center' }}
-            className="font-bold text-slate-900 mb-2 tracking-tight"
+            className="font-bold text-slate-900 dark:text-white mb-2 tracking-tight"
           >
             ENG Smart Store App
           </h1>
-          <p className="text-slate-500 text-sm">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700 relative z-10">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3 text-red-700 dark:text-red-300 relative z-10">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
             <span className="text-sm font-medium">{error}</span>
           </div>
         )}
 
         <form onSubmit={handleLogin} className="relative z-10 flex flex-col gap-5">
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700 ml-1">รหัสพนักงาน หรือ ชื่อจริง</label>
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 ml-1">รหัสพนักงาน หรือ ชื่อจริง</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <UserIcon className="h-5 w-5 text-slate-400" />
@@ -256,7 +256,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                 type="text"
                 value={loginInput}
                 onChange={(e) => setLoginInput(e.target.value)}
-                className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all text-slate-900 outline-none"
+                className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white outline-none placeholder:text-slate-400"
                 placeholder="กรอกรหัสพนักงาน หรือ ชื่อจริง"
                 disabled={loading}
                 autoFocus
@@ -267,7 +267,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           <button
             type="submit"
             disabled={loading}
-            className="mt-4 w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-70 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="mt-4 w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-70 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer border border-blue-500"
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />

@@ -3,18 +3,26 @@ import { InventoryItem, RequisitionRecord } from '../types';
 import { formatRecordTimestamp } from './dateUtils';
 
 interface GenerateExcelProps {
-  type: 'inventory_all' | 'low_stock' | 'requisition_history';
+  type: 'inventory_all' | 'low_stock' | 'requisition_history' | 'category';
   title: string;
   categoryFilter?: string;
+  userFilter?: string;
   items: InventoryItem[];
   requisitions: RequisitionRecord[];
 }
 
-export const generateAndDownloadExcel = async ({ type, title, categoryFilter, items, requisitions }: GenerateExcelProps) => {
+export const generateAndDownloadExcel = async ({
+  type,
+  title,
+  categoryFilter,
+  userFilter,
+  items,
+  requisitions
+}: GenerateExcelProps) => {
   let data: any[] = [];
   let filename = 'Report.xlsx';
 
-  if (type === 'inventory_all' || type === 'low_stock') {
+  if (type === 'inventory_all' || type === 'low_stock' || type === 'category') {
     let filteredItems = items;
     if (type === 'low_stock') {
       filteredItems = items.filter(i => i.status === 'low' || i.status === 'out');
@@ -37,7 +45,12 @@ export const generateAndDownloadExcel = async ({ type, title, categoryFilter, it
     }));
     filename = type === 'low_stock' ? 'Low_Stock_Report.xlsx' : 'Inventory_Report.xlsx';
   } else if (type === 'requisition_history') {
-    const sortedReqs = [...requisitions].sort((a, b) => {
+    let reqs = requisitions;
+    if (userFilter) {
+      const lowerFilter = userFilter.toLowerCase();
+      reqs = reqs.filter(r => (r.requestedBy && r.requestedBy.toLowerCase().includes(lowerFilter)));
+    }
+    const sortedReqs = [...reqs].sort((a, b) => {
       const timeA = a.isoDate ? new Date(a.isoDate).getTime() : 0;
       const timeB = b.isoDate ? new Date(b.isoDate).getTime() : 0;
       return timeB - timeA;
@@ -52,7 +65,7 @@ export const generateAndDownloadExcel = async ({ type, title, categoryFilter, it
       'งาน/สถานที่': req.purpose || '-',
       'หมายเหตุ': req.note || '-'
     }));
-    filename = 'Transaction_History.xlsx';
+    filename = userFilter ? `Transaction_History_${userFilter.replace(/\s+/g, '_')}.xlsx` : 'Transaction_History.xlsx';
   }
 
   const ws = XLSX.utils.json_to_sheet(data);

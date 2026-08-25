@@ -448,9 +448,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 transition-colors">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-750 sticky top-0 z-10 px-4 pt-safe-header pb-3.5 flex items-center justify-between shadow-2xs transition-colors">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 sticky top-0 z-10 px-4 pt-safe-header pb-3.5 flex items-center justify-between shadow-2xs transition-colors">
         <div>
-          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2">
+          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             จัดการรายชื่อ & สิทธิ์ผู้ใช้งาน
           </h1>
@@ -488,9 +488,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
         {/* Add User Form */}
         {showAddForm && (
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-2xs border border-slate-300 dark:border-slate-700 mb-4 animate-in slide-in-from-top-3 duration-200 transition-colors">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-750 pb-3">
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-2xs border border-slate-300 dark:border-slate-800 mb-4 animate-in slide-in-from-top-3 duration-200 transition-colors">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-base">
                 <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" /> เพิ่มผู้ใช้งานใหม่
               </h3>
               <button
@@ -504,7 +504,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             <form onSubmit={handleAddUser} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     รหัสพนักงาน (ID) <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -514,60 +514,60 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       setNewId(e.target.value);
                       if (!newUsername) setNewUsername(e.target.value);
                     }}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น 1912 หรือ 9999"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ชื่อผู้ใช้งาน (Username)
                   </label>
                   <input
                     type="text"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="ค่าเริ่มต้นใช้เดียวกับ ID"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ชื่อ-นามสกุล (ชื่อจริง) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น สมชาย ใจดี"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ชื่อเล่น (Nickname)
                   </label>
                   <input
                     type="text"
                     value={newNickname}
                     onChange={(e) => setNewNickname(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น ชาย"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     สิทธิ์การใช้งาน (Role)
                   </label>
                   <select
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value as 'admin' | 'user')}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium cursor-pointer transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium cursor-pointer transition-colors shadow-2xs"
                   >
                     <option value="user">User (ผู้ใช้ทั่วไป)</option>
                     <option value="admin">Admin (ผู้ดูแลระบบ)</option>
@@ -579,7 +579,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+                  className="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
                 >
                   ยกเลิก
                 </button>
@@ -605,7 +605,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="ค้นหาชื่อ, Username, ID..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3.5 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3.5 py-2 text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
             />
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 self-end sm:self-auto">
@@ -659,7 +659,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base truncate">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base truncate">
                           {user.name}
                         </h4>
                         {user.nickname && (
@@ -675,14 +675,14 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2.5 mt-1 text-xs text-slate-500 dark:text-slate-400 flex-wrap font-mono">
-                        <span>ID: <strong className="text-slate-700 dark:text-slate-300">{user.id}</strong></span>
+                        <span>ID: <strong className="text-slate-700 dark:text-slate-200">{user.id}</strong></span>
                         <span>•</span>
-                        <span>User: <strong className="text-slate-700 dark:text-slate-300">{user.username || user.id}</strong></span>
+                        <span>User: <strong className="text-slate-700 dark:text-slate-200">{user.username || user.id}</strong></span>
                         <span>•</span>
                         <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded uppercase tracking-wider ${
                           isAdmin 
                             ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300' 
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                         }`}>
                           {user.role}
                         </span>
@@ -716,7 +716,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             className={`appearance-none outline-none text-xs font-bold px-2.5 py-1.5 pr-7 rounded-xl border cursor-pointer transition-colors shadow-2xs ${
                               isAdmin 
                                 ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' 
-                                : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                                : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200'
                             }`}
                           >
                             <option value="user">User</option>
@@ -775,13 +775,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:rounded-3xl shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 transition-colors flex flex-col">
             {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-750 flex items-center justify-between shrink-0">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold border border-blue-200 dark:border-blue-800/60 shadow-2xs">
                   <Edit3 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">
                     แก้ไขข้อมูลผู้ใช้งาน
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -809,50 +809,50 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* ID Field */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     รหัสพนักงาน (ID) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={editId}
                     onChange={(e) => setEditId(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น 1912 หรือ Admininmad"
                     required
                   />
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1">
                     (ใช้เป็น Key หลักในการค้นหาและระบุตัวตน)
                   </p>
                 </div>
 
                 {/* Username Field */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ชื่อผู้ใช้งาน (Username) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={editUsername}
                     onChange={(e) => setEditUsername(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น 1912 หรือ custom_user"
                     required
                   />
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1">
                     (ใช้สำหรับกรอกเข้าสู่ระบบ)
                   </p>
                 </div>
 
                 {/* Real Name Field */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ชื่อ-นามสกุล (ชื่อจริง) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น Chanayood Wongsunthon"
                     required
                   />
@@ -860,27 +860,27 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
                 {/* Nickname Field */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ชื่อเล่น (Nickname)
                   </label>
                   <input
                     type="text"
                     value={editNickname}
                     onChange={(e) => setEditNickname(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
                     placeholder="เช่น Mild, ชาย, บู"
                   />
                 </div>
 
                 {/* Role Field */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                     ระดับสิทธิ์ (Role)
                   </label>
                   <select
                     value={editRole}
                     onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none cursor-pointer transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none cursor-pointer transition-colors shadow-2xs"
                   >
                     <option value="user">User (ผู้ใช้ทั่วไป)</option>
                     <option value="admin">Admin (ผู้ดูแลระบบ)</option>
@@ -895,11 +895,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               )}
 
               {/* Modal Footer */}
-              <div className="p-4 border-t border-slate-200 dark:border-slate-750 flex justify-end gap-2.5 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))]">
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2.5 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))]">
                 <button
                   type="button"
                   onClick={closeEditModal}
-                  className="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+                  className="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
                 >
                   ยกเลิก
                 </button>

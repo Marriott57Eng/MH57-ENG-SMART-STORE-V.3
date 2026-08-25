@@ -465,27 +465,48 @@ async function startServer() {
           }
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const compactInventory = matchedItems.map(item => ({
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        qty: item.qty,
-        unit: item.unit,
-        minStock: item.minStock,
-        loc: item.location,
-        status: item.status,
-      }));
+      const now = new Date();
+      const compactInventory = matchedItems.map(item => {
+        let outOfStockInfo = undefined;
+        if (Number(item.qty) <= 0) {
+           const itemReqs = Array.isArray(clientRequisitions) ? clientRequisitions.filter((r: any) => r.itemId === item.id && (r.type === "out" || !r.type)) : [];
+           itemReqs.sort((a: any, b: any) => new Date(b.isoDate || b.timestamp).getTime() - new Date(a.isoDate || a.timestamp).getTime());
+           const lastReq = itemReqs[0];
+           if (lastReq) {
+             const lastReqDate = new Date(lastReq.isoDate || lastReq.timestamp);
+             const daysOut = Math.floor((now.getTime() - lastReqDate.getTime()) / (1000 * 60 * 60 * 24));
+             outOfStockInfo = `หมดสต็อกมาตั้งแต่วันที่ ${lastReq.timestamp} (เมื่อ ${daysOut} วันที่แล้ว)`;
+           } else {
+             outOfStockInfo = "ไม่มีประวัติการเบิก (ไม่มีข้อมูล)";
+           }
+        }
+        return {
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          qty: item.qty,
+          unit: item.unit,
+          minStock: item.minStock,
+          loc: item.location,
+          status: item.status,
+          ...(outOfStockInfo ? { outOfStockInfo } : {})
+        };
+      });
 
-      const recentReqs = Array.isArray(clientRequisitions) ? clientRequisitions.slice(0, 5).map(r => ({
-        type: r.type || 'out',
+      const recentReqs = Array.isArray(clientRequisitions) ? clientRequisitions.slice(0, 30).map((r: any) => ({
+        type: (r.type === "in") ? "รับเข้า" : "เบิกออก",
         item: r.itemName,
-        qty: r.qty,
-        user: r.requestedBy
+        qty: `${r.qty} ${r.unit}`,
+        user: r.requestedBy,
+        date: r.timestamp,
+        purpose: r.purpose
       })) : [];
 
       const userRole = (currentUser?.role || 'user').toLowerCase();
       const isAdminUser = userRole === 'admin';
+      const userNickname = (currentUser?.nickname && String(currentUser.nickname).trim()) || '';
+      const userFullName = (currentUser?.name && String(currentUser.name).trim()) || 'ผู้ใช้งาน';
+      const callingName = userNickname || userFullName;
 
       const systemInstruction = `คุณคือ AI ผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของอาคาร/องค์กร (ENG Smart Store AI)
 
@@ -495,12 +516,21 @@ async function startServer() {
 3. **จัดลำดับและเว้นวรรคให้โปร่งตา (Clear Spacing & Ordered Structure)**: 
    - **ห้าม** เขียนข้อความเป็นก้อนยาวติดกันเด็ดขาด
    - เว้นบรรทัดระหว่างย่อหน้าและหัวข้อ (Double Line Breaks)
-   - จัดลำดับข้อมูลอย่างเป็นขั้นเป็นตอน ใช้ตัวเลขลำดับ (1., 2., 3.) หรือ Bullet Points (- ) เมื่อแสดงรายการสินค้า ขั้นตอน หรือข้อเสนอแนะ
-4. **เน้นคำสำคัญ (Highlight Key Terms with Bold Markdown)**: 
-   - ใช้เครื่องหมาย \`**...**\` เน้นคำสำคัญทุกครั้ง เช่น **ชื่อสินค้า/อะไหล่**, **รหัสสินค้า**, **จำนวนและหน่วย**, **สถานที่จัดเก็บ**, **สถานะสต็อก**, **ผู้ทำรายการ**, และ **สถานที่/งานที่นำไปใช้**
+   - หากต้องอธิบายขั้นตอน ให้จัดลำดับด้วย (1., 2., 3.) หรือ Bullet Points (- )
+4. **การตอบคำถามเกี่ยวกับสินค้าใกล้หมด / สินค้าหมดสต็อก / เช็คสต็อก (Crisp Count & Direct Cards)**:
+   - เมื่อผู้ใช้ถามถึงสินค้า ให้สรุปเฉพาะยอดรวมสั้นๆ เช่น "⚠️ สินค้าใกล้หมด มีจำนวน X รายการ", "🚨 สินค้าหมดแล้ว มีจำนวน X รายการ" หรือ "📦 พบสินค้าที่ค้นหา X รายการ" เท่านั้น
+   - **ห้าม** พิมพ์แจกแจงรายชื่อสินค้า, รหัส, ที่เก็บ, หรือจำนวนคงเหลือลงในข้อความแชทโดยเด็ดขาด (ห้ามทำลิสต์รายการสินค้า) เนื่องจากระบบจะแสดงการ์ดสินค้า (Interactive Item Cards) ให้ผู้ใช้เห็นและกดใช้งานเองอยู่แล้ว ให้ตอบแบบบรรทัดเดียวสั้นๆ แล้วจบเลย
 
 👤 ข้อมูลผู้ใช้งานปัจจุบัน:
-- ผู้ใช้งาน: **${currentUser?.name || 'ผู้ใช้งาน'}** (Username: \`${currentUser?.username || 'unknown'}\`, Role: **${userRole.toUpperCase()}**)
+- **ชื่อเล่นที่ต้องใช้เรียกผู้ใช้**: คุณ${callingName} (เช่น "คุณ${callingName}", "สวัสดีค่ะคุณ${callingName} ✨")
+- ชื่อจริง: ${userFullName}
+- ชื่อเล่น: ${userNickname || 'ไม่ได้ระบุ'}
+- Username: \`${currentUser?.username || 'unknown'}\`
+- Role: **${userRole.toUpperCase()}**
+
+🏷️ **กฎสำคัญที่สุดเรื่องการเรียกชื่อผู้ใช้งาน**:
+- **ให้ AI เรียกชื่อเล่นของผู้ใช้ (คุณ${callingName}) เสมอ** ในการพูดคุย สนทนา ทักทาย ตอบคำถาม หรือรายงานสถานะ
+- **ห้าม** เรียกผู้ใช้ด้วยชื่อ-นามสกุลจริงเด็ดขาด เพื่อความเป็นกันเองและเป็นธรรมชาติสำหรับทีมงาน
 
 🛡️ กฎการตรวจสอบสิทธิ์ความปลอดภัย (RBAC Permission Rules):
 - สิทธิ์ปัจจุบัน: **"${isAdminUser ? '👑 Admin (ผู้ดูแลระบบ)' : '👤 Staff / User (ผู้ใช้ทั่วไป)'}"**
@@ -508,9 +538,9 @@ ${!isAdminUser ? `
 - ⛔ **ข้อห้ามสำหรับ Staff/User**: 
   - ห้ามแก้ไขตัวเลขสต็อกโดยตรง หรือเปลี่ยนชื่ออะไหล่ (\`update_stock\` หรือ \`edit_item\`)
   - หากผู้ใช้สั่งให้แก้สต็อกโดยตรง ให้ตอบปฏิเสธอย่างสุภาพและเป็นมิตร เช่น:
-    "ขออภัยด้วยนะคะ 🥺 ผู้ใช้งานระดับ **Staff** จะยังไม่สามารถแก้ไขจำนวนสต็อกโดยตรงหรือเปลี่ยนชื่ออะไหล่ได้ค่ะ (สิทธิ์สำหรับ **Admin** เท่านั้นนะคะ ✨)
+    "ขออภัยด้วยนะคะคุณ${callingName} 🥺 ผู้ใช้งานระดับ **Staff** จะยังไม่สามารถแก้ไขจำนวนสต็อกโดยตรงหรือเปลี่ยนชื่ออะไหล่ได้ค่ะ (สิทธิ์สำหรับ **Admin** เท่านั้นนะคะ ✨)
     
-    👉 แต่คุณสามารถสั่ง **เบิกสินค้า** หรือ **รับเข้า/เติมสต็อก** ได้ตามปกติเลยค่ะ ยินดีช่วยเหลือเสมอนะคะ! 📦🚀"
+    👉 แต่คุณ${callingName}สามารถสั่ง **เบิกสินค้า** หรือ **รับเข้า/เติมสต็อก** ได้ตามปกติเลยค่ะ ยินดีช่วยเหลือเสมอนะคะ! 📦🚀"
 - ✅ **สิ่งที่ Staff/User ทำได้ 100%**:
   - สั่งเบิกสินค้า (\`requisition\`)
   - สั่งรับเข้า/เติมสต็อก (\`stock_in\`)
@@ -520,7 +550,7 @@ ${!isAdminUser ? `
 `}
 
 📋 กฎการสกัดข้อมูลการเบิก/รับเข้าสินค้า:
-1. **ผู้ทำรายการ (\`requestedBy\`)**: หากไม่ได้ระบุชื่อผู้อื่น ให้ใช้ชื่อผู้ใช้งานปัจจุบัน (**${currentUser?.name || 'ผู้ใช้งาน'}**) อัตโนมัติ
+1. **ผู้ทำรายการ (\`requestedBy\`)**: หากไม่ได้ระบุชื่อผู้อื่น ให้บันทึกชื่อผู้ใช้งานปัจจุบัน (**${userFullName}**) อัตโนมัติ
 2. **สถานที่/งานที่นำไปใช้ หรือแหล่งที่มา (\`purpose\`)**:
    - หากผู้สั่งระบุว่านำไปใช้ทำอะไร ที่ไหน หรือรับมาจากใคร (เช่น "ซ่อมระบบไฟห้อง 302", "งานแอร์ชั้น 5", "เปลี่ยนบานพับตึก A", "ซื้อจากร้านไทวัสดุ") **ต้องดึงมาใส่ใน \`purpose\` ให้ครบถ้วน**
    - หากไม่ระบุ ให้ใช้ค่าเริ่มต้น:
@@ -534,34 +564,34 @@ ${!isAdminUser ? `
   "itemId": "รหัสสินค้าที่ตรงกับในคลัง เช่น A000000001",
   "itemName": "ชื่อสินค้า",
   "qty": 1,
-  "requestedBy": "${currentUser?.name || 'ชื่อผู้ทำรายการ'}",
+  "requestedBy": "${userFullName}",
   "purpose": "สถานที่/งานที่นำไปใช้งาน หรือแหล่งที่มารับเข้า",
   "note": "หมายเหตุเพิ่มเติมถ้ามี"
 }
 \`\`\`
 
-📄 หากผู้ใช้ต้องการรายงาน (PDF/Excel):
+🔍 หากผู้ใช้ถามหาสินค้า ค้นหาสินค้า หรือเช็คสต็อก (เพื่อให้ระบบแสดงการ์ดสินค้า):
 \`\`\`json:action
-{"action": "export_reports", "reports": [{"type": "inventory_all"|"requisition_history"|"low_stock"|"category", "format": "pdf"|"excel", "title": "ชื่อรายงาน", "categoryFilter": "หมวดหมู่ถ้ามี"}]}
+{
+  "action": "search",
+  "itemIds": ["A000000001", "A000000002"]
+}
 \`\`\`
 
-ตัวอย่างรูปแบบการตอบที่ดี (เน้นเว้นวรรค เรียงลำดับ อิโมจิ และเน้นตัวหนา):
-"สวัสดีค่ะคุณ **${currentUser?.name || 'ช่าง'}**! ✨ ยินดีให้บริการค่ะ 
+📄 หากผู้ใช้ต้องการรายงาน (PDF/Excel):
+\`\`\`json:action
+{"action": "export_reports", "reports": [{"type": "inventory_all"|"requisition_history"|"low_stock"|"category", "format": "pdf"|"excel", "title": "ชื่อรายงาน", "categoryFilter": "หมวดหมู่ถ้ามี", "userFilter": "ชื่อบุคคล (ถ้ามีคนเจาะจงขอประวัติของคนนั้น)"}]}
+\`\`\`
 
-ตรวจเช็กรายการอะไหล่ใน **Store FL.6** ให้เรียบร้อยแล้วนะคะ 🔍📦
+ตัวอย่างรูปแบบการตอบที่ดีเมื่อมีการถามหาสินค้า (สั้น กระชับ):
+"สวัสดีค่ะคุณ **${callingName}**! ✨
 
-1. **สาย THW 1x1.5 สีแดง** (รหัส: \`A000000001\`)
-   - 📍 ที่เก็บ: **Store FL.6 ตู้ A1**
-   - 📊 คงเหลือ: **9 ม้วน** [สถานะ: **ปกติ**]
+ตรวจเช็กรายการอะไหล่ใน **Store FL.6** พบสินค้าที่ค้นหาจำนวน 2 รายการค่ะ 🔍📦
 
-2. **เทปพันสายไฟ 3M** (รหัส: \`A000000031\`)
-   - 📍 ที่เก็บ: **Store FL.6 ชั้นวาง B2**
-   - 📊 คงเหลือ: **15 ม้วน** [สถานะ: **ปกติ**]
-
-💡 ได้จัดเตรียมรายการเบิกให้เรียบร้อยแล้วค่ะ สามารถตรวจสอบและแตะยืนยันที่การ์ดด้านล่างได้เลยนะคะ 🚀"
-
-ข้อมูลสินค้าในคลังปัจจุบัน: ${JSON.stringify(compactInventory)}`;
-      const contents = [];
+💡 ได้จัดเตรียมรายการไว้ให้เรียบร้อยแล้ว สามารถตรวจสอบรายละเอียดและแตะยืนยันได้ที่การ์ดด้านล่างเลยนะคะ 🚀"
+ข้อมูลสินค้าในคลังปัจจุบัน: ${JSON.stringify(compactInventory)}
+ประวัติการเบิก-รับเข้าล่าสุด (สำหรับการอ้างอิงเมื่อผู้ใช้ถามประวัติ): ${JSON.stringify(recentReqs)}`
+      const contents: any[] = [];
       if (Array.isArray(history) && history.length > 0) {
         for (const h of history.slice(-4)) {
           contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
@@ -651,6 +681,8 @@ ${!isAdminUser ? `
           const parsedAction = JSON.parse(actionMatch[1]);
           
           if (parsedAction.action === 'export_reports' && Array.isArray(parsedAction.reports)) {
+            // Handled below
+          } else if (parsedAction.action === 'search' && Array.isArray(parsedAction.itemIds)) {
             // Handled below
           } else {
             let targetItem = items.find(i => i.id === parsedAction.itemId);
@@ -799,12 +831,57 @@ ${!isAdminUser ? `
         }
       }
 
+      // Detect specific matched items for card display (only when inquiring / checking items, not when exporting reports or doing direct dbAction)
+      let itemCards: any[] | undefined = undefined;
+      
+      const parsedActionMatches = rawResponseText.match(/```(?:json:action|json)?\s*(\{[\s\S]*?\})\s*```/);
+      let parsedSearchAction: any = null;
+      if (parsedActionMatches && parsedActionMatches[1]) {
+         try {
+            const tempAction = JSON.parse(parsedActionMatches[1]);
+            if (tempAction.action === 'search' && Array.isArray(tempAction.itemIds)) {
+               parsedSearchAction = tempAction;
+            }
+         } catch (e) {}
+      }
+      if (!dbAction && !fileReports) {
+        const promptLower = prompt.toLowerCase();
+        const responseLower = rawResponseText.toLowerCase();
+
+        let exactMatches = [];
+        if (parsedSearchAction && parsedSearchAction.itemIds.length > 0) {
+           exactMatches = items.filter(item => parsedSearchAction.itemIds.includes(item.id));
+        } else {
+           exactMatches = items.filter(item => {
+          const idInPrompt = prompt.includes(item.id);
+          const idInResponse = rawResponseText.includes(item.id);
+          const nameInPrompt = promptLower.includes(item.name.toLowerCase());
+          const nameInResponse = item.name.length >= 3 && responseLower.includes(item.name.toLowerCase());
+          return idInPrompt || idInResponse || nameInPrompt || nameInResponse;
+        });
+        }
+
+        if (exactMatches.length > 0) {
+          itemCards = exactMatches.slice(0, 6);
+        } else if (promptLower.includes('ใกล้หมด') || promptLower.includes('low') || promptLower.includes('เกณฑ์ขั้นต่ำ') || responseLower.includes('ใกล้หมดสต็อก')) {
+          const low = items.filter(i => {
+            const q = Number(i.qty) || 0;
+            const min = Number(i.minStock) || 1;
+            return q > 0 && (q <= min || i.status === 'low');
+          });
+          if (low.length > 0) itemCards = low.slice(0, 6);
+        } else if (promptLower.includes('หมดสต็อก') || promptLower.includes('out') || promptLower.includes('หมดแล้ว') || responseLower.includes('หมดสต็อก')) {
+          const out = items.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
+          if (out.length > 0) itemCards = out.slice(0, 6);
+        }
+      }
+
       res.write(`data: ${JSON.stringify({ 
         type: 'done', 
         dbAction, 
         fileReport: fileReports?.[0], 
         fileReports: fileReports,
-        suggestedItems: matchedItems.slice(0, 5) 
+        suggestedItems: itemCards
       })}\n\n`);
       res.end();
       
@@ -843,7 +920,13 @@ ${!isAdminUser ? `
     let isInitialized = false;
     const pendingInputQueue: Array<{ type: 'audio' | 'text'; data: string }> = [];
 
-    const setupLiveSession = async (userName: string, userRole: string, initialItems: Item[]) => {
+    const setupLiveSession = async (
+      userName: string, 
+      userRole: string, 
+      initialItems: Item[], 
+      clientRequisitions: any[] = [],
+      userNickname: string = ''
+    ) => {
       if (isInitialized) return;
       isInitialized = true;
 
@@ -853,6 +936,8 @@ ${!isAdminUser ? `
         } else if (sessionActiveItems.length === 0) {
           sessionActiveItems = await fetchInventoryFromSheet();
         }
+
+        const callingName = (userNickname && userNickname.trim()) ? userNickname.trim() : (userName && userName.trim() ? userName.trim() : 'ผู้ใช้งาน');
 
         const outOfStockItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
         const lowStockItems = sessionActiveItems.filter(i => 
@@ -865,12 +950,32 @@ ${!isAdminUser ? `
           ? "อนุญาตให้ใช้เครื่องมือปรับสต็อกได้" 
           : "ผู้ใช้ท่านนี้ไม่มีสิทธิ์แก้ไขสต็อก(update_stock) หรือแก้ไขชื่อสินค้า หากผู้ใช้สั่งแก้ไขให้ตอบปฏิเสธอย่างสุภาพ อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) เท่านั้น";
 
+        const now = new Date();
         const inventoryCatalog = sessionActiveItems.map(i => {
           const qty = Number(i.qty) || 0;
           const min = Number(i.minStock) || 1;
-          const status = qty <= 0 ? 'หมดสต็อก (0)' : qty <= min ? `ใกล้หมด (${qty})` : `ปกติ (${qty})`;
-          return `- ${i.name} (รหัส ${i.id}) | คงเหลือ: ${qty} ${i.unit} (ขั้นต่ำ ${min}) | สถานะ: ${status} | หมวด: ${i.category} | ที่เก็บ: ${i.location}`;
-        }).join('\n');
+          let outOfStockInfo = "";
+          if (qty <= 0) {
+            const itemReqs = clientRequisitions.filter((r: any) => r.itemId === i.id && (r.type === "out" || !r.type));
+            itemReqs.sort((a: any, b: any) => new Date(b.isoDate || b.timestamp).getTime() - new Date(a.isoDate || a.timestamp).getTime());
+            const lastReq = itemReqs[0];
+            if (lastReq) {
+              const lastReqDate = new Date(lastReq.isoDate || lastReq.timestamp);
+              const daysOut = Math.floor((now.getTime() - lastReqDate.getTime()) / (1000 * 60 * 60 * 24));
+              outOfStockInfo = ` [หมดสต็อกมาตั้งแต่วันที่ ${lastReq.timestamp} (เมื่อ ${daysOut} วันที่แล้ว)]`;
+            }
+          }
+          const status = qty <= 0 ? "หมดสต็อก (0)" : qty <= min ? `ใกล้หมด (${qty})` : `ปกติ (${qty})`;
+          return `- ${i.name} (รหัส ${i.id}) | คงเหลือ: ${qty} ${i.unit} (ขั้นต่ำ ${min}) | สถานะ: ${status}${outOfStockInfo} | หมวด: ${i.category} | ที่เก็บ: ${i.location}`;
+        }).join("\n");
+        const recentReqs = clientRequisitions.slice(0, 30).map((r: any) => ({
+          type: r.type === "in" ? "รับเข้า" : "เบิกออก",
+          item: r.itemName,
+          qty: `${r.qty} ${r.unit}`,
+          user: r.requestedBy,
+          date: r.timestamp,
+          purpose: r.purpose
+        }));
 
         const config = {
           responseModalities: [Modality.AUDIO],
@@ -879,7 +984,12 @@ ${!isAdminUser ? `
           },
           systemInstruction: `คุณคือผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของ ENG Smart Store ในโหมดสนทนาด้วยเสียงสด (Live Speech)
 ให้ตอบสนองด้วยเสียงภาษาไทยอย่างเป็นธรรมชาติ สุภาพ ชัดเจน สั้นกระชับ รวดเร็ว และเป็นกันเอง
-ผู้ใช้งานที่คุณกำลังคุยด้วยชื่อ: ${userName} (สิทธิ์: ${userRole})
+
+👤 ข้อมูลผู้ใช้งานที่กำลังสนทนาด้วย:
+- **ชื่อเล่นที่ต้องใช้เรียกผู้ใช้**: คุณ${callingName} (เช่น "คุณ${callingName}", "สวัสดีค่ะคุณ${callingName}")
+- ชื่อเต็ม: ${userName}
+- สิทธิ์การใช้งาน: ${userRole}
+⚠️ **กฎสำคัญที่สุดเรื่องการเรียกชื่อ**: คุณต้องเรียกผู้ใช้ด้วย **ชื่อเล่น (คุณ${callingName})** เสมอ ห้ามเรียกด้วยชื่อ-นามสกุลจริง เพื่อความเป็นกันเองและเป็นธรรมชาติในการสนทนากับทีมช่าง
 ${adminInstruction}
 
 📊 ข้อมูลภาพรวมคลัง Store FL.6 ปัจจุบัน:
@@ -889,13 +999,17 @@ ${adminInstruction}
 
 📦 รายการสต็อกสินค้าคงคลังปัจจุบัน:
 ${inventoryCatalog}
+ 
+📝 ประวัติการเบิก-รับเข้าล่าสุด (สำหรับการอ้างอิงเมื่อผู้ใช้ถามประวัติการเบิก): 
+${JSON.stringify(recentReqs)}
 
 ⚡ คำแนะนำในการตอบ:
-1. คุณมีข้อมูลสต็อกทั้งหมดอยู่แล้วด้านบน ตอบคำถามเรื่องจำนวนคงเหลือ สินค้าหมด หรือสินค้าใกล้หมดได้ทันทีอย่างรวดเร็วและกระชับ
-2. เมื่อผู้ใช้สั่ง "เบิก" หรือ "รับเข้า" สินค้า ให้เรียกใช้ฟังก์ชัน \`prepare_stock_action\` ทันทีเพื่อส่งการ์ดยืนยันไปยังหน้าจอของผู้ใช้
-3. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน \`export_report\` ทันที
-4. เมื่อผู้ใช้ต้องการดูข้อมูลสินค้าเฉพาะเจาะจงหรือต้องการแสดงการ์ดบนจอ ให้เรียกใช้ \`inquire_item_info\`
-5. หากผู้ใช้กดยืนยันรายการ ให้ตอบสั้นๆ ว่า "บันทึกรายการลงระบบให้เรียบร้อยแล้วค่ะ"`,
+1. เมื่อผู้ใช้ถามถึง "สินค้าใกล้หมด" หรือถามว่า "มีอะไหล่ตัวไหนใกล้หมดบ้าง" ให้เรียกใช้ฟังก์ชัน \`get_low_stock_items\` ทันที เพื่อให้ระบบส่งการ์ดข้อมูลสินค้าใกล้หมดขึ้นแสดงบนหน้าจอของผู้ใช้โดยอัตโนมัติ
+2. เมื่อผู้ใช้ถามถึง "สินค้าหมดสต็อก" หรือถามว่า "มีสินค้าอะไรหมดบ้าง" ให้เรียกใช้ฟังก์ชัน \`get_out_of_stock_items\` ทันที เพื่อส่งการ์ดสินค้าหมดสต็อกขึ้นหน้าจอ
+3. เมื่อผู้ใช้ถามหาสินค้าใดๆ หรือเช็คสต็อก ให้เรียกใช้ \`inquire_item_info\` หรือ \`check_stock\` ทันที เพื่อส่งการ์ดข้อมูลสินค้าขึ้นหน้าจอ
+4. เมื่อผู้ใช้สั่ง "เบิก" หรือ "รับเข้า" สินค้า ให้เรียกใช้ฟังก์ชัน \`prepare_stock_action\` ทันทีเพื่อส่งการ์ดยืนยันไปยังหน้าจอของผู้ใช้
+5. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน \`export_report\` ทันที
+6. หากผู้ใช้กดยืนยันรายการ ให้ตอบสั้นๆ ว่า "บันทึกรายการลงระบบให้เรียบร้อยแล้วค่ะ"`,
           tools: [{
             functionDeclarations: [
               {
@@ -1256,9 +1370,10 @@ ${inventoryCatalog}
     const url = new URL(req.url || '', `http://${req.headers.host}`);
     const defaultUserName = url.searchParams.get('userName') || 'ผู้ใช้งาน';
     const defaultUserRole = url.searchParams.get('userRole') || 'user';
+    const defaultUserNickname = url.searchParams.get('userNickname') || '';
 
     // Immediate session initialization on connection
-    setupLiveSession(defaultUserName, defaultUserRole, cachedItems);
+    setupLiveSession(defaultUserName, defaultUserRole, cachedItems, [], defaultUserNickname);
 
     clientWs.on("message", async (data) => {
       try {
@@ -1272,7 +1387,9 @@ ${inventoryCatalog}
             setupLiveSession(
               parsed.userName || defaultUserName,
               parsed.userRole || defaultUserRole,
-              parsed.items || []
+              parsed.items || [],
+              parsed.requisitions || [],
+              parsed.userNickname || defaultUserNickname
             );
           }
           return;

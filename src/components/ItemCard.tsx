@@ -1,13 +1,15 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { InventoryItem } from '../types';
 import { MapPin, AlertTriangle, CheckCircle2, XCircle, ChevronRight } from 'lucide-react';
 
 interface ItemCardProps {
   item: InventoryItem;
   onClick: () => void;
+  index?: number;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
+export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) => {
   const getCategoryColor = (cat: string) => {
     switch (cat) {
       case 'เคมี':
@@ -57,9 +59,20 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
   };
 
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96, y: -8 }}
+      transition={{
+        duration: 0.22,
+        ease: [0.22, 1, 0.36, 1],
+        delay: Math.min(index * 0.02, 0.2),
+      }}
+      whileHover={{ y: -2, transition: { duration: 0.15 } }}
+      whileTap={{ scale: 0.985 }}
       onClick={onClick}
-      className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-3.5 shadow-sm dark:shadow-[0_2px_8px_rgba(0,0,0,0.35)] active:scale-[0.99] hover:border-blue-400 dark:hover:border-blue-500/80 transition-all cursor-pointer relative group flex flex-col justify-between"
+      className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-3.5 shadow-sm dark:shadow-[0_2px_8px_rgba(0,0,0,0.35)] hover:border-blue-400 dark:hover:border-blue-500/80 transition-colors cursor-pointer relative group flex flex-col justify-between"
     >
       <div className="flex gap-3">
         {/* Content */}
@@ -136,6 +149,6 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick }) => {
           <ChevronRight className="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

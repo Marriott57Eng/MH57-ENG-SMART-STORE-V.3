@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { RequisitionRecord, InventoryItem } from '../types';
-import { formatRecordTimestamp } from '../utils/dateUtils';
 import { 
   X, Save, AlertCircle, Clock, Calendar, MapPin, 
   ArrowDownRight, ArrowUpRight, FileText, User, Package, Trash2
@@ -168,30 +168,47 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/80 dark:border-slate-800 animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Smooth Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+      />
+
+      {/* Smooth Modal Dialog */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/80 dark:border-slate-800 transition-colors"
+      >
         
         {/* Modal Header */}
-        <div className="px-4 pt-safe-header pb-3 sm:py-4 bg-slate-50 dark:bg-slate-850 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
+        <div className="px-4 pt-safe-header pb-3 sm:py-4 bg-slate-50 dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs border border-blue-500">
               <FileText className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">แก้ไขประวัติการเบิก / รับเข้า (Admin)</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">รหัสรายการ: {record.id}</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">แก้ไขประวัติการเบิก / รับเข้า (Admin)</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">รหัสรายการ: {record.id}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="p-4 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="p-4 overflow-y-auto space-y-4 flex-1 bg-white dark:bg-slate-900">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-xs font-medium">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -201,7 +218,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
 
           {/* Type Toggle: Out vs In */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">ประเภทรายการ</label>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200">ประเภทรายการ</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -209,7 +226,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
                 className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
                   type === 'out'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 <ArrowUpRight className="w-4 h-4" />
@@ -221,7 +238,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
                 className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
                   type === 'in'
                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 <ArrowDownRight className="w-4 h-4" />
@@ -231,8 +248,8 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
           </div>
 
           {/* Item Selector / Details */}
-          <div className="space-y-2 bg-slate-50/80 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+          <div className="space-y-2 bg-slate-50/80 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <Package className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               เลือกสินค้าจากคลัง หรือแก้ไขข้อมูลสินค้าในบันทึก
             </label>
@@ -241,7 +258,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               <select
                 value={selectedItemId}
                 onChange={(e) => handleItemSelect(e.target.value)}
-                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:border-blue-500 outline-none"
               >
                 <option value="">-- เลือกสินค้าจากฐานข้อมูล หรือกรอกเองด้านล่าง --</option>
                 {items.map((i) => (
@@ -254,35 +271,35 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <div>
-                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">รหัสสินค้า (Item ID)</label>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">รหัสสินค้า (Item ID)</label>
                 <input
                   type="text"
                   value={selectedItemId}
                   onChange={(e) => setSelectedItemId(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-800 dark:text-white outline-none focus:border-blue-500"
                   placeholder="เช่น A000000166"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">หมวดหมู่ (Category)</label>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">หมวดหมู่ (Category)</label>
                 <input
                   type="text"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white outline-none focus:border-blue-500"
                   placeholder="เช่น เคมี, ไฟฟ้า"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">ชื่อสินค้า (Item Name)</label>
+              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">ชื่อสินค้า (Item Name)</label>
               <input
                 type="text"
                 required
                 value={itemName}
                 onChange={(e) => setItemName(e.target.value)}
-                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:border-blue-500"
                 placeholder="ระบุชื่อสินค้า..."
               />
             </div>
@@ -291,7 +308,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
           {/* Quantity and Unit */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">จำนวนที่ทำรายการ *</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200">จำนวนที่ทำรายการ *</label>
               <input
                 type="number"
                 min="1"
@@ -302,12 +319,12 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">หน่วยนับ</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200">หน่วยนับ</label>
               <input
                 type="text"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
                 placeholder="เช่น ชิ้น, กล่อง"
               />
             </div>
@@ -315,7 +332,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
 
           {/* Requested By (ผู้ทำรายการ) */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               {type === 'in' ? 'ผู้รับเข้าสินค้า' : 'ผู้เบิกสินค้า'} *
             </label>
@@ -324,14 +341,14 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               required
               value={requestedBy}
               onChange={(e) => setRequestedBy(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
               placeholder="ระบุชื่อผู้ทำรายการ..."
             />
           </div>
 
           {/* Purpose / Location */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               {type === 'in' ? 'แหล่งที่มา / เหตุผลการรับเข้า' : 'งานที่นำไปใช้ / แผนก / หน้างาน'} *
             </label>
@@ -340,7 +357,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               required
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
               placeholder="เช่น ซ่อมแซมระบบน้ำ FL.3 / จัดซื้อใหม่จากซัพพลายเออร์"
             />
           </div>
@@ -348,7 +365,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
           {/* Date and Time pickers */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                 วันที่
               </label>
@@ -356,11 +373,11 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
                 type="date"
                 value={dateStr}
                 onChange={(e) => setDateStr(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                 เวลา
               </label>
@@ -368,14 +385,14 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
                 type="time"
                 value={timeStr}
                 onChange={(e) => setTimeStr(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none"
               />
             </div>
           </div>
 
           {/* Note */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
               <FileText className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               หมายเหตุเพิ่มเติม
             </label>
@@ -383,14 +400,14 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none resize-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 outline-none resize-none"
               placeholder="หมายเหตุเพิ่มเติม..."
             />
           </div>
         </form>
 
         {/* Modal Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between gap-2 shrink-0 pb-[max(16px,calc(env(safe-area-inset-bottom,16px)+12px))] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-none">
           {onDelete && (
             <div>
               {showDeleteConfirm ? (
@@ -431,7 +448,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               type="button"
               disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-white rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-300 dark:border-slate-700"
             >
               ยกเลิก
             </button>
@@ -439,7 +456,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
               type="button"
               disabled={isSaving}
               onClick={handleSubmit}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-1.5 cursor-pointer border border-blue-500"
             >
               <Save className="w-4 h-4" />
               <span>{isSaving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}</span>
@@ -447,7 +464,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
           </div>
         </div>
 
-      </div>
+      </motion.div>
     </div>
   );
 };
