@@ -80,7 +80,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) 
           {/* Top row with ID, Category & Status */}
           <div className="flex items-center justify-between gap-1.5 mb-1 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
+              <span className="font-mono text-xs font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black border border-slate-300 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
                 {item.id}
               </span>
               <span

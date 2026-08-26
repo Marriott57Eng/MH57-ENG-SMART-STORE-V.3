@@ -13,13 +13,14 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Check localStorage first
-    const saved = localStorage.getItem('app_theme');
-    if (saved === 'dark' || saved === 'light') {
-      return saved;
-    }
+    try {
+      const saved = localStorage.getItem('app_theme');
+      if (saved === 'dark' || saved === 'light') {
+        return saved;
+      }
+    } catch (_) {}
     // Check system preference
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
     }
     return 'light';
@@ -36,7 +37,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove('dark');
       root.style.colorScheme = 'light';
     }
-    localStorage.setItem('app_theme', theme);
+    try {
+      localStorage.setItem('app_theme', theme);
+    } catch (_) {}
   }, [theme]);
 
   const toggleTheme = () => {

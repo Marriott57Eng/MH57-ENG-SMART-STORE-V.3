@@ -76,7 +76,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         {/* Header Badges & Close Button */}
         <div className="p-3.5 pb-2.5 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2.5 py-0.5 rounded-md shadow-xs border border-slate-700 dark:border-slate-800">
+            <span className="font-mono text-xs font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-black px-2.5 py-0.5 rounded-md shadow-2xs border border-slate-300 dark:border-slate-800">
               {item.id}
             </span>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-2xs">
@@ -106,8 +106,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
 
         {/* Item Title */}
-        <div className="px-4 py-3 border-b border-slate-800 dark:border-slate-800 bg-slate-950 dark:bg-black shadow-inner">
-          <h2 className="text-base sm:text-lg font-bold text-white leading-snug tracking-wide">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-black">
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug tracking-wide">
             {item.name}
           </h2>
         </div>

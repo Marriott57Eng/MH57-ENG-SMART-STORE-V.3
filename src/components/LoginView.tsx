@@ -162,12 +162,27 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         } catch (_) {}
       }
 
+const generateSafeUUID = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch (_) {}
+  }
+  return 'id-' + Date.now() + '-' + Math.random().toString(36).substring(2, 10);
+};
+
       if (foundUser) {
         // Handle persistent device lock
-        let deviceId = localStorage.getItem('device_id');
+        let deviceId: string | null = null;
+        try {
+          deviceId = localStorage.getItem('device_id');
+        } catch (_) {}
+
         if (!deviceId) {
-          deviceId = crypto.randomUUID();
-          localStorage.setItem('device_id', deviceId);
+          deviceId = generateSafeUUID();
+          try {
+            localStorage.setItem('device_id', deviceId);
+          } catch (_) {}
         }
 
         // Fetch fresh user data to check if already active on another device
@@ -184,7 +199,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           }
         } catch (_) {}
 
-        const newToken = crypto.randomUUID();
+        const newToken = generateSafeUUID();
         const updateData: any = { sessionToken: newToken };
         if (foundUser.id !== 'Admininmad') {
           updateData.activeDeviceId = deviceId;

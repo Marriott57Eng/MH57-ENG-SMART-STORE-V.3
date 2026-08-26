@@ -332,7 +332,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-1.5 py-0.2 rounded shadow-2xs">
+                            <span className="font-mono text-xs font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black border border-slate-300 dark:border-slate-800 px-1.5 py-0.2 rounded shadow-2xs">
                               {item.id}
                             </span>
                             <span className="text-xs text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.2 rounded">
@@ -372,7 +372,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-mono font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
+                      <span className="text-xs font-mono font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black border border-slate-300 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
                         {currentItem.id}
                       </span>
                       <span className="text-sm font-bold text-slate-900 dark:text-white truncate">

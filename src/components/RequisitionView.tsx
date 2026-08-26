@@ -297,7 +297,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                     {/* Item Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2 py-0.5 rounded-md border border-slate-700 dark:border-slate-800 shadow-2xs">
+                        <span className="font-mono text-xs font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black px-2 py-0.5 rounded-md border border-slate-300 dark:border-slate-800 shadow-2xs">
                           {record.itemId}
                         </span>
                         <span

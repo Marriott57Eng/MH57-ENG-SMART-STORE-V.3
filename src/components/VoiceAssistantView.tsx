@@ -1009,7 +1009,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                       </div>
 
                       {msg.dbAction.record && (
-                        <div className="font-mono text-sm font-semibold bg-slate-950 dark:bg-black px-2.5 py-1 rounded-lg border border-slate-700 dark:border-slate-800 text-white shadow-xs">
+                        <div className="font-mono text-sm font-semibold bg-slate-100 dark:bg-black px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white shadow-xs">
                           {msg.dbAction.record.id}
                         </div>
                       )}
@@ -1028,7 +1028,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                               {msg.dbAction.item.category}
                             </div>
                           </div>
-                          <div className="font-mono text-xs font-bold text-white bg-slate-950 dark:bg-black px-2 py-0.5 rounded border border-slate-700 dark:border-slate-800 text-right shadow-2xs">
+                          <div className="font-mono text-xs font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black px-2 py-0.5 rounded border border-slate-300 dark:border-slate-800 text-right shadow-2xs">
                             {msg.dbAction.item.id}
                           </div>
                         </div>
@@ -1166,7 +1166,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                 <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 leading-snug">
                                   {item.name}
                                 </h4>
-                                <span className="font-mono text-[11px] font-bold text-white bg-slate-950 dark:bg-black border border-slate-700 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs shrink-0">
+                                <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black border border-slate-300 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs shrink-0">
                                   {item.id}
                                 </span>
                               </div>
