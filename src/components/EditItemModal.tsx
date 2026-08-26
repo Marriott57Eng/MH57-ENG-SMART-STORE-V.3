@@ -97,7 +97,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
       unit: unit.trim() || 'ชิ้น',
       qty: numQty,
       minStock: numMinStock,
-      location: location.trim() || 'Store FL.6',
+      location: location.trim() || 'Store',
       note: note.trim(),
       ordered: ordered.trim(),
       orderedDate: orderedDate.trim(),

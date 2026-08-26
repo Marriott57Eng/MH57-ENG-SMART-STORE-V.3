@@ -8,7 +8,13 @@ import http from "http";
 import { initializeApp } from 'firebase/app';
 import { getFirestore, getDocs, collection, doc, setDoc } from 'firebase/firestore';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let ai: GoogleGenAI;
+function getAI(): GoogleGenAI {
+  if (!ai) {
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+  }
+  return ai;
+}
 
 let firebaseConfig: any = { projectId: "", firestoreDatabaseId: "(default)" };
 try {
@@ -19,8 +25,16 @@ try {
   console.warn("Could not load firebase-applet-config.json");
 }
 
-const firebaseApp = initializeApp(firebaseConfig);
-const firestoreDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+let firebaseApp: any = null;
+let firestoreDb: any = null;
+try {
+  if (firebaseConfig && firebaseConfig.projectId) {
+    firebaseApp = initializeApp(firebaseConfig);
+    firestoreDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
+  }
+} catch (err) {
+  console.warn("Firebase initialization skipped in server:", err);
+}
 
 
 
@@ -214,6 +228,11 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
 
+  // Health check endpoint for Cloud Run container monitoring & rollout probes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", time: new Date().toISOString() });
+  });
+
   // API: Get Inventory Data
   app.get("/api/inventory", async (req, res) => {
     try {
@@ -372,7 +391,7 @@ async function startServer() {
 
       try {
         // Run deep reasoning analysis with Antigravity Agent
-        const interaction = await ai.interactions.create({
+        const interaction = await getAI().interactions.create({
           agent: "antigravity-preview-05-2026",
           input: `${deepAnalysisInstruction}\n\n${prompt || 'วิเคราะห์สถานะคลังสินค้าแบบเจาะลึก'}\n\n${summaryText}`,
           environment: "remote",
@@ -396,7 +415,7 @@ async function startServer() {
       } catch (agentError: any) {
         console.warn("Antigravity agent fallback to generative model:", agentError.message);
         // Seamless fallback to high-intelligence reasoning model
-        const fallbackRes = await ai.models.generateContent({
+        const fallbackRes = await getAI().models.generateContent({
           model: "gemini-3.7-flash",
           contents: `${deepAnalysisInstruction}\n\n${prompt || 'วิเคราะห์สถานะคลังสินค้าแบบเจาะลึก'}\n\n${summaryText}`,
           config: {
@@ -607,7 +626,7 @@ ${!isAdminUser ? `
       
       let hasSentChunks = false;
       const tryGenerate = async (modelName) => {
-        const stream = await ai.models.generateContentStream({
+        const stream = await getAI().models.generateContentStream({
           model: modelName,
           contents,
           config: { systemInstruction, temperature: 0.2 },
@@ -1338,7 +1357,7 @@ ${JSON.stringify(recentReqs)}
           },
         };
 
-        sessionPromise = ai.live.connect({
+        sessionPromise = getAI().live.connect({
           model: "gemini-3.1-flash-live-preview",
           config,
           callbacks,

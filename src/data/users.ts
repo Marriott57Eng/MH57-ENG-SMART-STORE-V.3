@@ -1,11 +1,11 @@
 export const initialUsers = [
   { id: "1912", name: "Umpon Na-Sulong", nickname: "Umpon" },
-  { id: "1987", name: "Phaiboon Ruechai", nickname: "Boon" },
+  { id: "1987", name: "Phaiboon Ruechai", nickname: "Phaiboon" },
   { id: "1321", name: "Kwanpirom Teapun", nickname: "JJ" },
   { id: "25", name: "Thawatchai Thukthay", nickname: "Wat" },
   { id: "63", name: "Amornsak Phantorn", nickname: "Gig" },
   { id: "64", name: "Boonta Libutdee", nickname: "Ta" },
-  { id: "105", "name": "Suphawat Phutthapong", nickname: "Aoan" },
+  { id: "105", "name": "Suphawat Phutthapong", nickname: "Auan" },
   { id: "154", "name": "Thanapat Kunakul", nickname: "Tong" },
   { id: "303", "name": "Wattana Wong-nagm", nickname: "Bu" },
   { id: "410", "name": "Chai Chuyram", "nickname": "Duang" },

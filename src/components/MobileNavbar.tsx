@@ -24,7 +24,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
   const tabs = [
     { id: 'inventory' as AppTab, label: 'อะไหล่ทั้งหมด', icon: Package },
     { id: 'history' as AppTab, label: 'เบิก/รับ', icon: ClipboardList, badge: requisitionCount },
-    { id: 'voice' as AppTab, label: isLiveActive ? '🔴 คุยสด AI' : 'ถาม AI', icon: Bot, isCenter: true },
+    { id: 'voice' as AppTab, label: isLiveActive ? '🔴 คุยสดกับ AI' : 'ถาม AI', icon: Bot, isCenter: true },
     { id: 'dashboard' as AppTab, label: 'ภาพรวม', icon: BarChart3, dot: lowStockCount > 0 },
     { id: 'categories' as AppTab, label: 'หมวด', icon: Layers },
     ...(isAdmin ? [{ id: 'users' as AppTab, label: 'ผู้ใช้', icon: Users }] : []),

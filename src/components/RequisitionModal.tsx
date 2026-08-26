@@ -4,7 +4,7 @@ import { InventoryItem, RequisitionRecord } from '../types';
 import { 
   X, User, Calendar, Clock, MapPin, Check, 
   AlertCircle, FileText, Search, ArrowDownRight, ArrowUpRight,
-  ChevronDown
+  ChevronDown, Package, Layers
 } from 'lucide-react';
 
 interface RequisitionModalProps {
@@ -366,36 +366,71 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               </div>
             )}
 
-            {/* Current Item Summary Card */}
+            {/* Current Item Summary Card - Compact Frame with Extra Large Font Filling the Space */}
             {currentItem && (
-              <div className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-mono font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-black border border-slate-300 dark:border-slate-800 px-2 py-0.5 rounded shadow-2xs">
-                        {currentItem.id}
+              <motion.div 
+                key={currentItem.id} // Re-animate if item changes
+                initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="mt-2.5 overflow-hidden rounded-xl border-2 border-blue-500/80 dark:border-blue-500/60 bg-white dark:bg-slate-900 shadow-sm"
+              >
+                {/* Top Header Row: Status & ID on Left | Location & Category on Top-Right */}
+                <div className="flex items-center justify-between gap-1.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {transactionType === 'out' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-blue-600 text-white shadow-2xs">
+                        <ArrowDownRight className="w-3 h-3 stroke-[3]" />
+                        เบิกออก
                       </span>
-                      <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {currentItem.name}
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-600 text-white shadow-2xs">
+                        <ArrowUpRight className="w-3 h-3 stroke-[3]" />
+                        รับเข้า
                       </span>
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-300 mt-1 flex items-center gap-2">
-                      <span>หมวด: <strong className="text-slate-700 dark:text-white">{currentItem.category}</strong></span>
-                      <span>•</span>
-                      <span>ที่เก็บ: <strong className="text-slate-700 dark:text-white">{currentItem.location}</strong></span>
-                    </div>
+                    )}
+                    <span className="font-mono text-xs font-black text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-2 py-0.5 rounded shadow-2xs">
+                      {currentItem.id}
+                    </span>
+                  </div>
+
+                  {/* Right Side: Location & Category Stacked */}
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-300 shadow-2xs">
+                      <MapPin className="w-3 h-3 text-red-500 shrink-0" />
+                      <span>ที่เก็บ: <strong className="text-slate-900 dark:text-white font-extrabold">{currentItem.location}</strong></span>
+                    </span>
+                    <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 shadow-2xs">
+                      หมวด: {currentItem.category}
+                    </span>
                   </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-extrabold text-blue-700 dark:text-blue-400">
-                    คงเหลือ {currentItem.qty} {currentItem.unit}
-                  </div>
-                  <span className="text-xs text-slate-400 dark:text-slate-400">
-                    (เกณฑ์ขั้นต่ำ: {currentItem.minStock} {currentItem.unit})
-                  </span>
+                {/* Middle Body: Giant Item Name filling the compact container */}
+                <div className="px-3 py-2.5 sm:px-4 sm:py-3 flex items-center bg-white dark:bg-slate-900">
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 dark:text-white leading-tight break-words tracking-tight w-full drop-shadow-sm">
+                    {currentItem.name}
+                  </h3>
                 </div>
-              </div>
+
+                {/* Bottom Footer: Stock Balance Bar */}
+                <div className="px-3 py-1.5 bg-slate-50/90 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-1.5">
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                    คงเหลือปัจจุบัน
+                  </span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">
+                      {currentItem.qty}
+                    </span>
+                    <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-200">
+                      {currentItem.unit}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 ml-1">
+                      (ขั้นต่ำ: {currentItem.minStock} {currentItem.unit})
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
             )}
           </div>
 

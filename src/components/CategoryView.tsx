@@ -50,7 +50,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
   };
 
   const getCategoryDescription = (name: string) => {
-    return CATEGORY_IMAGE_MAP[name]?.description || 'อุปกรณ์และอะไหล่ช่างประจำคลัง Store FL.6';
+    return CATEGORY_IMAGE_MAP[name]?.description || 'อุปกรณ์และอะไหล่ช่างประจำคลัง ';
   };
 
   return (

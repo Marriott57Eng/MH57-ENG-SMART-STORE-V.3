@@ -168,7 +168,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
             id: Date.now().toString(),
             role: 'assistant',
             source: 'live',
-            text: `ไม่พบสินค้าที่มีรหัสหรือชื่อ "${itemId}" ในคลัง Store FL.6 กรุณาตรวจสอบชื่อสินค้าอีกครั้ง`,
+            text: `ไม่พบสินค้าที่มีรหัสหรือชื่อ "${itemId}" ในคลัง Store กรุณาตรวจสอบชื่อสินค้าอีกครั้ง`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
          }]);
          return;
