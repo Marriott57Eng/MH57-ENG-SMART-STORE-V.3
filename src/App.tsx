@@ -22,9 +22,15 @@ import { GlobalProgressBar } from './components/GlobalProgressBar';
 import { InventorySkeleton } from './components/InventorySkeleton';
 import { 
   Package, Search, RefreshCw, Filter, ClipboardList, Plus,
-  AlertTriangle, CheckCircle2, XCircle, Bot, X, FileDown, Loader2, LogOut, User as UserIcon
+  AlertTriangle, CheckCircle2, XCircle, Bot, X, FileDown, Loader2, LogOut, User as UserIcon, Bell
 } from 'lucide-react';
 import { generateAndDownloadPdf } from './utils/pdfGenerator';
+import { useGeolocationAuth } from './hooks/useGeolocationAuth';
+import { GeoRestrictionModal } from './components/GeoRestrictionModal';
+import { TransactionSuccessModal, TransactionSuccessData } from './components/TransactionSuccessModal';
+import { playSuccessSoundAndSpeak } from './utils/audioUtils';
+import { notifyStockTransaction, notifyAuthEvent } from './utils/lineNotify';
+import { LineSettingsModal } from './components/LineSettingsModal';
 import { User } from './types';
 
 // Helper function to strip undefined values so Firestore never errors on setDoc
@@ -136,6 +142,22 @@ const getInitialRequisitions = (): RequisitionRecord[] => {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const {
+    verifyLocation,
+    isCheckingGeo,
+    checkInitialLocation,
+    geoModalState,
+    closeGeoModal,
+    recheckLocation,
+  } = useGeolocationAuth(currentUser);
+  
+  // Check location on initial login/load
+  useEffect(() => {
+    if (currentUser) {
+      checkInitialLocation();
+    }
+  }, [currentUser, checkInitialLocation]);
+  
   const [items, setItems] = useState<InventoryItem[]>(getInitialInventory);
   const [summary, setSummary] = useState<InventorySummary | null>(getInitialSummary);
   const [loading, setLoading] = useState(() => getInitialInventory().length === 0);
@@ -171,6 +193,17 @@ export default function App() {
   const [isEditItemModalOpen, setIsEditItemModalOpen] = useState(false);
   const [requisitionToEdit, setRequisitionToEdit] = useState<RequisitionRecord | null>(null);
   const [isEditRequisitionModalOpen, setIsEditRequisitionModalOpen] = useState(false);
+  const [isLineSettingsModalOpen, setIsLineSettingsModalOpen] = useState(false);
+  const [transactionSuccess, setTransactionSuccess] = useState<TransactionSuccessData | null>(null);
+  
+  const handleOpenRequisitionModal = async (item?: InventoryItem | null) => {
+    const isAllowed = await verifyLocation();
+    if (isAllowed) {
+      setItemForRequisition(item || null);
+      setIsRequisitionModalOpen(true);
+    }
+  };
+
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -414,6 +447,7 @@ export default function App() {
           if (currentUser.role !== 'admin' && userData.activeDeviceId && deviceId && userData.activeDeviceId !== deviceId) {
             alert('บัญชีนี้ถูกเข้าสู่ระบบจากเครื่องอื่น หรือผู้ดูแลระบบได้ปลดล็อกบัญชีของคุณ');
             localStorage.removeItem('warehouse_user');
+            setChatHistory([]);
             setCurrentUser(null);
             return;
           }
@@ -493,6 +527,21 @@ export default function App() {
           setSelectedItem(updatedItem);
         }
 
+        // Show Transaction Success Pop Up Modal
+        setTransactionSuccess({
+          type: recordData.type,
+          itemId: updatedItem.id,
+          itemName: updatedItem.name,
+          category: updatedItem.category,
+          qty: recordData.qty,
+          unit: updatedItem.unit,
+          requestedBy: recordData.requestedBy,
+          purpose: recordData.purpose,
+          timestamp: newRecord.timestamp,
+          previousQty: currentItem.qty,
+          newQty: newQty,
+        });
+
         addToast({
           type: 'success',
           title: isStockIn ? 'รับเข้าสินค้าสำเร็จ' : 'เบิกสินค้าสำเร็จ',
@@ -504,6 +553,24 @@ export default function App() {
           setDoc(doc(db, 'requisitions', newRecord.id), newRecord),
           setDoc(doc(db, 'inventory', updatedItem.id), updatedItem)
         ]).catch(err => console.error("Background Firestore sync error:", err));
+
+        // 4. Send Real-time LINE Notification (Non-blocking background trigger)
+        notifyStockTransaction({
+          type: recordData.type,
+          itemId: updatedItem.id,
+          itemName: updatedItem.name,
+          category: updatedItem.category,
+          qty: recordData.qty,
+          unit: updatedItem.unit,
+          location: updatedItem.location,
+          requestedBy: recordData.requestedBy,
+          purpose: recordData.purpose,
+          note: recordData.note,
+          previousQty: currentItem.qty,
+          newQty: newQty,
+          status: newStatus,
+          timestamp: newRecord.timestamp,
+        }).catch(err => console.warn("LINE stock notification notice:", err));
       } else {
         setDoc(doc(db, 'requisitions', newRecord.id), newRecord).catch(console.error);
       }
@@ -655,6 +722,35 @@ export default function App() {
     }
 
     if (action.action === 'requisition' || action.action === 'stock_in') {
+      const isStockIn = action.action === 'stock_in';
+      const itemName = action.item?.name || 'สินค้า';
+      const qty = action.record?.qty || 0;
+      const unit = action.item?.unit || 'ชิ้น';
+
+      // Play chime and speak if not suppressed (e.g. when handled by Live Speech)
+      if (!action.skipVoice) {
+        playSuccessSoundAndSpeak(
+          isStockIn
+            ? `บันทึกรับเข้า ${itemName} จำนวน ${qty} ${unit} เรียบร้อยแล้วค่ะ`
+            : `บันทึกการเบิก ${itemName} จำนวน ${qty} ${unit} เรียบร้อยแล้วค่ะ`
+        );
+      }
+
+      if (action.item && action.record) {
+        setTransactionSuccess({
+          type: isStockIn ? 'in' : 'out',
+          itemId: action.item.id,
+          itemName: action.item.name,
+          category: action.item.category,
+          qty: action.record.qty,
+          unit: action.item.unit,
+          requestedBy: action.record.requestedBy,
+          purpose: action.record.purpose,
+          timestamp: action.record.timestamp,
+          newQty: action.item.qty,
+        });
+      }
+
       if (action.record) {
         const cleanRecord = cleanForFirestore(action.record);
         setRequisitions((prev) => {
@@ -690,6 +786,25 @@ export default function App() {
         }
 
         setDoc(doc(db, 'inventory', cleanItem.id), cleanItem).catch(err => console.error("Failed to update inventory", err));
+
+        // Send LINE notification for AI-assisted stock actions
+        if (action.record) {
+          notifyStockTransaction({
+            type: isStockIn ? 'in' : 'out',
+            itemId: cleanItem.id,
+            itemName: cleanItem.name,
+            category: cleanItem.category,
+            qty: action.record.qty,
+            unit: cleanItem.unit,
+            location: cleanItem.location,
+            requestedBy: action.record.requestedBy,
+            purpose: action.record.purpose,
+            previousQty: oldItem?.qty,
+            newQty: cleanItem.qty,
+            status: cleanItem.status,
+            timestamp: action.record.timestamp,
+          }).catch(err => console.warn("LINE notification error from AI action:", err));
+        }
       }
     } else if (action.action === 'update_stock') {
       if (action.item) {
@@ -817,6 +932,7 @@ export default function App() {
   // Handle logout with device session cleanup
   const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
+    const loggedOutUser = currentUser;
     try {
       if (currentUser?.id) {
         await updateDoc(doc(db, 'users', currentUser.id), {
@@ -827,7 +943,19 @@ export default function App() {
     } catch (err) {
       console.warn('Logout session clear error:', err);
     } finally {
+      if (loggedOutUser) {
+        notifyAuthEvent({
+          type: 'logout',
+          userId: loggedOutUser.id,
+          username: loggedOutUser.username,
+          name: loggedOutUser.name,
+          nickname: loggedOutUser.nickname,
+          role: loggedOutUser.role,
+        }).catch(err => console.warn("LINE logout notification notice:", err));
+      }
+
       localStorage.removeItem('warehouse_user');
+      setChatHistory([]);
       setCurrentUser(null);
       setShowLogoutConfirm(false);
       setIsLoggingOut(false);
@@ -835,7 +963,20 @@ export default function App() {
   };
 
   if (!currentUser) {
-    return <LoginView onLogin={setCurrentUser} />;
+    const handleLogin = (user: User) => {
+      setChatHistory([]);
+      setCurrentUser(user);
+      // Send real-time LINE login notification
+      notifyAuthEvent({
+        type: 'login',
+        userId: user.id,
+        username: user.username,
+        name: user.name,
+        nickname: user.nickname,
+        role: user.role,
+      }).catch(err => console.warn("LINE login notification notice:", err));
+    };
+    return <LoginView onLogin={handleLogin} />;
   }
 
   return (
@@ -864,25 +1005,25 @@ export default function App() {
               className="flex-1 flex flex-col pb-28 sm:pb-24"
             >
               {/* Sticky Mobile Topbar */}
-              <header className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700/90 sticky top-0 z-30 px-4 pt-safe-header pb-2.5 shadow-sm dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors duration-200">
-                <div className="flex items-center justify-between gap-2 mb-2.5">
+              <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-30 px-3.5 sm:px-5 pt-safe-header pb-2.5 sm:pb-3 shadow-xs dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors duration-200">
+                <div className="flex items-center justify-between gap-2.5 mb-2.5">
                   {/* Brand Logo & User Info Badge (Left) */}
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     {/* 3D Official App Logo */}
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-xl overflow-hidden shadow-xs border border-slate-300 dark:border-slate-650 bg-slate-950 flex items-center justify-center p-0.5">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-xl overflow-hidden shadow-xs border border-slate-300 dark:border-slate-700 bg-slate-950 flex items-center justify-center p-0.5">
                       <EngLogo alt="ENG Smart Store Logo" className="w-full h-full object-contain" />
                     </div>
 
                     {/* User Info Badge */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-650 px-2 py-1 rounded-xl shadow-2xs min-w-0">
+                    <div className="flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 px-2.5 py-1 rounded-xl shadow-2xs min-w-0">
                       <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/70 border border-blue-200 dark:border-blue-700/60 flex items-center justify-center shrink-0 shadow-xs">
                         <UserIcon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[110px] sm:max-w-[150px]" title={currentUser.name}>
+                        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate max-w-[110px] sm:max-w-[160px]" title={currentUser.name}>
                           {currentUser.name}
                         </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold truncate">
+                        <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-semibold truncate leading-tight">
                           {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}
                         </span>
                       </div>
@@ -896,20 +1037,30 @@ export default function App() {
 
                     <button
                       onClick={() => setShowLogoutConfirm(true)}
-                      className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-95 transition-all flex items-center border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
+                      className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 active:scale-95 transition-all flex items-center border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
                       title="ออกจากระบบ"
                     >
-                      <LogOut className="w-5 h-5" />
+                      <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
 
                     <button
                       onClick={() => fetchInventory(true)}
                       disabled={refreshing}
-                      className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-750 active:scale-95 transition-all text-lg flex items-center gap-1 border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
+                      className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-750 active:scale-95 transition-all flex items-center gap-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer shadow-2xs"
                       title="ซิงค์ข้อมูลล่าสุด"
                     >
-                      <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
+                      <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${refreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
                     </button>
+
+                    {currentUser.role === 'admin' && (
+                      <button
+                        onClick={() => setIsLineSettingsModalOpen(true)}
+                        className="p-2 rounded-xl text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 active:scale-95 transition-all flex items-center border border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/60 dark:bg-emerald-950/30 cursor-pointer shadow-2xs"
+                        title="ตั้งค่าการแจ้งเตือน LINE"
+                      >
+                        <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
+                      </button>
+                    )}
 
                     {currentUser.role === 'admin' && (
                       <button
@@ -938,11 +1089,8 @@ export default function App() {
                     )}
 
                     <button
-                      onClick={() => {
-                        setItemForRequisition(null);
-                        setIsRequisitionModalOpen(true);
-                      }}
-                      className="p-2 px-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-blue-500 dark:border-blue-400 shadow-xs cursor-pointer"
+                      onClick={() => handleOpenRequisitionModal()}
+                      className="p-2 px-2.5 sm:px-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-blue-500 dark:border-blue-400 shadow-xs cursor-pointer"
                     >
                       <ClipboardList className="w-4 h-4" />
                       <span>เบิกของ</span>
@@ -952,62 +1100,62 @@ export default function App() {
 
                 {/* Search Bar */}
                 <div className="relative mb-2">
-                  <Search className="w-5 h-5 text-slate-400 dark:text-slate-400 absolute left-3 top-2.5" />
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 dark:text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="ค้นหาชื่อสินค้า, รหัส, หมวดหมู่, ตำแหน่ง..."
-                    className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-8 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 transition-all shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-9 py-2 text-sm sm:text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 transition-all shadow-2xs"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
                       className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   )}
                 </div>
 
                 {/* Status Filter Chips */}
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-lg">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs sm:text-sm">
                   <button
                     onClick={() => setStatusFilter('all')}
-                    className={`px-3 py-1 rounded-full font-medium shrink-0 transition-all shadow-2xs ${
+                    className={`px-3 py-1.5 rounded-full font-semibold shrink-0 transition-all shadow-2xs ${
                       statusFilter === 'all'
-                        ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500 font-bold'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-650 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     ทั้งหมด ({items.length})
                   </button>
                   <button
                     onClick={() => setStatusFilter('low')}
-                    className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
+                    className={`px-3 py-1.5 rounded-full font-semibold shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
                       statusFilter === 'low'
-                        ? 'bg-amber-500 text-white font-bold border border-amber-600 dark:border-amber-400'
+                        ? 'bg-amber-500 text-white border border-amber-600 dark:border-amber-400'
                         : 'bg-amber-50/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/90 hover:bg-amber-100 dark:hover:bg-amber-900/60'
                     }`}
                   >
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                     ใกล้หมด ({summary?.lowStockCount || 0})
                   </button>
                   <button
                     onClick={() => setStatusFilter('out')}
-                    className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
+                    className={`px-3 py-1.5 rounded-full font-semibold shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
                       statusFilter === 'out'
-                        ? 'bg-red-600 text-white font-bold border border-red-700 dark:border-red-500'
+                        ? 'bg-red-600 text-white border border-red-700 dark:border-red-500'
                         : 'bg-red-50/80 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700/90 hover:bg-red-100 dark:hover:bg-red-900/60'
                     }`}
                   >
-                    <XCircle className="w-4 h-4 text-red-500" />
+                    <XCircle className="w-3.5 h-3.5 text-red-500" />
                     หมดสต็อก ({summary?.outOfStockCount || 0})
                   </button>
                 </div>
 
                 {/* Category Horizontal Filter Pills */}
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1.5 text-sm">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1.5 text-xs sm:text-sm">
                   <button
                     onClick={() => setSelectedCategory('ทั้งหมด')}
                     className={`px-2.5 py-1 rounded-lg shrink-0 transition-all shadow-2xs ${
@@ -1035,32 +1183,32 @@ export default function App() {
               </header>
 
               {/* Inventory List Body */}
-              <main className="p-3 space-y-2.5 flex-1">
+              <main className="p-3 sm:p-4.5 space-y-3 flex-1 max-w-5xl mx-auto w-full">
                 {loading ? (
                   <InventorySkeleton count={6} />
                 ) : error ? (
-                  <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 text-red-700 dark:text-red-300 p-4 rounded-xl text-lg space-y-2">
+                  <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 text-red-700 dark:text-red-300 p-4 rounded-xl text-sm sm:text-base space-y-2">
                     <p className="font-bold">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
                     <p>{error}</p>
                     <button
                       onClick={() => fetchInventory(true)}
-                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg font-semibold text-lg hover:bg-red-700 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg font-semibold text-sm hover:bg-red-700 transition-colors cursor-pointer"
                     >
                       ลองใหม่อีกครั้ง
                     </button>
                   </div>
                 ) : filteredItems.length === 0 ? (
                   <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-                    <Package className="w-6 h-6 mx-auto mb-2 opacity-40" />
-                    <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">ไม่พบรายการสินค้าที่ค้นหา</p>
-                    <p className="text-lg text-slate-400 dark:text-slate-500 mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรองหมวดหมู่</p>
+                    <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p className="text-base font-semibold text-slate-600 dark:text-slate-300">ไม่พบรายการสินค้าที่ค้นหา</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรองหมวดหมู่</p>
                     <button
                       onClick={() => {
                         setSearchQuery('');
                         setSelectedCategory('ทั้งหมด');
                         setStatusFilter('all');
                       }}
-                      className="mt-3 text-lg text-blue-600 dark:text-blue-400 font-semibold underline cursor-pointer"
+                      className="mt-3 text-sm text-blue-600 dark:text-blue-400 font-semibold underline cursor-pointer"
                     >
                       ล้างการค้นหาทั้งหมด
                     </button>
@@ -1095,10 +1243,7 @@ export default function App() {
                 records={requisitions}
                 items={items}
                 isAdmin={currentUser?.role === 'admin'}
-                onOpenNewRequisition={() => {
-                  setItemForRequisition(null);
-                  setIsRequisitionModalOpen(true);
-                }}
+                onOpenNewRequisition={() => handleOpenRequisitionModal()}
                 onDeleteRecord={handleDeleteRequisition}
                 onEditRecord={(record) => {
                   setRequisitionToEdit(record);
@@ -1216,10 +1361,7 @@ export default function App() {
               isAdmin={currentUser?.role === 'admin'}
               onClose={() => setSelectedItem(null)}
               onAskAI={handleAskAIAboutItem}
-              onStartRequisition={(item) => {
-                setItemForRequisition(item);
-                setIsRequisitionModalOpen(true);
-              }}
+              onStartRequisition={(item) => handleOpenRequisitionModal(item)}
               onEditItem={(item) => {
                 setItemToEdit(item);
                 setIsEditItemModalOpen(true);
@@ -1282,6 +1424,21 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Geo-location Restriction Modal */}
+        <GeoRestrictionModal
+          state={geoModalState}
+          onClose={closeGeoModal}
+          onRetry={recheckLocation}
+          isChecking={isCheckingGeo}
+        />
+
+        {/* Transaction Success Modal with Voice Announcement */}
+        <TransactionSuccessModal
+          isOpen={!!transactionSuccess}
+          data={transactionSuccess}
+          onClose={() => setTransactionSuccess(null)}
+        />
+
         {/* Error Alert Modal */}
         <AnimatePresence>
           {dbErrorAlert && (
@@ -1301,17 +1458,17 @@ export default function App() {
                 className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800"
               >
                 <div className="bg-red-600 p-4 text-white flex items-center gap-3">
-                  <XCircle className="w-6 h-6" />
-                  <h2 className="font-bold text-lg">รายการไม่สำเร็จ</h2>
+                  <XCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <h2 className="font-bold text-base sm:text-lg">รายการไม่สำเร็จ</h2>
                 </div>
-                <div className="p-5">
-                  <p className="text-lg text-slate-600 dark:text-slate-300 mb-4 font-medium">
+                <div className="p-4 sm:p-5">
+                  <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-4 font-medium leading-relaxed">
                     {dbErrorAlert}
                   </p>
                   <div className="flex justify-end mt-4">
                     <button 
                       onClick={() => setDbErrorAlert(null)}
-                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                     >
                       ปิดหน้าต่าง
                     </button>
@@ -1341,18 +1498,18 @@ export default function App() {
                 className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800"
               >
                 <div className="bg-amber-500 p-4 text-white flex items-center gap-3">
-                  <AlertTriangle className="w-6 h-6" />
-                  <h2 className="font-bold text-lg">แจ้งเตือนสินค้าสต็อกต่ำ!</h2>
+                  <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <h2 className="font-bold text-base sm:text-lg">แจ้งเตือนสินค้าสต็อกต่ำ!</h2>
                 </div>
-                <div className="p-5">
-                  <p className="text-lg text-slate-600 dark:text-slate-300 mb-4">
-                    พบว่ามีสินค้า <b className="text-amber-600 dark:text-amber-400">{summary.lowStockCount || 0}</b> รายการใกล้หมด และ <b className="text-red-600 dark:text-red-400">{summary.outOfStockCount || 0}</b> รายการหมดสต็อกแล้ว<br/><br/>
+                <div className="p-4 sm:p-5">
+                  <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
+                    พบว่ามีสินค้า <b className="text-amber-600 dark:text-amber-400 font-bold">{summary.lowStockCount || 0}</b> รายการใกล้หมด และ <b className="text-red-600 dark:text-red-400 font-bold">{summary.outOfStockCount || 0}</b> รายการหมดสต็อกแล้ว<br/><br/>
                     <span className="text-red-600 dark:text-red-400 font-semibold">กรุณาตรวจสอบและดำเนินการเขียนใบสั่งซื้อ (PR) เพื่อเติมสต็อกโดยด่วน</span>
                   </p>
                   <div className="flex justify-end gap-2 mt-4">
                     <button 
                       onClick={() => setShowLowStockAlert(false)}
-                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                      className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-xs sm:text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                     >
                       ปิดหน้าต่าง
                     </button>
@@ -1362,7 +1519,7 @@ export default function App() {
                         setStatusFilter('low');
                         setActiveTab('inventory');
                       }}
-                      className="px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold text-lg hover:bg-amber-600 transition-colors cursor-pointer"
+                      className="px-3.5 py-2 bg-amber-500 text-white rounded-xl font-semibold text-xs sm:text-sm hover:bg-amber-600 transition-colors cursor-pointer shadow-xs"
                     >
                       ดูรายการสินค้า
                     </button>
@@ -1450,6 +1607,13 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* LINE Notification Settings Modal */}
+        <LineSettingsModal
+          isOpen={isLineSettingsModalOpen}
+          onClose={() => setIsLineSettingsModalOpen(false)}
+          currentUser={currentUser}
+        />
       </div>
     </div>
   );

@@ -10,80 +10,11 @@ import {
 import { generateAndDownloadPdf } from '../utils/pdfGenerator';
 import { generateAndDownloadExcel } from '../utils/excelGenerator';
 import { formatRecordTimestamp } from '../utils/dateUtils';
+import { useGeolocationAuth } from '../hooks/useGeolocationAuth';
 import { useLiveAudio } from '../hooks/useLiveAudio';
+import { GeoRestrictionModal } from './GeoRestrictionModal';
 import { EngLogo } from './EngLogo';
-
-// Helper to play confirmation chime and Thai speech synthesis
-const playSuccessSoundAndSpeak = (speechText: string = 'ยืนยันเรียบร้อยแล้วค่ะ') => {
-  // 1. Web Audio API gentle confirmation chime
-  try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) {
-      const ctx = new AudioContextClass();
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      const now = ctx.currentTime;
-      
-      // Note 1 (D5)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(587.33, now);
-      gain1.gain.setValueAtTime(0.12, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.18);
-
-      // Note 2 (A5)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(880.00, now + 0.08);
-      gain2.gain.setValueAtTime(0.18, now + 0.08);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.08);
-      osc2.stop(now + 0.35);
-    }
-  } catch (e) {
-    console.warn('Audio chime error:', e);
-  }
-
-  // 2. Speech Synthesis in Thai
-  try {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(speechText);
-      utterance.lang = 'th-TH';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
-
-      const speak = () => {
-        const voices = window.speechSynthesis.getVoices();
-        const thaiVoice = voices.find(v => v.lang === 'th-TH' || v.lang.startsWith('th'));
-        if (thaiVoice) {
-          utterance.voice = thaiVoice;
-        }
-        window.speechSynthesis.speak(utterance);
-      };
-
-      if (window.speechSynthesis.getVoices().length > 0) {
-        speak();
-      } else {
-        window.speechSynthesis.onvoiceschanged = () => {
-          speak();
-        };
-        setTimeout(speak, 150);
-      }
-    }
-  } catch (e) {
-    console.warn('Speech synthesis error:', e);
-  }
-};
+import { playSuccessSoundAndSpeak } from '../utils/audioUtils';
 
 interface VoiceAssistantViewProps {
   items: InventoryItem[];
@@ -118,6 +49,13 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   const [inputText, setInputText] = useState('');
   const [speechSupported, setSpeechSupported] = useState(true);
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+  const {
+    verifyLocation,
+    isCheckingGeo,
+    geoModalState,
+    closeGeoModal,
+    recheckLocation,
+  } = useGeolocationAuth(currentUser as any);
   const liveMessageIdRef = useRef<string | null>(null);
 
   // Download handler for PDF & Excel
@@ -253,6 +191,19 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         text: `📄 AI ได้สร้างและดาวน์โหลดรายงาน "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) ให้เรียบร้อยแล้ว ท่านสามารถกดดาวน์โหลดซ้ำได้จากการ์ดด้านล่างนี้`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         fileReports: [reportAction]
+      }]);
+    }
+
+    // 2.5 Agent-to-Agent Realtime Web Search
+    else if (toolCall.name === 'search_live_web_agent') {
+      const { query } = toolCall.args || {};
+      const msgId = Date.now().toString();
+      setChatHistory(prev => [...prev, {
+        id: msgId,
+        role: 'assistant',
+        source: 'live',
+        text: `🌐 **Agent-to-Agent Real-time Search**: เชื่อมต่อ AI Web Intelligence Agent ค้นหาข้อมูลสด: *"${query || 'ค้นหาข้อมูลออนไลน์'}"*`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     }
 
@@ -487,6 +438,13 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     }
   }, [items, setChatHistory]);
 
+  const [liveUserSpokenText, setLiveUserSpokenText] = useState('');
+
+  const handleUserTranscript = useCallback((userText: string) => {
+    if (!userText || !userText.trim()) return;
+    setLiveUserSpokenText(userText);
+  }, []);
+
   const { 
     isLiveConnected, 
     isConnecting, 
@@ -500,7 +458,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   } = useLiveAudio(
     handleLiveToolCall,
     handleTranscript,
-    onLiveStateChange
+    onLiveStateChange,
+    handleUserTranscript
   );
 
   // Sync real-time inventory to active Live Speech server session on changes
@@ -682,7 +641,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               // keep the last part if it doesn't end with \n\n
               jsonBuffer = parts.pop() || '';
               
-              for (const part of parts) {
+               for (const part of parts) {
                   if (part.startsWith('data: ')) {
                       let serverError = null;
                       try {
@@ -766,12 +725,17 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   }, [chatHistory, isListening, transcript]);
 
   // Handle user confirming a DB action (Stock in / Stock out / update)
-  const handleConfirmDbAction = useCallback((messageId: string, action: DbActionPayload) => {
+  const handleConfirmDbAction = useCallback(async (messageId: string, action: DbActionPayload) => {
     if (!action) return;
 
-    // 1. Execute DB Action to Firestore / state
+    if (action.action === 'requisition' || action.action === 'stock_in') {
+      const isAllowed = await verifyLocation();
+      if (!isAllowed) return;
+    }
+
+    // 1. Execute DB Action to Firestore / state (Suppress redundant chime/TTS when in Live Speech)
     if (onExecuteDbAction) {
-      onExecuteDbAction(action);
+      onExecuteDbAction({ ...action, skipVoice: isLiveConnected });
     }
 
     // 2. Mark as confirmed in chat history
@@ -788,12 +752,12 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
 
     // 3. Audio / Speech Feedback
     if (isLiveConnected) {
-      // If active in Live Speech session, let Live Speech AI speak instead of browser TTS
+      // When in Live Speech, Live Speech Gemini AI speaks the confirmation exclusively (no synthetic chime/TTS)
       const actionName = action.action === 'stock_in' ? 'รับเข้าสินค้า' : 'เบิกสินค้า';
       const itemName = action.item?.name || action.record?.itemName || 'สินค้า';
       const itemQty = action.record?.qty || 1;
       const itemUnit = action.item?.unit || action.record?.unit || 'หน่วย';
-      sendMessage(`ผู้ใช้กดยืนยันการทำรายการ${actionName} ${itemName} จำนวน ${itemQty} ${itemUnit} เรียบร้อยแล้ว กรุณาแจ้งยืนยันด้วยเสียงสั้นๆ`);
+      sendMessage(`บันทึกการทำรายการ${actionName} ${itemName} จำนวน ${itemQty} ${itemUnit} เรียบร้อยแล้ว แจ้งผลยืนยันด้วยเสียงสั้นๆ`);
     } else {
       // For typed / text chat requisition, speak using browser Thai SpeechSynthesis
       const textToSpeak = action.action === 'stock_in' 
@@ -803,7 +767,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         : 'ยืนยันเรียบร้อยแล้วค่ะ';
       playSuccessSoundAndSpeak(textToSpeak);
     }
-  }, [onExecuteDbAction, setChatHistory, isLiveConnected, sendMessage]);
+  }, [onExecuteDbAction, setChatHistory, isLiveConnected, sendMessage, verifyLocation]);
 
   // Handle user cancelling a DB action
   const handleCancelDbAction = useCallback((messageId: string) => {
@@ -1325,6 +1289,19 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           </div>
         ))}
 
+        {/* Live Speech User Hearing Indicator */}
+        {isLiveConnected && (isUserSpeaking || liveUserSpokenText) && (
+          <div className="flex flex-col items-end">
+            <div className="max-w-[85%] rounded-2xl rounded-tr-none p-3 bg-emerald-600/90 text-white shadow-xs text-sm sm:text-base animate-pulse flex items-center gap-2">
+              <Mic className="w-4 h-4 text-emerald-200 shrink-0" />
+              <div>
+                <span className="text-[11px] block opacity-80 mb-0.5">AI กำลังได้ยินเสียงของคุณ:</span>
+                <span className="font-medium">{liveUserSpokenText ? `"${liveUserSpokenText}"` : 'กำลังรับฟังคำสั่ง...'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Live Interim Transcript Bubble while Listening */}
         {isListening && transcript && (
           <div className="flex flex-col items-end">
@@ -1507,6 +1484,13 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           </button>
         </form>
       </div>
+
+      <GeoRestrictionModal
+        state={geoModalState}
+        onClose={closeGeoModal}
+        onRetry={recheckLocation}
+        isChecking={isCheckingGeo}
+      />
     </div>
   );
 };

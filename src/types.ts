@@ -55,6 +55,7 @@ export interface DbActionPayload {
   previousQty?: number;
   newQty?: number;
   recordId?: string;
+  skipVoice?: boolean;
 }
 
 export interface ChatMessage {
@@ -83,4 +84,44 @@ export interface User {
   sessionToken?: string;
   activeDeviceId?: string;
   lastActiveAt?: number;
+}
+
+export interface LineNotificationConfig {
+  enabled: boolean;
+  channelAccessToken: string;
+  destinationId: string; // User ID (U...) or Group ID (C.../R...)
+  notifyStockOut: boolean;
+  notifyStockIn: boolean;
+  notifyLogin: boolean;
+  notifyLogout: boolean;
+  notifyLowStock?: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface LineStockNotifyData {
+  type: 'in' | 'out';
+  itemId: string;
+  itemName: string;
+  category?: string;
+  qty: number;
+  unit: string;
+  location?: string;
+  requestedBy: string;
+  purpose?: string;
+  note?: string;
+  timestamp?: string;
+  previousQty?: number;
+  newQty?: number;
+  status?: 'normal' | 'low' | 'out';
+}
+
+export interface LineAuthNotifyData {
+  type: 'login' | 'logout';
+  userId?: string;
+  username: string;
+  name: string;
+  nickname?: string;
+  role: 'admin' | 'user';
+  timestamp?: string;
 }

@@ -1,8 +1,9 @@
 {
-  "name": "Remix MH57 ENG Store App V.2",
-  "description": "แอปพลิเคชันจัดการคลังสินค้า Store FL.6 ของ ENG Smart Store พร้อมระบบ AI Voice & Chat Assistant (Gemini 3.5 Flash Lite & Gemini Live Speech) และระบบวิเคราะห์เชิงลึกด้วย Antigravity Agent",
+  "name": "MH57 ENG Store App V.2",
+  "description": "แอปพลิเคชันจัดการคลังสินค้าของ ENG Smart Store พร้อมระบบ AI Voice & Chat Assistant (Gemini 3.5 Flash Lite & Gemini Live Speech) และระบบวิเคราะห์เชิงลึกด้วย Antigravity Agent",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "geolocation"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

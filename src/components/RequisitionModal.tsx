@@ -6,6 +6,7 @@ import {
   AlertCircle, FileText, Search, ArrowDownRight, ArrowUpRight,
   ChevronDown, Package, Layers
 } from 'lucide-react';
+import { playSuccessSoundAndSpeak } from '../utils/audioUtils';
 
 interface RequisitionModalProps {
   isOpen: boolean;
@@ -161,6 +162,13 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
         isoDate = selectedDateTime.toISOString();
       }
     } catch {}
+
+    const isStockIn = transactionType === 'in';
+    const speechText = isStockIn
+      ? `บันทึกรับเข้า ${currentItem.name} จำนวน ${finalQty} ${currentItem.unit} เรียบร้อยแล้วค่ะ`
+      : `บันทึกการเบิก ${currentItem.name} จำนวน ${finalQty} ${currentItem.unit} เรียบร้อยแล้วค่ะ`;
+
+    playSuccessSoundAndSpeak(speechText);
 
     onSubmit({
       type: transactionType,

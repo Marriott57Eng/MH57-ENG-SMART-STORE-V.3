@@ -6,7 +6,15 @@ import fs from "fs";
 import { WebSocketServer } from "ws";
 import http from "http";
 import { initializeApp } from 'firebase/app';
-import { getFirestore, getDocs, collection, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, getDocs, collection, doc, setDoc, getDoc } from 'firebase/firestore';
+import { 
+  pushLineMessage, 
+  createStockFlexMessage, 
+  createAuthFlexMessage, 
+  createTestFlexMessage, 
+  getServerLineConfig, 
+  updateServerLineConfig 
+} from './server/lineService';
 
 let ai: GoogleGenAI;
 function getAI(): GoogleGenAI {
@@ -108,6 +116,7 @@ const CACHE_TTL_MS = 120 * 1000; // 2 minutes cache
 
 async function fetchInventoryFromFirestore(): Promise<Item[]> {
   try {
+    if (!firestoreDb) return [];
     const snap = await getDocs(collection(firestoreDb, 'inventory'));
     if (!snap.empty) {
       const items: Item[] = [];
@@ -318,12 +327,155 @@ async function startServer() {
       if (typeof location === 'string') targetItem.location = location;
       if (typeof note === 'string') targetItem.note = note;
 
-      await setDoc(doc(firestoreDb, 'inventory', targetItem.id), targetItem);
+      if (firestoreDb) {
+        await setDoc(doc(firestoreDb, 'inventory', targetItem.id), targetItem);
+      }
       cacheTimestamp = 0; // force refresh cache
 
       res.json({ success: true, item: targetItem });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Sync initial LINE config from Firestore if available
+  if (firestoreDb) {
+    getDoc(doc(firestoreDb, 'settings', 'line_config')).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        updateServerLineConfig(data as any);
+        console.log("LINE notification config loaded from Firestore");
+      }
+    }).catch((err) => {
+      console.warn("Could not load LINE config from Firestore on startup:", err?.message || err);
+    });
+  }
+
+  // API: Get LINE Notification Config
+  app.get("/api/line/config", async (req, res) => {
+    try {
+      const config = getServerLineConfig();
+      // Mask token for security when sending to frontend
+      const maskedToken = config.channelAccessToken 
+        ? `${config.channelAccessToken.slice(0, 8)}...${config.channelAccessToken.slice(-6)}` 
+        : '';
+      res.json({
+        ...config,
+        hasToken: !!config.channelAccessToken,
+        maskedToken,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API: Save LINE Notification Config
+  app.post("/api/line/config", async (req, res) => {
+    try {
+      const updated = req.body;
+      const current = getServerLineConfig();
+      
+      // If client didn't send a new token (or sent masked), keep existing
+      const token = (updated.channelAccessToken && !updated.channelAccessToken.includes('...'))
+        ? updated.channelAccessToken
+        : current.channelAccessToken;
+
+      const newConfig = updateServerLineConfig({
+        ...updated,
+        channelAccessToken: token,
+      });
+
+      if (firestoreDb) {
+        await setDoc(doc(firestoreDb, 'settings', 'line_config'), newConfig, { merge: true });
+      }
+
+      res.json({ success: true, config: newConfig });
+    } catch (error: any) {
+      console.error("Save LINE config error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API: Test LINE Notification
+  app.post("/api/line/test", async (req, res) => {
+    try {
+      const { channelAccessToken, destinationId } = req.body;
+      const currentConfig = getServerLineConfig();
+      const token = (channelAccessToken && !channelAccessToken.includes('...')) 
+        ? channelAccessToken 
+        : currentConfig.channelAccessToken;
+      const dest = destinationId || currentConfig.destinationId;
+
+      if (!token) {
+        return res.status(400).json({ success: false, error: 'กรุณากรอก LINE Channel Access Token' });
+      }
+      if (!dest) {
+        return res.status(400).json({ success: false, error: 'กรุณากรอก LINE Destination ID (User ID หรือ Group ID)' });
+      }
+
+      const testMessage = createTestFlexMessage();
+      const result = await pushLineMessage([testMessage], token, dest);
+
+      if (!result.success) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+
+      res.json({ success: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จเรียบร้อยแล้ว!' });
+    } catch (error: any) {
+      console.error("Test LINE notification error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // API: Send LINE Notification
+  app.post("/api/line/notify", async (req, res) => {
+    try {
+      const { type, data } = req.body;
+      const config = getServerLineConfig();
+
+      if (!config.enabled) {
+        return res.json({ success: false, skipped: true, reason: 'LINE notifications disabled' });
+      }
+
+      if (!config.channelAccessToken || !config.destinationId) {
+        return res.json({ success: false, skipped: true, reason: 'LINE token or destination not configured yet' });
+      }
+
+      let flexMessage: any = null;
+
+      if (type === 'stock_in' || type === 'stock_out') {
+        const isStockIn = type === 'stock_in';
+        if (isStockIn && !config.notifyStockIn) {
+          return res.json({ success: false, skipped: true, reason: 'Stock in notification disabled' });
+        }
+        if (!isStockIn && !config.notifyStockOut) {
+          return res.json({ success: false, skipped: true, reason: 'Stock out notification disabled' });
+        }
+        flexMessage = createStockFlexMessage(data);
+      } else if (type === 'login' || type === 'logout') {
+        const isLogin = type === 'login';
+        if (isLogin && !config.notifyLogin) {
+          return res.json({ success: false, skipped: true, reason: 'Login notification disabled' });
+        }
+        if (!isLogin && !config.notifyLogout) {
+          return res.json({ success: false, skipped: true, reason: 'Logout notification disabled' });
+        }
+        flexMessage = createAuthFlexMessage(data);
+      }
+
+      if (!flexMessage) {
+        return res.status(400).json({ success: false, error: 'Invalid notification type' });
+      }
+
+      const result = await pushLineMessage([flexMessage]);
+      if (!result.success) {
+        return res.json({ success: false, skipped: result.skipped ?? false, error: result.error });
+      }
+
+      res.json({ success: true, message: 'LINE notification sent successfully' });
+    } catch (error: any) {
+      console.warn("LINE notify endpoint exception:", error?.message || error);
+      res.json({ success: false, error: error?.message || 'Failed to process notification' });
     }
   });
 
@@ -443,12 +595,18 @@ async function startServer() {
     try {
       const { prompt, history, isVoice, items: clientItems, requisitions: clientRequisitions, currentUser } = req.body;
       
+      // Set SSE headers immediately to allow instant streaming of status & chunks
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
       let items: Item[] = Array.isArray(clientItems) && clientItems.length > 0
         ? clientItems
         : await fetchInventoryFromSheet();
 
       // Improved RAG: Smart context filtering for Thai Language
       const pLower = prompt.toLowerCase();
+
       // 1. Remove common action/stop words to isolate nouns
       const cleanPrompt = pLower.replace(/(เบิก|ขอ|เพิ่ม|รับเข้า|ค้นหา|มี|ไหม|สต็อก|จำนวน|ช่วย|หน่อย|อัปเดต|เอา|สินค้า|กี่|แผ่น|ชิ้น|อัน|หลอด|ม้วน|แกลลอน|กล่อง|ตัว)/g, '');
       const searchTerms = pLower.split(/\s+/).filter((t: string) => t.length > 1);
@@ -527,16 +685,36 @@ async function startServer() {
       const userFullName = (currentUser?.name && String(currentUser.name).trim()) || 'ผู้ใช้งาน';
       const callingName = userNickname || userFullName;
 
-      const systemInstruction = `คุณคือ AI ผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของอาคาร/องค์กร (ENG Smart Store AI)
+      const currentYear = now.getFullYear();
+      const currentYearThai = currentYear + 543;
+      const currentDateStr = now.toLocaleDateString('th-TH', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        weekday: 'long',
+        timeZone: 'Asia/Bangkok'
+      });
+      const currentTimeStr = now.toLocaleTimeString('th-TH', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Bangkok'
+      });
+
+      const systemInstruction = `คุณคือ AI ผู้ช่วยอัจฉริยะของ ENG Smart Store (คลังสินค้า Store FL.6)
+🗓️ วันเวลาปัจจุบันในประเทศไทย: วัน${currentDateStr} (ค.ศ. ${currentYear} / พ.ศ. ${currentYearThai}) เวลา ${currentTimeStr} น.
+⚠️ **ปีปัจจุบันคือ ค.ศ. ${currentYear} (พ.ศ. ${currentYearThai})**:
+- ห้ามใช้ปี 2024 หรือ 2023 หรือปีในอดีตเด็ดขาด ปัจจุบันคือปี ${currentYear}
 
 🌟 บุคลิกภาพและสไตล์การตอบสนอง (Personality & Tone of Voice):
-1. **มีชีวิตชีวาและเปี่ยมด้วยความใส่ใจ (Warm, Lively & Enthusiastic)**: ตอบด้วยความกระตือรือร้น สุภาพ จริงใจ ให้ความมั่นใจ และพร้อมช่วยเหลือทีมช่างและพนักงานเสมอ
-2. **มี Emoji ประกอบ (Expressive with Emojis)**: ใช้ Emoji ที่เหมาะสม (เช่น ✨, 📦, 🔍, 📍, 🏷️, 📊, 🚨, ⚠️, ✅, 💡, 🚀, 🛠️, 📋, 📌) กำกับหัวข้อและจุดสำคัญ เพื่อความสดใสและอ่านง่าย
-3. **จัดลำดับและเว้นวรรคให้โปร่งตา (Clear Spacing & Ordered Structure)**: 
+1. **รอบรู้ มีชีวิตชีวา เปี่ยมด้วยความเชี่ยวชาญ และใส่ใจ (Warm, Expert & All-Around Helpful)**: 
+   - ตอบด้วยความกระตือรือร้น สุภาพ จริงใจ เชี่ยวชาญเรื่องอะไหล่ อุปกรณ์ และงานช่างในคลัง Store FL.6 เป็นหลัก
+2. **ความสามารถหลายภาษาและภาษาถิ่น (Multilingual & Regional Dialects)**: สามารถสนทนา ตอบคำถาม และให้คำแนะนำเป็นภาษาถิ่น (อีสาน, ใต้, คำเมือง/เหนือ, เขมร/สุรินทร์-บุรีรัมย์) หรือภาษาอังกฤษ ตามที่ผู้ใช้สั่งหรือสื่อสารเข้ามาได้อย่างเป็นธรรมชาติ
+3. **มี Emoji ประกอบ (Expressive with Emojis)**: ใช้ Emoji ที่เหมาะสม (เช่น ✨, 📦, 🔍, 📍, 🏷️, 📊, 🚨, ⚠️, ✅, 💡, 🚀, 🛠️, 📋, 📌) กำกับหัวข้อและจุดสำคัญ เพื่อความสดใสและอ่านง่าย
+4. **จัดลำดับและเว้นวรรคให้โปร่งตา (Clear Spacing & Ordered Structure)**: 
    - **ห้าม** เขียนข้อความเป็นก้อนยาวติดกันเด็ดขาด
    - เว้นบรรทัดระหว่างย่อหน้าและหัวข้อ (Double Line Breaks)
    - หากต้องอธิบายขั้นตอน ให้จัดลำดับด้วย (1., 2., 3.) หรือ Bullet Points (- )
-4. **การตอบคำถามเกี่ยวกับสินค้าใกล้หมด / สินค้าหมดสต็อก / เช็คสต็อก (Crisp Count & Direct Cards)**:
+5. **การตอบคำถามเกี่ยวกับสินค้าใกล้หมด / สินค้าหมดสต็อก / เช็คสต็อก (Crisp Count & Direct Cards)**:
    - เมื่อผู้ใช้ถามถึงสินค้า ให้สรุปเฉพาะยอดรวมสั้นๆ เช่น "⚠️ สินค้าใกล้หมด มีจำนวน X รายการ", "🚨 สินค้าหมดแล้ว มีจำนวน X รายการ" หรือ "📦 พบสินค้าที่ค้นหา X รายการ" เท่านั้น
    - **ห้าม** พิมพ์แจกแจงรายชื่อสินค้า, รหัส, ที่เก็บ, หรือจำนวนคงเหลือลงในข้อความแชทโดยเด็ดขาด (ห้ามทำลิสต์รายการสินค้า) เนื่องจากระบบจะแสดงการ์ดสินค้า (Interactive Item Cards) ให้ผู้ใช้เห็นและกดใช้งานเองอยู่แล้ว ให้ตอบแบบบรรทัดเดียวสั้นๆ แล้วจบเลย
 
@@ -609,7 +787,7 @@ ${!isAdminUser ? `
 
 💡 ได้จัดเตรียมรายการไว้ให้เรียบร้อยแล้ว สามารถตรวจสอบรายละเอียดและแตะยืนยันได้ที่การ์ดด้านล่างเลยนะคะ 🚀"
 ข้อมูลสินค้าในคลังปัจจุบัน: ${JSON.stringify(compactInventory)}
-ประวัติการเบิก-รับเข้าล่าสุด (สำหรับการอ้างอิงเมื่อผู้ใช้ถามประวัติ): ${JSON.stringify(recentReqs)}`
+ประวัติการเบิก-รับเข้าล่าสุด (สำหรับการอ้างอิงเมื่อผู้ใช้ถามประวัติ): ${JSON.stringify(recentReqs)}\``
       const contents: any[] = [];
       if (Array.isArray(history) && history.length > 0) {
         for (const h of history.slice(-4)) {
@@ -617,10 +795,6 @@ ${!isAdminUser ? `
         }
       }
       contents.push({ role: 'user', parts: [{ text: prompt }] });
-
-      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
 
       let rawResponseText = "";
       
@@ -996,19 +1170,65 @@ ${!isAdminUser ? `
           purpose: r.purpose
         }));
 
-        const config = {
+        const currentYear = now.getFullYear();
+        const currentYearThai = currentYear + 543;
+        const currentDateStr = now.toLocaleDateString('th-TH', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric', 
+          weekday: 'long',
+          timeZone: 'Asia/Bangkok'
+        });
+        const currentTimeStr = now.toLocaleTimeString('th-TH', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Asia/Bangkok'
+        });
+
+        const config: any = {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } },
           },
-          systemInstruction: `คุณคือผู้ช่วยจัดการคลังสินค้าอัจฉริยะ Store FL.6 ของ ENG Smart Store ในโหมดสนทนาด้วยเสียงสด (Live Speech)
-ให้ตอบสนองด้วยเสียงภาษาไทยอย่างเป็นธรรมชาติ สุภาพ ชัดเจน สั้นกระชับ รวดเร็ว และเป็นกันเอง
+          outputAudioTranscription: {},
+          inputAudioTranscription: {},
+          systemInstruction: `คุณคือผู้ช่วยอัจฉริยะ Store FL.6 ของ ENG Smart Store ในโหมดสนทนาด้วยเสียงสด (Live Speech)
+🗓️ วันเวลาปัจจุบันในประเทศไทย: วัน${currentDateStr} (ค.ศ. ${currentYear} / พ.ศ. ${currentYearThai}) เวลา ${currentTimeStr} น.
+⚠️ **ปีปัจจุบันคือ ค.ศ. ${currentYear} (พ.ศ. ${currentYearThai})**:
+- ห้ามใช้ปี 2024 หรือ 2023 ในคำค้นหาเด็ดขาด ปัจจุบันคือปี ${currentYear}
+
+เป้าหมายสำคัญ: รับฟังเสียงคำสั่งภาษาไทยและภาษาต่างๆ อย่างแม่นยำ ตอบสนองทันที รวดเร็ว สุภาพ สั้นกระชับ และเป็นมิตร
+
+🎯 ขอบเขตการสนทนาและความรู้ (Conversational Scope & External Knowledge):
+1. **การคุยเรื่องทั่วไป ฟุตบอล กีฬา ข่าวสาร และความรู้เชิงช่าง**: คุณเป็น AI ที่มีความรอบรู้สูง สามารถพูดคุยเรื่องทั่วไป ตอบผลฟุตบอล โปรแกรมการแข่งขัน ข่าวด่วน สภาพอากาศ และให้ความรู้เชิงช่างได้อย่างเป็นกันเอง
+2. **การตอบคำถามทั่วไป/กีฬา/ภายนอก (ห้ามปฏิเสธ)**:
+   - เมื่อผู้ใช้ถามเรื่องผลกีฬา (เช่น ผลบอล/โปรแกรมแข่ง อาร์เซนอล, แมนยู, ลิเวอร์พูล, พรีเมียร์ลีก, ยูฟ่า), ข่าวด่วน, ราคาทอง, ราคาน้ำมัน หรือสภาพอากาศ **ต้องเรียก Function Tool \`search_live_web_agent\` ทันที แล้วนำผลลัพธ์มาพูดตอบผู้ใช้โดยตรงด้วยเสียงสด**
+   - ⛔ **ห้ามตอบปฏิเสธ** ว่า 'อยู่นอกเหนือฐานข้อมูลคลังพัสดุ' หรือ 'ระบบดูแลเฉพาะงานช่าง' โดยเด็ดขาด คุณยินดีตอบทุกคำถามอย่างชาญฉลาดเสมอ
+
+🌐 การค้นหาข้อมูลสดจากอินเทอร์เน็ตผ่าน AI Agent ตัวรอง (Real-time Agent-to-Agent Web Search):
+- เมื่อผู้ใช้ถามคำถามที่ต้องใช้ข้อมูลภายนอก ข้อมูลปัจจุบัน หรือข้อมูลสดแบบเรียลไทม์ (เช่น 'เมื่อคืนแมนยูชนะเท่าไหร่', 'ผลบอลคู่ล่าสุด', 'อาร์เซนอลแข่งวันไหน', 'ข่าวด่วนวันนี้', 'ราคาน้ำมัน', 'สภาพอากาศ', 'ข้อมูลสเปก/ราคาอะไหล่ภายนอก')
+- **ให้เรียกใช้ Function Tool \`search_live_web_agent\` ทันที**: ส่งคำค้นหา \`query\` ไปยัง AI Web Intelligence Search Agent
+- เมื่อได้รับคำตอบจาก Web Agent แล้ว ให้คุณพูดสรุปผลลัพธ์นั้นให้ผู้ใช้ฟังด้วยเสียงสดทันทีอย่างกระชับ ชัดเจน 1-2 ประโยค (ปรับสำเนียงตามภาษา/ภาษาถิ่นที่สนทนาอยู่)
+
+🌐 ความสามารถด้านภาษาและภาษาถิ่น (Multilingual & Regional Dialects):
+- **ปรับภาษาตามคำสั่งหรือภาษาที่ผู้ใช้พูดด้วยทันที**:
+  - **ภาษาอีสาน** (เว้าอีสาน): เช่น "สวัสดีจ้าคุณ${callingName} มื้อนี้สิเบิกอะไหล่หยังบ่จ้า เดี๋ยวเช็คสต็อกให้เด้อ", "จัดส่งการ์ดยืนยันให้ที่หน้าจอแล้วเด้อ"
+  - **ภาษาใต้** (แหลงใต้): เช่น "สวัสดีครับคุณ${callingName} วันนี้อีเบิกของไหรหม้าย เดี๋ยวแลสต็อกให้ครับ", "ส่งการ์ดยืนยันให้ที่หน้าจอแล้วนิ"
+  - **ภาษาเขมร (Khmer / สุรินทร์-บุรีรัมย์)**: เช่น "ซัวซเดยคุณ${callingName} มีอะไหล่ออยช่วยเบิกบอง?", "บันทึกเรียบร้อยเจียรอยแล้วค่ะ"
+  - **ภาษาอังกฤษ (English)**: เช่น "Hello Khun ${callingName}! How can I help with Store FL.6 inventory today?", "I have prepared the confirmation card on your screen."
+  - **ภาษาเหนือ (คำเมือง)**: เช่น "สวัสดีเจ้าคุณ${callingName} วันนี้จะเบิกอะหยังเจ้า เดี๋ยวตรวจสต็อกหื้อเน้อเจ้า"
+  - และภาษาอื่นๆ ตามที่ผู้ใช้ระบุหรือเริ่มพูดมา
+- หากผู้ใช้ไม่ได้ระบุภาษาเฉพาะ ให้ใช้ **ภาษาไทยกลางที่สุภาพ สดใส และเป็นกันเอง**
+
+⚡ กฎความกระชับและการสลับประเด็นคำสั่ง (Concise & Responsive):
+1. **พูดสั้นกระชับ (1-2 ประโยค)**: ตอบตรงประเด็น ไม่พูดยาวเยิ่นเย้อ เพื่อให้บทสนทนาลื่นไหลและโต้ตอบได้ทันท่วงที
+2. **หยุดฟังเมื่อมีคำสั่งใหม่**: เมื่อผู้ใช้พูดคำสั่งใหม่ ให้หยุดประเด็นเดิมทันทีและดำเนินการตามคำสั่งใหม่อย่างรวดเร็ว
 
 👤 ข้อมูลผู้ใช้งานที่กำลังสนทนาด้วย:
 - **ชื่อเล่นที่ต้องใช้เรียกผู้ใช้**: คุณ${callingName} (เช่น "คุณ${callingName}", "สวัสดีค่ะคุณ${callingName}")
 - ชื่อเต็ม: ${userName}
 - สิทธิ์การใช้งาน: ${userRole}
-⚠️ **กฎสำคัญที่สุดเรื่องการเรียกชื่อ**: คุณต้องเรียกผู้ใช้ด้วย **ชื่อเล่น (คุณ${callingName})** เสมอ ห้ามเรียกด้วยชื่อ-นามสกุลจริง เพื่อความเป็นกันเองและเป็นธรรมชาติในการสนทนากับทีมช่าง
+⚠️ **กฎการเรียกชื่อ**: คุณต้องเรียกผู้ใช้ด้วย **ชื่อเล่น (คุณ${callingName})** เสมอ ห้ามเรียกด้วยชื่อ-นามสกุลจริง
 ${adminInstruction}
 
 📊 ข้อมูลภาพรวมคลัง Store FL.6 ปัจจุบัน:
@@ -1019,16 +1239,18 @@ ${adminInstruction}
 📦 รายการสต็อกสินค้าคงคลังปัจจุบัน:
 ${inventoryCatalog}
  
-📝 ประวัติการเบิก-รับเข้าล่าสุด (สำหรับการอ้างอิงเมื่อผู้ใช้ถามประวัติการเบิก): 
+📝 ประวัติการเบิก-รับเข้าล่าสุด: 
 ${JSON.stringify(recentReqs)}
 
-⚡ คำแนะนำในการตอบ:
-1. เมื่อผู้ใช้ถามถึง "สินค้าใกล้หมด" หรือถามว่า "มีอะไหล่ตัวไหนใกล้หมดบ้าง" ให้เรียกใช้ฟังก์ชัน \`get_low_stock_items\` ทันที เพื่อให้ระบบส่งการ์ดข้อมูลสินค้าใกล้หมดขึ้นแสดงบนหน้าจอของผู้ใช้โดยอัตโนมัติ
-2. เมื่อผู้ใช้ถามถึง "สินค้าหมดสต็อก" หรือถามว่า "มีสินค้าอะไรหมดบ้าง" ให้เรียกใช้ฟังก์ชัน \`get_out_of_stock_items\` ทันที เพื่อส่งการ์ดสินค้าหมดสต็อกขึ้นหน้าจอ
-3. เมื่อผู้ใช้ถามหาสินค้าใดๆ หรือเช็คสต็อก ให้เรียกใช้ \`inquire_item_info\` หรือ \`check_stock\` ทันที เพื่อส่งการ์ดข้อมูลสินค้าขึ้นหน้าจอ
-4. เมื่อผู้ใช้สั่ง "เบิก" หรือ "รับเข้า" สินค้า ให้เรียกใช้ฟังก์ชัน \`prepare_stock_action\` ทันทีเพื่อส่งการ์ดยืนยันไปยังหน้าจอของผู้ใช้
-5. เมื่อผู้ใช้สั่งออกรายงาน PDF หรือ Excel ให้เรียกใช้ฟังก์ชัน \`export_report\` ทันที
-6. หากผู้ใช้กดยืนยันรายการ ให้ตอบสั้นๆ ว่า "บันทึกรายการลงระบบให้เรียบร้อยแล้วค่ะ"`,
+⚡ กฎการดำเนินการคำสั่ง (เรียก Function Tools ทันที):
+1. **เมื่อได้ยินคำสั่งเบิกสินค้า** (เช่น "ขอเบิก...", "เบิก...", "เอา...", "ใช้..."): เรียก \`prepare_stock_action\` (action: 'stock_out') ทันที แล้วพูดสั้นๆ เช่น "ส่งการ์ดยืนยันการเบิก...ให้ที่หน้าจอแล้วค่ะ คุณ${callingName}" (หรือปรับสำเนียงตามภาษาที่สนทนาอยู่)
+2. **เมื่อได้ยินคำสั่งรับเข้าสินค้า** (เช่น "รับเข้า...", "เติมของ...", "ซื้อมาเพิ่ม..."): เรียก \`prepare_stock_action\` (action: 'stock_in') ทันที แล้วพูดสั้นๆ เช่น "ส่งการ์ดยืนยันการรับเข้า...ให้ที่หน้าจอแล้วค่ะ"
+3. **เมื่อถามหาสินค้าหรือเช็คสต็อก** (เช่น "เช็ค...", "มี...ไหม", "ดู...", "หา..."): เรียก \`inquire_item_info\` หรือ \`check_stock\` ทันที แล้วตอบจำนวนคงเหลือสั้นๆ
+4. **เมื่อถามสินค้าใกล้หมด**: เรียก \`get_low_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าใกล้หมด...รายการ ส่งขึ้นจอแล้วค่ะ"
+5. **เมื่อถามสินค้าหมดสต็อก**: เรียก \`get_out_of_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าหมดสต็อก...รายการ ส่งขึ้นจอแล้วค่ะ"
+6. **เมื่อถามภาพรวมคลัง**: เรียก \`get_stock_summary\` ทันที แล้วตอบสรุปสั้นๆ 1 ประโยค
+7. **เมื่อสั่งออกรายงาน** (PDF/Excel): เรียก \`export_report\` ทันที แล้วตอบสั้นๆ "ออกรายงานเรียบร้อยแล้วค่ะ"
+8. **เมื่อยืนยันทำรายการ**: ตอบสั้นๆ "บันทึกการเบิก/รับเข้า...เรียบร้อยแล้วค่ะ คุณ${callingName}"`,
           tools: [{
             functionDeclarations: [
               {
@@ -1119,7 +1341,7 @@ ${JSON.stringify(recentReqs)}
         };
 
         const callbacks = {
-          onmessage: (message: LiveServerMessage) => {
+          onmessage: async (message: LiveServerMessage) => {
             const parts = message.serverContent?.modelTurn?.parts || [];
             let textTranscript = "";
             let audioData = "";
@@ -1128,19 +1350,30 @@ ${JSON.stringify(recentReqs)}
               if (part.inlineData?.data) audioData = part.inlineData.data;
             }
 
-            if (textTranscript) {
+            // Check for transcription from output / input audio transcription
+            const outputTrans = (message.serverContent as any)?.outputAudioTranscription?.text;
+            if (outputTrans && !textTranscript) {
+              textTranscript = outputTrans;
+            }
+
+            const inputTrans = (message.serverContent as any)?.inputAudioTranscription?.text;
+            if (inputTrans && clientWs.readyState === 1) {
+              clientWs.send(JSON.stringify({ userTranscript: inputTrans }));
+            }
+
+            if (textTranscript && clientWs.readyState === 1) {
               clientWs.send(JSON.stringify({ text: textTranscript, transcript: true }));
             }
 
-            if (audioData) {
+            if (audioData && clientWs.readyState === 1) {
               clientWs.send(JSON.stringify({ audio: audioData }));
             }
 
-            if (message.serverContent?.turnComplete) {
+            if (message.serverContent?.turnComplete && clientWs.readyState === 1) {
               clientWs.send(JSON.stringify({ turnComplete: true }));
             }
 
-            if (message.serverContent?.interrupted) {
+            if (message.serverContent?.interrupted && clientWs.readyState === 1) {
               clientWs.send(JSON.stringify({ interrupted: true }));
             }
 
@@ -1148,9 +1381,11 @@ ${JSON.stringify(recentReqs)}
               const calls = message.toolCall.functionCalls || [];
               for (const fc of calls) {
                 if (fc) {
-                  clientWs.send(JSON.stringify({
-                    toolCall: { name: fc.name, args: fc.args, id: fc.id }
-                  }));
+                  if (clientWs.readyState === 1) {
+                    clientWs.send(JSON.stringify({
+                      toolCall: { name: fc.name, args: fc.args, id: fc.id }
+                    }));
+                  }
 
                   let toolResult = "ดำเนินการเรียบร้อยแล้ว";
                   
@@ -1164,20 +1399,6 @@ ${JSON.stringify(recentReqs)}
                       const maxItem = sortedItems[sortedItems.length - 1];
                       toolResult = `สินค้าที่มีจำนวนน้อยที่สุดคือ: ${minItem.name} (รหัส ${minItem.id}) มีจำนวน ${minItem.qty} ${minItem.unit}\n` +
                         `สินค้าที่มีจำนวนมากที่สุดคือ: ${maxItem.name} (รหัส ${maxItem.id}) มีจำนวน ${maxItem.qty} ${maxItem.unit}`;
-                    }
-
-                    if (activeLiveSession) {
-                      try {
-                        activeLiveSession.sendToolResponse({
-                          functionResponses: [{
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result: toolResult }
-                          }]
-                        });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
                     }
                   } else if (fc.name === "get_stock_summary") {
                     const totalItems = sessionActiveItems.length;
@@ -1193,20 +1414,6 @@ ${JSON.stringify(recentReqs)}
                       `- ปริมาณสต็อกรวมทุกรายการ: ${totalQty} หน่วย\n` +
                       `- สินค้าหมดสต็อก (ของขาด): ${outCount} รายการ\n` +
                       `- สินค้าใกล้หมด (ต่ำกว่าเกณฑ์ความปลอดภัย): ${lowCount} รายการ`;
-                    
-                    if (activeLiveSession) {
-                      try {
-                        activeLiveSession.sendToolResponse({
-                          functionResponses: [{
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result: toolResult }
-                          }]
-                        });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
-                    }
                   } else if (fc.name === "get_out_of_stock_items") {
                     const outItems = sessionActiveItems.filter(i => (Number(i.qty) || 0) <= 0 || i.status === 'out');
                     if (outItems.length === 0) {
@@ -1214,20 +1421,6 @@ ${JSON.stringify(recentReqs)}
                     } else {
                       toolResult = `พบสินค้าหมดสต็อกทั้งหมด ${outItems.length} รายการ:\n` +
                         outItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}) - ตำแหน่ง: ${i.location}`).join('\n');
-                    }
-
-                    if (activeLiveSession) {
-                      try {
-                        activeLiveSession.sendToolResponse({
-                          functionResponses: [{
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result: toolResult }
-                          }]
-                        });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
                     }
                   } else if (fc.name === "get_low_stock_items") {
                     const lowItems = sessionActiveItems.filter(i => 
@@ -1239,20 +1432,6 @@ ${JSON.stringify(recentReqs)}
                     } else {
                       toolResult = `พบสินค้าใกล้หมดสต็อก ${lowItems.length} รายการ:\n` +
                         lowItems.map((i, idx) => `${idx + 1}. ${i.name} (รหัส: ${i.id}) - คงเหลือ ${i.qty} ${i.unit} (เกณฑ์ขั้นต่ำ ${i.minStock} ${i.unit})`).join('\n');
-                    }
-
-                    if (activeLiveSession) {
-                      try {
-                        activeLiveSession.sendToolResponse({
-                          functionResponses: [{
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result: toolResult }
-                          }]
-                        });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
                     }
                   } else if (fc.name === "prepare_stock_action") {
                     const { action, itemId, quantity } = (fc.args as any) || {};
@@ -1274,35 +1453,9 @@ ${JSON.stringify(recentReqs)}
                     });
 
                     toolResult = "ส่งการ์ดยืนยันรายการไปยังหน้าจอของผู้ใช้เรียบร้อยแล้ว แจ้งให้ผู้ใช้ตรวจสอบและกดยืนยัน";
-                    if (activeLiveSession) {
-                      try {
-                        activeLiveSession.sendToolResponse({
-                          functionResponses: [{
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result: toolResult }
-                          }]
-                        });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
-                    }
                   } else if (fc.name === "export_report") {
                     const format = (fc.args?.format as string || "pdf").toLowerCase();
                     toolResult = `สร้างการ์ดดาวน์โหลดรายงาน ${format.toUpperCase()} ส่งไปยังหน้าจอเรียบร้อยแล้วค่ะ`;
-                    if (activeLiveSession) {
-                      try {
-                        activeLiveSession.sendToolResponse({
-                          functionResponses: [{
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result: toolResult }
-                          }]
-                        });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
-                    }
                   } else if (fc.name === "inquire_item_info" || fc.name === "check_stock") {
                     const searchTerm = (fc.args?.searchTerm as string || "").toLowerCase().trim();
                     let matchingItems = sessionActiveItems;
@@ -1336,20 +1489,33 @@ ${JSON.stringify(recentReqs)}
                     }
                     
                     toolResult = resultText;
-                    
-                    if (activeLiveSession) {
+                  }
+
+                  const liveTarget = activeLiveSession;
+                  if (liveTarget) {
+                    try {
+                      liveTarget.sendToolResponse({
+                        functionResponses: [{
+                          id: fc.id,
+                          name: fc.name,
+                          response: { result: toolResult }
+                        }]
+                      });
+                    } catch (e) {
+                      console.error("Tool response error", e);
+                    }
+                  } else if (sessionPromise) {
+                    sessionPromise.then((s: any) => {
                       try {
-                        activeLiveSession.sendToolResponse({
+                        s.sendToolResponse({
                           functionResponses: [{
                             id: fc.id,
                             name: fc.name,
                             response: { result: toolResult }
                           }]
                         });
-                      } catch (e) {
-                        console.error("Tool response error", e);
-                      }
-                    }
+                      } catch (e) {}
+                    }).catch(() => {});
                   }
                 }
               }
@@ -1454,12 +1620,40 @@ ${JSON.stringify(recentReqs)}
     });
   });
 
-  // Pre-warm inventory cache immediately on startup
-  fetchInventoryFromSheet().catch(() => {});
+  // Pre-warm inventory cache immediately on startup (safe background task)
+  fetchInventoryFromSheet().catch((err) => {
+    console.warn("Initial inventory warm-up notice:", err?.message || err);
+  });
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`ENG SMART STORE Server running on http://0.0.0.0:${PORT}`);
+  });
+
+  // Graceful shutdown on Cloud Run revision shifts
+  process.on("SIGTERM", () => {
+    console.log("SIGTERM received, closing server...");
+    server.close(() => {
+      process.exit(0);
+    });
+  });
+
+  process.on("SIGINT", () => {
+    console.log("SIGINT received, closing server...");
+    server.close(() => {
+      process.exit(0);
+    });
   });
 }
 
-startServer();
+// Global safety catchers to prevent container crash on transient network errors
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught server exception (handled):", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection (handled):", reason);
+});
+
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+});

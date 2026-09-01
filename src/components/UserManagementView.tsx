@@ -14,12 +14,14 @@ import {
   Check, 
   Search,
   CheckCircle2,
-  Unlock
+  Unlock,
+  Bell
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { User as UserType } from '../types';
 import { initialUsers } from '../data/users';
+import { LineSettingsModal } from './LineSettingsModal';
 
 interface UserManagementViewProps {
   currentUser: UserType;
@@ -75,6 +77,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showLineSettings, setShowLineSettings] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Add Form states
@@ -448,7 +451,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 transition-colors">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 sticky top-0 z-10 px-4 pt-safe-header pb-3.5 flex items-center justify-between shadow-2xs transition-colors">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 sticky top-0 z-10 px-4 pt-safe-header pb-3.5 flex items-center justify-between shadow-2xs transition-colors flex-wrap gap-2">
         <div>
           <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -458,16 +461,29 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             แก้ไข ID, Username, ชื่อจริง, ชื่อเล่น และสิทธิ์ของทุกคน
           </p>
         </div>
-        <button
-          onClick={() => {
-            setShowAddForm(!showAddForm);
-            setError('');
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-blue-500"
-        >
-          {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showAddForm ? 'ปิดฟอร์ม' : 'เพิ่มผู้ใช้'}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* LINE Settings Button */}
+          <button
+            onClick={() => setShowLineSettings(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-emerald-500"
+            title="ตั้งค่าการแจ้งเตือนผ่าน LINE"
+          >
+            <Bell className="w-4 h-4" />
+            <span>ตั้งค่าแจ้งเตือน LINE</span>
+          </button>
+
+          {/* Add User Button */}
+          <button
+            onClick={() => {
+              setShowAddForm(!showAddForm);
+              setError('');
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-blue-500"
+          >
+            {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showAddForm ? 'ปิดฟอร์ม' : 'เพิ่มผู้ใช้'}
+          </button>
+        </div>
       </div>
 
       <div className="p-4 max-w-5xl mx-auto space-y-4">
@@ -916,6 +932,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* LINE Settings Modal */}
+      <LineSettingsModal
+        isOpen={showLineSettings}
+        onClose={() => setShowLineSettings(false)}
+        currentUser={currentUser}
+      />
     </div>
   );
 };
