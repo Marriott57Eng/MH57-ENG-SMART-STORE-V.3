@@ -205,11 +205,11 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 10 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-300 dark:border-slate-700 transition-colors"
+        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/90 dark:border-slate-800 transition-colors"
       >
         
         {/* Header */}
-        <div className="px-3.5 sm:px-4 pt-safe-header pb-3 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
+        <div className="px-3.5 sm:px-4 pt-safe-header pb-3 sm:py-4 border-b border-slate-200/90 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-sm transition-colors border ${
               transactionType === 'out' ? 'bg-blue-600 border-blue-500 shadow-blue-500/20' : 'bg-emerald-600 border-emerald-500 shadow-emerald-500/20'
@@ -221,7 +221,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
               )}
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
                 {transactionType === 'out' ? 'บันทึกการเบิกสินค้า' : 'บันทึกการรับเข้าสินค้า'}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -233,7 +233,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
           >
             <X className="w-4 h-4" />
           </button>
@@ -241,7 +241,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
 
         {/* Transaction Type Switcher (เบิกออก vs รับเข้า) */}
         <div className="px-3.5 sm:px-4 pt-2.5 pb-1 bg-white dark:bg-slate-900 shrink-0">
-          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl sm:rounded-2xl border border-slate-300 dark:border-slate-700 shadow-2xs">
+          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs">
             <button
               type="button"
               onClick={() => {

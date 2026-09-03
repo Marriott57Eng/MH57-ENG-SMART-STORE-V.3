@@ -54,16 +54,16 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
   };
 
   return (
-    <div className="p-4 pt-safe-content space-y-4 pb-24 bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
+    <div className="p-3.5 sm:p-4 pt-safe-content space-y-4 pb-28 sm:pb-24 bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
-            <Boxes className="w-4 h-4" />
+          <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <Boxes className="w-4.5 h-4.5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">หมวดหมู่สินค้าในคลัง</h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">หมวดหมู่สินค้าในคลัง</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               จำแนกตามโครงสร้างคลังสินค้า ({summary?.categories.length || 0} หมวดหมู่)
             </p>
           </div>
@@ -77,11 +77,11 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
             title="ส่งออกรายงาน PDF คลังสินค้า"
           >
             {isExporting ? (
-              <Loader2 className="w-5 h-5 animate-spin text-blue-600 dark:text-blue-400" />
+              <Loader2 className="w-4.5 h-4.5 animate-spin text-blue-600 dark:text-blue-400" />
             ) : (
-              <FileDown className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <FileDown className="w-4.5 h-4.5 text-red-600 dark:text-red-400" />
             )}
-            <span className="text-sm font-bold hidden sm:inline-block">PDF</span>
+            <span className="text-xs sm:text-sm font-bold hidden sm:inline-block">PDF</span>
           </button>
         )}
       </div>
@@ -100,20 +100,20 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
           return (
             <motion.div
               key={cat.name}
-              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{
                 duration: 0.22,
-                ease: [0.22, 1, 0.36, 1],
-                delay: Math.min(idx * 0.03, 0.25),
+                ease: [0.16, 1, 0.3, 1],
+                delay: Math.min(idx * 0.025, 0.2),
               }}
               whileHover={{ y: -2, transition: { duration: 0.15 } }}
               whileTap={{ scale: 0.985 }}
               onClick={() => onSelectCategory(cat.name)}
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer group flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)] hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500/70 transition-all cursor-pointer group flex flex-col justify-between"
             >
               {/* Category Image Banner with Overlay */}
-              <div className="relative h-28 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <div className="relative h-28 sm:h-32 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                 <img
                   src={catImg}
                   alt={cat.name}
@@ -133,10 +133,10 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
                       {getCategoryIcon(cat.name)}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-extrabold text-white text-base sm:text-lg leading-tight drop-shadow-xs truncate">
+                      <h3 className="font-extrabold text-white text-base leading-tight drop-shadow-xs truncate">
                         {cat.name}
                       </h3>
-                      <span className="text-xs sm:text-sm text-slate-200 font-medium drop-shadow-xs">
+                      <span className="text-xs text-slate-200 font-medium drop-shadow-xs">
                         {cat.count} รายการ
                       </span>
                     </div>
@@ -145,15 +145,15 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
                   {/* Stock status pills (Red for out of stock, Amber for low stock) */}
                   <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 shrink-0">
                     {outOfStockItemsInCat > 0 && (
-                      <span className="bg-red-600/95 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-red-400/40">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                        <span>หมดจากคลัง {outOfStockItemsInCat}</span>
+                      <span className="bg-red-600/95 text-white text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-red-400/40">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <span>หมด {outOfStockItemsInCat}</span>
                       </span>
                     )}
 
                     {lowStockItemsInCat > 0 && (
-                      <span className="bg-amber-500/95 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-amber-300/40">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span className="bg-amber-500/95 text-white text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs border border-amber-300/40">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
                         <span>ใกล้หมด {lowStockItemsInCat}</span>
                       </span>
                     )}
@@ -162,12 +162,12 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
               </div>
 
               {/* Bottom Details */}
-              <div className="p-3 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-750">
+              <div className="p-3 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex-1 min-w-0 pr-2">
-                  <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1 leading-normal">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 leading-normal">
                     {getCategoryDescription(cat.name)}
                   </p>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-0.5">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">
                     คงเหลือรวม: <span className="text-blue-600 dark:text-blue-400 font-bold">{cat.totalQty.toLocaleString()}</span> หน่วย
                   </p>
                 </div>

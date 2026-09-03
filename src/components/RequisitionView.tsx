@@ -132,7 +132,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 
             <button
               onClick={onOpenNewRequisition}
-              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 text-white px-3 py-2 rounded-xl text-lg font-bold flex items-center gap-1.5 shadow-sm transition-all border border-blue-500 cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-95 text-white px-3 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm transition-all border border-blue-500 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               บันทึก เบิก/รับเข้า
@@ -142,17 +142,17 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 
         {/* Stats summary banner */}
         <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-slate-750">
-          <div className="bg-slate-50 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-300 dark:border-slate-700 text-center shadow-2xs">
-            <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">รายการทั้งหมด</span>
-            <span className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{records.length} ครั้ง</span>
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-center shadow-2xs">
+            <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 block font-medium">รายการทั้งหมด</span>
+            <span className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">{records.length} ครั้ง</span>
           </div>
-          <div className="bg-blue-50/70 dark:bg-blue-950/40 p-2 rounded-xl border border-blue-200 dark:border-blue-800/80 text-center shadow-2xs">
-            <span className="text-xs text-blue-600 dark:text-blue-400 block font-medium">เบิกออกรวม</span>
-            <span className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{totalWithdrawn} ชิ้น</span>
+          <div className="bg-blue-50/80 dark:bg-blue-950/40 p-2 rounded-xl border border-blue-200 dark:border-blue-800/80 text-center shadow-2xs">
+            <span className="text-[11px] sm:text-xs text-blue-600 dark:text-blue-400 block font-medium">เบิกออกรวม</span>
+            <span className="text-base sm:text-lg font-black text-blue-700 dark:text-blue-300">{totalWithdrawn} ชิ้น</span>
           </div>
-          <div className="bg-emerald-50/70 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800/80 text-center shadow-2xs">
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">รับเข้ารวม</span>
-            <span className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">+{totalReceived} ชิ้น</span>
+          <div className="bg-emerald-50/80 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800/80 text-center shadow-2xs">
+            <span className="text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-400 block font-medium">รับเข้ารวม</span>
+            <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-300">+{totalReceived} ชิ้น</span>
           </div>
         </div>
 
@@ -160,34 +160,34 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
         <div className="flex items-center gap-1.5 mt-3 pt-1">
           <button
             onClick={() => setTypeFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-lg font-bold transition-all cursor-pointer shadow-2xs ${
+            className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-2xs ${
               typeFilter === 'all'
-                ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-650 hover:bg-slate-100 dark:hover:bg-slate-750'
+                ? 'bg-blue-600 text-white border border-blue-600 shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
             }`}
           >
             ทั้งหมด ({records.length})
           </button>
           <button
             onClick={() => setTypeFilter('out')}
-            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
+            className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
               typeFilter === 'out'
                 ? 'bg-blue-600 text-white border border-blue-700 dark:border-blue-500 shadow-xs'
                 : 'bg-blue-50/80 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 hover:bg-blue-100 dark:hover:bg-blue-900/50'
             }`}
           >
-            <ArrowUpRight className="w-4 h-4" />
+            <ArrowUpRight className="w-3.5 h-3.5" />
             เบิกออก ({records.filter((r) => r.type === 'out' || !r.type).length})
           </button>
           <button
             onClick={() => setTypeFilter('in')}
-            className={`px-3 py-1.5 rounded-lg text-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
+            className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
               typeFilter === 'in'
                 ? 'bg-emerald-600 text-white border border-emerald-700 dark:border-emerald-500 shadow-xs'
                 : 'bg-emerald-50/80 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
             }`}
           >
-            <ArrowDownRight className="w-4 h-4" />
+            <ArrowDownRight className="w-3.5 h-3.5" />
             รับเข้า ({records.filter((r) => r.type === 'in').length})
           </button>
         </div>
@@ -200,7 +200,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="ค้นหาชื่อผู้ทำรายการ, สินค้า, รหัส หรือสถานที่..."
-            className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-650 rounded-xl pl-9 pr-3 py-2 text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 shadow-2xs transition-all"
+            className="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm sm:text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 shadow-2xs transition-all"
           />
         </div>
       </div>
@@ -243,28 +243,28 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             return (
               <div
                 key={record.id}
-                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-4 shadow-sm hover:border-blue-400 dark:hover:border-blue-500/80 transition-all space-y-3"
+                className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)] hover:border-blue-400 dark:hover:border-blue-500/70 transition-all space-y-3"
               >
                 {/* Top: User Info, Type Badge & Timestamp */}
-                <div className="flex items-start justify-between gap-2 border-b border-slate-200 dark:border-slate-750 pb-2.5">
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                   <div className="flex items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg shrink-0 border ${
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border ${
                       isStockIn 
                         ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' 
                         : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                     }`}>
                       {isStockIn ? (
-                        <ArrowDownRight className="w-5 h-5" />
+                        <ArrowDownRight className="w-4.5 h-4.5" />
                       ) : (
-                        <ArrowUpRight className="w-5 h-5" />
+                        <ArrowUpRight className="w-4.5 h-4.5" />
                       )}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
+                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                           {record.requestedBy}
                         </h3>
-                        <span className={`text-xs font-extrabold px-1.5 py-0.2 rounded ${
+                        <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
                           isStockIn
                             ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
                             : 'bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80'
@@ -272,8 +272,8 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                           {isStockIn ? 'รับเข้า' : 'เบิกออก'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-sm text-slate-400 dark:text-slate-400 mt-0.5 font-medium">
-                        <Clock className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                      <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-medium">
+                        <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                         <span>{formatRecordTimestamp(record.timestamp, record.isoDate)}</span>
                       </div>
                     </div>
@@ -281,7 +281,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 
                   {/* Transaction Quantity Badge */}
                   <div className="text-right">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-lg font-extrabold border ${
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-sm sm:text-base font-black border ${
                       isStockIn
                         ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80'
                         : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/80'
@@ -301,7 +301,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                           {record.itemId}
                         </span>
                         <span
-                          className={`text-sm font-semibold px-2 py-0.5 rounded-full border ${getCategoryColor(
+                          className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${getCategoryColor(
                             record.category
                           )}`}
                         >
@@ -309,16 +309,16 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                         </span>
                       </div>
 
-                      <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg sm:text-lg leading-snug line-clamp-2">
+                      <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base leading-snug line-clamp-2">
                         {record.itemName}
                       </h4>
 
                       {/* CURRENT WAREHOUSE STOCK BALANCE */}
-                      <div className="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between flex-wrap gap-1">
-                        <div className="flex items-center gap-1.5 text-lg">
-                          <Boxes className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                          <span className="text-slate-500 dark:text-slate-400 text-sm">สต็อกคงเหลือปัจจุบัน:</span>
-                          <span className="font-extrabold text-slate-900 dark:text-white text-lg">
+                      <div className="mt-2 pt-1.5 border-t border-slate-200/80 dark:border-slate-700 flex items-center justify-between flex-wrap gap-1">
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+                          <Boxes className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span className="text-slate-500 dark:text-slate-400">สต็อกคงเหลือปัจจุบัน:</span>
+                          <span className="font-black text-slate-900 dark:text-white">
                             {currentQty !== null ? `${currentQty} ${currentUnit}` : 'ไม่พบข้อมูล'}
                           </span>
                         </div>
@@ -326,15 +326,15 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                         {currentQty !== null && (
                           <div>
                             {currentStatus === 'out' ? (
-                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/80 px-1.5 py-0.2 rounded">
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/80 px-1.5 py-0.5 rounded">
                                 <XCircle className="w-2.5 h-2.5" /> หมดสต็อก
                               </span>
                             ) : currentStatus === 'low' ? (
-                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 px-1.5 py-0.2 rounded">
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 px-1.5 py-0.5 rounded">
                                 <AlertTriangle className="w-2.5 h-2.5" /> สต็อกเหลือน้อย
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 px-1.5 py-0.2 rounded">
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 px-1.5 py-0.5 rounded">
                                 <CheckCircle2 className="w-2.5 h-2.5" /> ปกติ
                               </span>
                             )}
@@ -346,10 +346,10 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                 </div>
 
                 {/* Bottom: Purpose / Location & Note */}
-                <div className="space-y-1 text-lg">
+                <div className="space-y-1 text-xs sm:text-sm">
                   <div className="flex items-start gap-1.5 text-slate-700 dark:text-slate-300">
-                    <MapPin className={`w-4 h-4 shrink-0 mt-0.5 ${isStockIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`} />
-                    <span className="font-medium text-lg">
+                    <MapPin className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${isStockIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`} />
+                    <span className="font-medium">
                       <strong className="text-slate-900 dark:text-slate-100">
                         {isStockIn ? 'แหล่งที่มา / เหตุผล:' : 'งานที่นำไปใช้:'}
                       </strong>{' '}
@@ -358,8 +358,8 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                   </div>
 
                   {record.note && (
-                    <div className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400 text-sm">
-                      <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400 text-xs">
+                      <FileText className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
                       <span>หมายเหตุ: {record.note}</span>
                     </div>
                   )}
@@ -367,7 +367,7 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 
                 {/* Admin Actions: Edit & Delete (Only visible for Admin) */}
                 {isAdmin && (
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-750 flex items-center justify-end gap-2">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
                     {onEditRecord && (
                       <button
                         onClick={() => onEditRecord(record)}

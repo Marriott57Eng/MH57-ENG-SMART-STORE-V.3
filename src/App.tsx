@@ -998,10 +998,10 @@ export default function App() {
           {activeTab === 'inventory' && (
             <motion.div
               key="inventory"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, scale: 0.985, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.985, y: -8 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="flex-1 flex flex-col pb-28 sm:pb-24"
             >
               {/* Sticky Mobile Topbar */}
@@ -1099,19 +1099,19 @@ export default function App() {
                 </div>
 
                 {/* Search Bar */}
-                <div className="relative mb-2">
-                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 dark:text-slate-400 absolute left-3 top-2.5" />
+                <div className="relative mb-2.5">
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 dark:text-slate-400 absolute left-3 top-3" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="ค้นหาชื่อสินค้า, รหัส, หมวดหมู่, ตำแหน่ง..."
-                    className="w-full bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-9 py-2 text-sm sm:text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 transition-all shadow-2xs"
+                    className="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-9 py-2.5 text-sm sm:text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-800 transition-all shadow-2xs"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      className="absolute right-2.5 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     >
                       <X className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
@@ -1122,20 +1122,20 @@ export default function App() {
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs sm:text-sm">
                   <button
                     onClick={() => setStatusFilter('all')}
-                    className={`px-3 py-1.5 rounded-full font-semibold shrink-0 transition-all shadow-2xs ${
+                    className={`px-3 py-1.5 rounded-full font-bold shrink-0 transition-all shadow-2xs cursor-pointer ${
                       statusFilter === 'all'
-                        ? 'bg-slate-900 dark:bg-blue-600 text-white border border-slate-900 dark:border-blue-500'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-blue-600 text-white border border-blue-600 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     ทั้งหมด ({items.length})
                   </button>
                   <button
                     onClick={() => setStatusFilter('low')}
-                    className={`px-3 py-1.5 rounded-full font-semibold shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
+                    className={`px-3 py-1.5 rounded-full font-bold shrink-0 flex items-center gap-1 transition-all shadow-2xs cursor-pointer ${
                       statusFilter === 'low'
-                        ? 'bg-amber-500 text-white border border-amber-600 dark:border-amber-400'
-                        : 'bg-amber-50/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/90 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                        ? 'bg-amber-500 text-white border border-amber-600 dark:border-amber-400 shadow-xs'
+                        : 'bg-amber-50/90 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 hover:bg-amber-100 dark:hover:bg-amber-900/60'
                     }`}
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
@@ -1143,10 +1143,10 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => setStatusFilter('out')}
-                    className={`px-3 py-1.5 rounded-full font-semibold shrink-0 flex items-center gap-1 transition-all shadow-2xs ${
+                    className={`px-3 py-1.5 rounded-full font-bold shrink-0 flex items-center gap-1 transition-all shadow-2xs cursor-pointer ${
                       statusFilter === 'out'
-                        ? 'bg-red-600 text-white border border-red-700 dark:border-red-500'
-                        : 'bg-red-50/80 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700/90 hover:bg-red-100 dark:hover:bg-red-900/60'
+                        ? 'bg-red-600 text-white border border-red-700 dark:border-red-500 shadow-xs'
+                        : 'bg-red-50/90 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800/80 hover:bg-red-100 dark:hover:bg-red-900/60'
                     }`}
                   >
                     <XCircle className="w-3.5 h-3.5 text-red-500" />
@@ -1155,13 +1155,13 @@ export default function App() {
                 </div>
 
                 {/* Category Horizontal Filter Pills */}
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1.5 text-xs sm:text-sm">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 text-xs sm:text-sm">
                   <button
                     onClick={() => setSelectedCategory('ทั้งหมด')}
-                    className={`px-2.5 py-1 rounded-lg shrink-0 transition-all shadow-2xs ${
+                    className={`px-3 py-1 rounded-lg shrink-0 transition-all shadow-2xs cursor-pointer ${
                       selectedCategory === 'ทั้งหมด'
-                        ? 'bg-blue-50 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold border border-blue-300 dark:border-blue-600'
-                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-blue-600 text-white font-bold border border-blue-600 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     ทุกหมวด
@@ -1170,10 +1170,10 @@ export default function App() {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg shrink-0 transition-all shadow-2xs ${
+                      className={`px-3 py-1 rounded-lg shrink-0 transition-all shadow-2xs cursor-pointer ${
                         selectedCategory === cat
-                          ? 'bg-blue-50 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold border border-blue-300 dark:border-blue-600'
-                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                          ? 'bg-blue-600 text-white font-bold border border-blue-600 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-750'
                       }`}
                     >
                       {cat}
@@ -1233,10 +1233,10 @@ export default function App() {
           {activeTab === 'history' && (
             <motion.div
               key="history"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, scale: 0.985, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.985, y: -8 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="flex-1 flex flex-col overflow-hidden"
             >
               <RequisitionView
@@ -1257,10 +1257,10 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <motion.div
               key="dashboard"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, scale: 0.985, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.985, y: -8 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="flex-1 overflow-y-auto pb-28 sm:pb-24"
             >
               <StatsDashboard
@@ -1287,10 +1287,10 @@ export default function App() {
           {activeTab === 'categories' && (
             <motion.div
               key="categories"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, scale: 0.985, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.985, y: -8 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="flex-1 overflow-y-auto pb-28 sm:pb-24"
             >
               <CategoryView
@@ -1310,10 +1310,10 @@ export default function App() {
           {activeTab === 'users' && currentUser?.role === 'admin' && (
             <motion.div
               key="users"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, scale: 0.985, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.985, y: -8 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="flex-1 overflow-y-auto pb-28 sm:pb-24"
             >
               <UserManagementView 

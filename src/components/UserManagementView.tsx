@@ -451,13 +451,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 transition-colors">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 sticky top-0 z-10 px-4 pt-safe-header pb-3.5 flex items-center justify-between shadow-2xs transition-colors flex-wrap gap-2">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-10 px-4 pt-safe-header pb-3 flex items-center justify-between shadow-2xs transition-colors flex-wrap gap-2">
         <div>
-          <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             จัดการรายชื่อ & สิทธิ์ผู้ใช้งาน
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             แก้ไข ID, Username, ชื่อจริง, ชื่อเล่น และสิทธิ์ของทุกคน
           </p>
         </div>
@@ -465,11 +465,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           {/* LINE Settings Button */}
           <button
             onClick={() => setShowLineSettings(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-emerald-500"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-emerald-500"
             title="ตั้งค่าการแจ้งเตือนผ่าน LINE"
           >
-            <Bell className="w-4 h-4" />
-            <span>ตั้งค่าแจ้งเตือน LINE</span>
+            <Bell className="w-3.5 h-3.5" />
+            <span>แจ้งเตือน LINE</span>
           </button>
 
           {/* Add User Button */}
@@ -478,49 +478,49 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               setShowAddForm(!showAddForm);
               setError('');
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-blue-500"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer border border-blue-500"
           >
-            {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showAddForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             {showAddForm ? 'ปิดฟอร์ม' : 'เพิ่มผู้ใช้'}
           </button>
         </div>
       </div>
 
-      <div className="p-4 max-w-5xl mx-auto space-y-4">
+      <div className="p-3.5 sm:p-4 max-w-5xl mx-auto space-y-4">
         {/* Success / Error Alerts */}
         {successMsg && (
-          <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3.5 rounded-xl text-sm flex items-center gap-2.5 border border-emerald-300 dark:border-emerald-700 animate-in fade-in duration-200 shadow-2xs">
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3 rounded-xl text-xs sm:text-sm flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 animate-in fade-in duration-200 shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             <span className="font-medium">{successMsg}</span>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 p-3.5 rounded-xl text-sm flex items-start gap-2.5 border border-red-300 dark:border-red-700 animate-in fade-in duration-200 shadow-2xs">
-            <AlertCircle className="w-5 h-5 shrink-0" />
+          <div className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 p-3 rounded-xl text-xs sm:text-sm flex items-start gap-2 border border-red-200 dark:border-red-800 animate-in fade-in duration-200 shadow-2xs">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <span className="font-medium">{error}</span>
           </div>
         )}
 
         {/* Add User Form */}
         {showAddForm && (
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-2xs border border-slate-300 dark:border-slate-800 mb-4 animate-in slide-in-from-top-3 duration-200 transition-colors">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-base">
-                <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" /> เพิ่มผู้ใช้งานใหม่
+          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/90 dark:border-slate-800 mb-4 animate-in slide-in-from-top-3 duration-200 transition-colors">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-sm sm:text-base">
+                <Plus className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" /> เพิ่มผู้ใช้งานใหม่
               </h3>
               <button
                 onClick={() => setShowAddForm(false)}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4.5 h-4.5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddUser} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+            <form onSubmit={handleAddUser} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     รหัสพนักงาน (ID) <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -530,60 +530,60 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       setNewId(e.target.value);
                       if (!newUsername) setNewUsername(e.target.value);
                     }}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors"
                     placeholder="เช่น 1912 หรือ 9999"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     ชื่อผู้ใช้งาน (Username)
                   </label>
                   <input
                     type="text"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors"
                     placeholder="ค่าเริ่มต้นใช้เดียวกับ ID"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     ชื่อ-นามสกุล (ชื่อจริง) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors"
                     placeholder="เช่น สมชาย ใจดี"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     ชื่อเล่น (Nickname)
                   </label>
                   <input
                     type="text"
                     value={newNickname}
                     onChange={(e) => setNewNickname(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors"
                     placeholder="เช่น ชาย"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     สิทธิ์การใช้งาน (Role)
                   </label>
                   <select
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value as 'admin' | 'user')}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium cursor-pointer transition-colors shadow-2xs"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium cursor-pointer transition-colors"
                   >
                     <option value="user">User (ผู้ใช้ทั่วไป)</option>
                     <option value="admin">Admin (ผู้ดูแลระบบ)</option>
@@ -595,16 +595,16 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+                  className="px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
                   disabled={adding}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-5 py-2.5 text-sm transition-all disabled:opacity-70 flex items-center gap-2 shadow-xs cursor-pointer border border-blue-500"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-4 py-2 text-xs sm:text-sm transition-all disabled:opacity-70 flex items-center gap-1.5 shadow-xs cursor-pointer border border-blue-500"
                 >
-                  {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                   บันทึกผู้ใช้ใหม่
                 </button>
               </div>
@@ -613,15 +613,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         )}
 
         {/* Search & Stats Bar */}
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="ค้นหาชื่อ, Username, ID..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3.5 py-2 text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl pl-8.5 pr-3 py-2 text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-colors shadow-2xs"
             />
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 self-end sm:self-auto">
@@ -657,40 +657,40 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
               return (
                 <div 
                   key={user.id} 
-                  className={`bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-2xs border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 ${
+                  className={`bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                     isSelf 
-                      ? 'border-blue-400 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-950/20' 
-                      : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600'
+                      ? 'border-blue-300 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-950/20' 
+                      : 'border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
                   {/* User Details */}
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 font-bold text-sm shadow-xs ${
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-xs shadow-xs ${
                       isAdmin 
                         ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' 
                         : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60'
                     }`}>
-                      {isAdmin ? <ShieldAlert className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                      {isAdmin ? <ShieldAlert className="w-4.5 h-4.5" /> : <User className="w-4.5 h-4.5" />}
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base truncate">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm truncate">
                           {user.name}
                         </h4>
                         {user.nickname && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                             {user.nickname}
                           </span>
                         )}
                         {isSelf && (
-                          <span className="text-[11px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
-                            บัญชีของคุณ
+                          <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
+                            คุณ
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2.5 mt-1 text-xs text-slate-500 dark:text-slate-400 flex-wrap font-mono">
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap font-mono">
                         <span>ID: <strong className="text-slate-700 dark:text-slate-200">{user.id}</strong></span>
                         <span>•</span>
                         <span>User: <strong className="text-slate-700 dark:text-slate-200">{user.username || user.id}</strong></span>
@@ -711,11 +711,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     {/* EDIT BUTTON (Admin can edit ANY user, including himself!) */}
                     <button
                       onClick={() => openEditModal(user)}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-blue-300 dark:border-blue-700 transition-all active:scale-95 cursor-pointer shadow-2xs"
+                      className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-blue-200 dark:border-blue-700 transition-all active:scale-95 cursor-pointer shadow-2xs"
                       title="แก้ไข ชื่อจริง, Username, ID, Role"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
-                      แก้ไขข้อมูล
+                      แก้ไข
                     </button>
 
                     {/* Fast Role Selector for other users */}
@@ -732,7 +732,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             className={`appearance-none outline-none text-xs font-bold px-2.5 py-1.5 pr-7 rounded-xl border cursor-pointer transition-colors shadow-2xs ${
                               isAdmin 
                                 ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' 
-                                : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
                             }`}
                           >
                             <option value="user">User</option>
@@ -761,10 +761,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             }
                           }
                         }}
-                        className="w-8 h-8 flex items-center justify-center text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-xl transition-colors border border-amber-300 dark:border-amber-700 cursor-pointer shadow-2xs"
+                        className="w-8 h-8 flex items-center justify-center text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-xl transition-colors border border-amber-200 dark:border-amber-700 cursor-pointer shadow-2xs"
                         title="ปลดล็อกเซสชั่น (Force Logout)"
                       >
-                        <Unlock className="w-4 h-4" />
+                        <Unlock className="w-3.5 h-3.5" />
                       </button>
                     )}
 
@@ -772,10 +772,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     {!isSelf && user.id !== 'Admininmad' && (
                       <button
                         onClick={() => handleDeleteUser(user.id, user.name)}
-                        className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-xl transition-colors border border-slate-300 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-800 cursor-pointer shadow-2xs"
+                        className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-800 cursor-pointer shadow-2xs"
                         title="ลบผู้ใช้"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
