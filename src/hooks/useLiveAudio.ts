@@ -9,9 +9,10 @@ function pcmToBase64(pcmData: Float32Array): string {
   }
   const bytes = new Uint8Array(pcm16.buffer);
   let binary = '';
-  const chunkSize = 8192;
+  const chunkSize = 4096;
   for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+    const sub = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, sub as unknown as number[]);
   }
   return btoa(binary);
 }
@@ -41,7 +42,7 @@ export function useLiveAudio(
   const currentVolumeRef = useRef<number>(0);
   const inputLevelRef = useRef<number>(0);
 
-  // Volume animation loop to track voice activity and apply smooth audio ducking
+  // Volume animation loop to track voice activity smoothly
   const startVolumeTracker = useCallback(() => {
     const update = () => {
       let targetVol = 0;
@@ -64,24 +65,17 @@ export function useLiveAudio(
         }
       }
 
-      // 2. Check User mic input volume
-      if (inputLevelRef.current > 0.015) {
+      // 2. Check User mic input volume (only when AI is not playing to avoid self-trigger)
+      if (inputLevelRef.current > 0.012 && activeSourcesRef.current.size === 0) {
         targetVol = Math.max(targetVol, Math.min(1, inputLevelRef.current * 4.5));
         userActive = true;
-        // Slowly decay user mic level
-        inputLevelRef.current *= 0.85;
       }
+      // Slowly decay user mic level
+      inputLevelRef.current *= 0.85;
 
-      // 3. Audio Ducking Control: When sound is heard on the mic, gently lower AI output volume so user is heard
+      // Keep output gain stable and loud - no oscillating ducking
       if (outputAudioCtxRef.current && duckingGainRef.current) {
-        const now = outputAudioCtxRef.current.currentTime;
-        if (userActive || inputLevelRef.current > 0.018) {
-          // Duck AI output volume down to 35% softly instead of abruptly cutting off
-          duckingGainRef.current.gain.setTargetAtTime(0.35, now, 0.08);
-        } else {
-          // Smoothly ramp back up to 100% volume
-          duckingGainRef.current.gain.setTargetAtTime(1.0, now, 0.18);
-        }
+        duckingGainRef.current.gain.setTargetAtTime(1.0, outputAudioCtxRef.current.currentTime, 0.05);
       }
 
       // Smooth volume interpolation
@@ -107,12 +101,16 @@ export function useLiveAudio(
         ctx.resume().catch(() => {});
       }
       const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
+      // Ensure even byte length to prevent Int16Array alignment errors
+      const safeLength = binary.length - (binary.length % 2);
+      if (safeLength <= 0) return;
+
+      const bytes = new Uint8Array(safeLength);
+      for (let i = 0; i < safeLength; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
-      const buffer = bytes.buffer;
-      const int16Array = new Int16Array(buffer);
+      
+      const int16Array = new Int16Array(bytes.buffer, 0, safeLength / 2);
       const float32Array = new Float32Array(int16Array.length);
       for (let i = 0; i < int16Array.length; i++) {
         float32Array[i] = int16Array[i] / 32768.0;
@@ -139,7 +137,18 @@ export function useLiveAudio(
 
       activeSourcesRef.current.add(source);
 
-      const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current);
+      // Jitter buffer scheduling for gapless audio
+      const JITTER_BUFFER_SEC = 0.05; // 50ms buffer to absorb network jitter
+      const now = ctx.currentTime;
+      let startTime: number;
+
+      // If playback has underrun or is starting fresh, schedule slightly ahead
+      if (nextStartTimeRef.current <= now || nextStartTimeRef.current < now - 0.1) {
+        startTime = now + JITTER_BUFFER_SEC;
+      } else {
+        startTime = nextStartTimeRef.current;
+      }
+
       source.start(startTime);
       nextStartTimeRef.current = startTime + audioBuffer.duration;
     } catch (e) {
@@ -295,16 +304,17 @@ export function useLiveAudio(
         lowpass.connect(processor);
         processor.connect(inputCtx.destination);
 
-        // Smart Voice Activity & Noise Gate Parameters
+        // Smart Voice Activity & Acoustic Echo Suppression Parameters
         let lastVoiceTime = 0;
-        let clearVoiceCount = 0;
-        const NOISE_FLOOR_THRESHOLD = 0.008; // More sensitive RMS threshold to capture soft Thai speech
-        const CLEAR_COMMAND_THRESHOLD = 0.025; // Distinct clear command threshold for instant interruption
-        const HANGOVER_DURATION_MS = 650; // Keep gate open longer (650ms) to preserve Thai tone endings and trailing consonants
+        let intentionalBargeInCount = 0;
+        const NOISE_FLOOR_THRESHOLD = 0.007; // Sensitive threshold for natural Thai speech
+        const BARGE_IN_THRESHOLD = 0.09; // Distinct loud user voice to interrupt speaking AI
+        const HANGOVER_DURATION_MS = 500; // Natural pause window before silence is sent
 
         processor.onaudioprocess = (e) => {
           if (ws.readyState === WebSocket.OPEN) {
             const rawChannelData = e.inputBuffer.getChannelData(0);
+            const isAiPlaying = activeSourcesRef.current.size > 0;
             
             // Fast mic input volume calculation (RMS)
             let sum = 0;
@@ -313,35 +323,53 @@ export function useLiveAudio(
               sum += rawChannelData[i] * rawChannelData[i];
             }
             const rms = Math.sqrt(sum / (rawChannelData.length / step));
-            
             const now = Date.now();
+
+            if (isAiPlaying) {
+              // AI is speaking: Protect against loudspeaker acoustic feedback.
+              // If user intentionally speaks loud and clear directly into mic, trigger barge-in:
+              if (rms >= BARGE_IN_THRESHOLD) {
+                intentionalBargeInCount++;
+                if (intentionalBargeInCount >= 3) {
+                  // User intentionally interrupted AI
+                  activeSourcesRef.current.forEach(source => {
+                    try { source.stop(); } catch (err) {}
+                  });
+                  activeSourcesRef.current.clear();
+                  if (outputAudioCtxRef.current) {
+                    nextStartTimeRef.current = outputAudioCtxRef.current.currentTime;
+                  }
+                  intentionalBargeInCount = 0;
+                  lastVoiceTime = now;
+                  inputLevelRef.current = rms;
+
+                  const base64 = pcmToBase64(rawChannelData);
+                  ws.send(JSON.stringify({ audio: base64 }));
+                  return;
+                }
+              } else {
+                intentionalBargeInCount = 0;
+              }
+
+              // While AI is playing and user has not intentionally interrupted,
+              // send silence so Gemini Live does NOT falsely detect its own speaker echo
+              const silence = new Float32Array(rawChannelData.length);
+              const base64 = pcmToBase64(silence);
+              ws.send(JSON.stringify({ audio: base64 }));
+              return;
+            }
+
+            // Normal state: AI is not speaking, listening to user
+            intentionalBargeInCount = 0;
             const isSpeaking = rms >= NOISE_FLOOR_THRESHOLD;
             if (isSpeaking) {
               lastVoiceTime = now;
               inputLevelRef.current = Math.max(inputLevelRef.current, rms);
             }
 
-            // Detect clear, intentional spoken command (not soft noise)
-            if (rms >= CLEAR_COMMAND_THRESHOLD) {
-              clearVoiceCount++;
-              // If user is clearly speaking a new command while AI is still talking, stop old speech immediately
-              if (clearVoiceCount >= 2 && activeSourcesRef.current.size > 0) {
-                activeSourcesRef.current.forEach(source => {
-                  try { source.stop(); } catch (err) {}
-                });
-                activeSourcesRef.current.clear();
-                if (outputAudioCtxRef.current) {
-                  nextStartTimeRef.current = outputAudioCtxRef.current.currentTime;
-                }
-              }
-            } else {
-              clearVoiceCount = 0;
-            }
-
             const isGateOpen = isSpeaking || (now - lastVoiceTime < HANGOVER_DURATION_MS);
             
-            // If background room noise is below threshold and user isn't actively speaking,
-            // send silence buffer so Gemini's VAD can promptly detect end of turn and reply
+            // If user stopped speaking, send silence so Gemini's VAD can detect end of turn promptly
             let outputBuffer = rawChannelData;
             if (!isGateOpen) {
               outputBuffer = new Float32Array(rawChannelData.length);
@@ -369,15 +397,19 @@ export function useLiveAudio(
           }
           if (msg.turnComplete && onTranscript) {
             onTranscript('', true);
+            // Allow next turn to cleanly establish jitter buffer
+            if (outputAudioCtxRef.current && activeSourcesRef.current.size === 0) {
+              nextStartTimeRef.current = 0;
+            }
           }
           if (msg.interrupted) {
-            // When Gemini detects the user interrupted with a new command, immediately clear all playing chunks
+            // When Gemini detects interruption, clear all playing chunks immediately
             activeSourcesRef.current.forEach(source => {
               try { source.stop(); } catch (e) {}
             });
             activeSourcesRef.current.clear();
             if (outputAudioCtxRef.current) {
-              nextStartTimeRef.current = outputAudioCtxRef.current.currentTime;
+              nextStartTimeRef.current = 0;
               if (duckingGainRef.current) {
                 duckingGainRef.current.gain.setValueAtTime(1.0, outputAudioCtxRef.current.currentTime);
               }

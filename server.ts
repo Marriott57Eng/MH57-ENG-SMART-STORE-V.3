@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality, Type, ThinkingLevel } from "@google/genai";
 import fs from "fs";
 import { WebSocketServer } from "ws";
 import http from "http";
@@ -622,14 +622,16 @@ async function startServer() {
       } else {
           // Pass more items to AI to let it find the right item. Since Gemini context window is huge, we can afford passing ~100 items.
           const filtered = items.filter(item => {
-              const itemNameLower = item.name.toLowerCase();
-              const nameInPrompt = pLower.includes(itemNameLower) || cleanPrompt.includes(itemNameLower);
-              const idInPrompt = pLower.includes(item.id.toLowerCase());
-              const catInPrompt = pLower.includes(item.category.toLowerCase());
+              const itemNameLower = (item.name || '').toLowerCase();
+              const itemIdLower = (item.id || '').toLowerCase();
+              const itemCatLower = (item.category || '').toLowerCase();
+              const nameInPrompt = itemNameLower && (pLower.includes(itemNameLower) || cleanPrompt.includes(itemNameLower));
+              const idInPrompt = itemIdLower && pLower.includes(itemIdLower);
+              const catInPrompt = itemCatLower && pLower.includes(itemCatLower);
               const termInItem = searchTerms.some((term: string) => 
-                  itemNameLower.includes(term) || 
-                  item.id.toLowerCase().includes(term) ||
-                  item.category.toLowerCase().includes(term)
+                  (itemNameLower && itemNameLower.includes(term)) || 
+                  (itemIdLower && itemIdLower.includes(term)) ||
+                  (itemCatLower && itemCatLower.includes(term))
               );
               return nameInPrompt || idInPrompt || catInPrompt || termInItem;
           });
@@ -799,22 +801,42 @@ ${!isAdminUser ? `
       let rawResponseText = "";
       
       let hasSentChunks = false;
-      const tryGenerate = async (modelName) => {
-        const stream = await getAI().models.generateContentStream({
-          model: modelName,
-          contents,
-          config: { systemInstruction, temperature: 0.2 },
-        });
-        
-        let localRawText = "";
-        for await (const chunk of stream) {
-          if (chunk.text) {
-            hasSentChunks = true;
-            localRawText += chunk.text;
-            res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk.text })}\n\n`);
-          }
+      const tryGenerate = async (modelName: string) => {
+        const config: any = { systemInstruction, temperature: 0.2 };
+        // Disable reasoning latency for Flash Lite models to achieve instant sub-second TTFT (~300-400ms)
+        if (modelName.includes('3.5-flash-lite') || modelName.includes('3.1-flash-lite')) {
+          config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
         }
-        return localRawText;
+
+        const abortController = new AbortController();
+        // If a model stalls or hangs on Google's API side for >5 seconds without sending a chunk, failover immediately
+        const ttftTimeout = setTimeout(() => {
+          if (!hasSentChunks) {
+            abortController.abort(new Error(`Timeout waiting for TTFT on ${modelName}`));
+          }
+        }, 5000);
+
+        try {
+          config.abortSignal = abortController.signal;
+          const stream = await getAI().models.generateContentStream({
+            model: modelName,
+            contents,
+            config,
+          });
+          
+          let localRawText = "";
+          for await (const chunk of stream) {
+            clearTimeout(ttftTimeout);
+            if (chunk.text) {
+              hasSentChunks = true;
+              localRawText += chunk.text;
+              res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk.text })}\n\n`);
+            }
+          }
+          return localRawText;
+        } finally {
+          clearTimeout(ttftTimeout);
+        }
       };
 
       const generateWithFallback = async (models: string[]) => {
@@ -828,10 +850,11 @@ ${!isAdminUser ? `
             const is503 = err.status === 503 || err.status === 'UNAVAILABLE' || (err.message && err.message.includes('503')) || err.code === 503;
             const is429 = err.status === 429 || err.status === 'RESOURCE_EXHAUSTED' || (err.message && err.message.includes('429')) || err.code === 429;
             const is404 = err.status === 404 || err.status === 'NOT_FOUND' || (err.message && err.message.includes('404')) || err.code === 404;
+            const isTimeout = err.name === 'AbortError' || (err.message && err.message.includes('Timeout'));
             
-            if ((is503 || is429 || is404) && !hasSentChunks) {
+            if ((is503 || is429 || is404 || isTimeout) && !hasSentChunks) {
               if (i < models.length - 1) {
-                 const delayMs = 500 + Math.random() * 500;
+                 const delayMs = isTimeout ? 50 : 200 + Math.random() * 200;
                  await new Promise(r => setTimeout(r, delayMs));
                  continue; // try next model
               } else {
@@ -851,14 +874,13 @@ ${!isAdminUser ? `
       };
 
       try {
-        // Primary model: Flash Lite (3.5 Flash Lite / 3.1 Flash Lite) for maximum speed and lowest latency
+        // Primary model: Gemini 3.5 Flash Lite with ThinkingLevel.MINIMAL for fast streaming, followed by fallbacks
         const fallbackModels = [
            'gemini-3.5-flash-lite',
            'gemini-3.1-flash-lite',
            'gemini-flash-lite-latest',
-           'gemini-3.1-flash-live-preview',
            'gemini-flash-latest',
-           'gemini-3.7-flash'
+           'gemini-3.8-flash'
         ];
         rawResponseText = await generateWithFallback(fallbackModels);
       } catch (err: any) {
@@ -880,7 +902,8 @@ ${!isAdminUser ? `
           } else {
             let targetItem = items.find(i => i.id === parsedAction.itemId);
             if (!targetItem && parsedAction.itemName) {
-              targetItem = items.find(i => i.name.toLowerCase().includes(parsedAction.itemName.toLowerCase()));
+              const searchName = String(parsedAction.itemName).toLowerCase();
+              targetItem = items.find(i => (i.name || '').toLowerCase().includes(searchName));
             }
 
             if (!targetItem) {
@@ -1046,12 +1069,13 @@ ${!isAdminUser ? `
            exactMatches = items.filter(item => parsedSearchAction.itemIds.includes(item.id));
         } else {
            exactMatches = items.filter(item => {
-          const idInPrompt = prompt.includes(item.id);
-          const idInResponse = rawResponseText.includes(item.id);
-          const nameInPrompt = promptLower.includes(item.name.toLowerCase());
-          const nameInResponse = item.name.length >= 3 && responseLower.includes(item.name.toLowerCase());
-          return idInPrompt || idInResponse || nameInPrompt || nameInResponse;
-        });
+             const iNameLower = (item.name || '').toLowerCase();
+             const idInPrompt = item.id ? prompt.includes(item.id) : false;
+             const idInResponse = item.id ? rawResponseText.includes(item.id) : false;
+             const nameInPrompt = iNameLower ? promptLower.includes(iNameLower) : false;
+             const nameInResponse = (iNameLower.length >= 3) ? responseLower.includes(iNameLower) : false;
+             return idInPrompt || idInResponse || nameInPrompt || nameInResponse;
+           });
         }
 
         if (exactMatches.length > 0) {
@@ -1079,10 +1103,11 @@ ${!isAdminUser ? `
       res.end();
       
     } catch (error: any) {
+      console.error("SERVER /api/chat ERROR:", error);
       if (error.message === 'QUOTA_EXCEEDED') {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'QUOTA_EXCEEDED' })}\n\n`);
       } else {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'API_ERROR' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'API_ERROR', detail: error?.message || String(error) })}\n\n`);
       }
       res.end();
     }
@@ -1144,30 +1169,29 @@ ${!isAdminUser ? `
           : "ผู้ใช้ท่านนี้ไม่มีสิทธิ์แก้ไขสต็อก(update_stock) หรือแก้ไขชื่อสินค้า หากผู้ใช้สั่งแก้ไขให้ตอบปฏิเสธอย่างสุภาพ อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) เท่านั้น";
 
         const now = new Date();
-        const inventoryCatalog = sessionActiveItems.map(i => {
+
+        // Optimized compact catalog to prevent Live API token bloat and latency
+        const sampleItems = sessionActiveItems.length <= 35
+          ? sessionActiveItems
+          : [
+              ...outOfStockItems.slice(0, 10),
+              ...lowStockItems.slice(0, 10),
+              ...sessionActiveItems.filter(i => (Number(i.qty) || 0) > (Number(i.minStock) || 1)).slice(0, 15)
+            ];
+
+        const inventoryCatalog = sampleItems.map(i => {
           const qty = Number(i.qty) || 0;
           const min = Number(i.minStock) || 1;
-          let outOfStockInfo = "";
-          if (qty <= 0) {
-            const itemReqs = clientRequisitions.filter((r: any) => r.itemId === i.id && (r.type === "out" || !r.type));
-            itemReqs.sort((a: any, b: any) => new Date(b.isoDate || b.timestamp).getTime() - new Date(a.isoDate || a.timestamp).getTime());
-            const lastReq = itemReqs[0];
-            if (lastReq) {
-              const lastReqDate = new Date(lastReq.isoDate || lastReq.timestamp);
-              const daysOut = Math.floor((now.getTime() - lastReqDate.getTime()) / (1000 * 60 * 60 * 24));
-              outOfStockInfo = ` [หมดสต็อกมาตั้งแต่วันที่ ${lastReq.timestamp} (เมื่อ ${daysOut} วันที่แล้ว)]`;
-            }
-          }
           const status = qty <= 0 ? "หมดสต็อก (0)" : qty <= min ? `ใกล้หมด (${qty})` : `ปกติ (${qty})`;
-          return `- ${i.name} (รหัส ${i.id}) | คงเหลือ: ${qty} ${i.unit} (ขั้นต่ำ ${min}) | สถานะ: ${status}${outOfStockInfo} | หมวด: ${i.category} | ที่เก็บ: ${i.location}`;
+          return `- ${i.name} (รหัส ${i.id}) | คงเหลือ: ${qty} ${i.unit} (ขั้นต่ำ ${min}) | สถานะ: ${status} | ที่เก็บ: ${i.location}`;
         }).join("\n");
-        const recentReqs = clientRequisitions.slice(0, 30).map((r: any) => ({
+
+        const recentReqs = clientRequisitions.slice(0, 5).map((r: any) => ({
           type: r.type === "in" ? "รับเข้า" : "เบิกออก",
           item: r.itemName,
           qty: `${r.qty} ${r.unit}`,
           user: r.requestedBy,
-          date: r.timestamp,
-          purpose: r.purpose
+          date: r.timestamp
         }));
 
         const currentYear = now.getFullYear();
@@ -1235,8 +1259,9 @@ ${adminInstruction}
 - มีรายการสินค้าทั้งหมด: ${sessionActiveItems.length} รายการ (รวม ${totalUnits} หน่วย)
 - สินค้าหมดสต็อก: ${outOfStockItems.length} รายการ
 - สินค้าใกล้หมด: ${lowStockItems.length} รายการ
+(หมายเหตุ: สามารถตรวจสอบสินค้าทุกรายการในคลังได้ทันทีโดยเรียก \`check_stock\` หรือ \`inquire_item_info\`)
 
-📦 รายการสต็อกสินค้าคงคลังปัจจุบัน:
+📦 ตัวอย่างรายการสินค้าในคลัง (Out of Stock / Low Stock / Active):
 ${inventoryCatalog}
  
 📝 ประวัติการเบิก-รับเข้าล่าสุด: 
@@ -1253,6 +1278,17 @@ ${JSON.stringify(recentReqs)}
 8. **เมื่อยืนยันทำรายการ**: ตอบสั้นๆ "บันทึกการเบิก/รับเข้า...เรียบร้อยแล้วค่ะ คุณ${callingName}"`,
           tools: [{
             functionDeclarations: [
+              {
+                name: "search_live_web_agent",
+                description: "ค้นหาข้อมูลสดจากอินเทอร์เน็ต เช่น ผลกีฬา ฟุตบอล โปรแกรมการแข่งขัน ข่าวด่วน ราคาน้ำมัน ราคาทอง สภาพอากาศ หรือข้อมูลทั่วไปภายนอก",
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {
+                    query: { type: Type.STRING, description: "คำค้นหา เช่น 'ผลบอลอาร์เซนอลล่าสุด', 'ราคาน้ำมันวันนี้'" }
+                  },
+                  required: ["query"]
+                }
+              },
               {
                 name: "get_stock_extremes",
                 description: "ค้นหาสินค้าที่มีจำนวนมากที่สุดและน้อยที่สุดในคลัง",
@@ -1489,6 +1525,20 @@ ${JSON.stringify(recentReqs)}
                     }
                     
                     toolResult = resultText;
+                  } else if (fc.name === "search_live_web_agent") {
+                    const query = (fc.args?.query as string || "").trim();
+                    try {
+                      const searchRes = await getAI().models.generateContent({
+                        model: "gemini-3.5-flash-lite",
+                        contents: `ค้นหาข้อมูลสดออนไลน์และสรุปคำตอบให้ผู้ใช้: "${query}"\nตอบเป็นภาษาไทย สั้นกระชับ 1-2 ประโยค เพื่อให้ AI ตอบเป็นเสียงสดได้อย่างลื่นไหลและทันที`,
+                        config: {
+                          tools: [{ googleSearch: {} }]
+                        }
+                      });
+                      toolResult = searchRes.text || `ค้นหาข้อมูลเกี่ยวกับ ${query} เรียบร้อยแล้วค่ะ`;
+                    } catch (err: any) {
+                      toolResult = `ได้ค้นหาข้อมูลเกี่ยวกับ ${query} แล้ว แต่ขณะนี้ระบบค้นหาภายนอกตอบสนองล่าช้าเล็กน้อยค่ะ`;
+                    }
                   }
 
                   const liveTarget = activeLiveSession;
@@ -1557,14 +1607,19 @@ ${JSON.stringify(recentReqs)}
     const defaultUserRole = url.searchParams.get('userRole') || 'user';
     const defaultUserNickname = url.searchParams.get('userNickname') || '';
 
-    // Immediate session initialization on connection
-    setupLiveSession(defaultUserName, defaultUserRole, cachedItems, [], defaultUserNickname);
+    // Wait up to 250ms for client's 'init' message with full client state, or fallback to query params
+    const initTimer = setTimeout(() => {
+      if (!isInitialized) {
+        setupLiveSession(defaultUserName, defaultUserRole, cachedItems, [], defaultUserNickname);
+      }
+    }, 250);
 
     clientWs.on("message", async (data) => {
       try {
         const parsed = JSON.parse(data.toString());
 
         if (parsed.type === "init") {
+          clearTimeout(initTimer);
           if (Array.isArray(parsed.items) && parsed.items.length > 0) {
             sessionActiveItems = parsed.items;
           }
@@ -1572,7 +1627,7 @@ ${JSON.stringify(recentReqs)}
             setupLiveSession(
               parsed.userName || defaultUserName,
               parsed.userRole || defaultUserRole,
-              parsed.items || [],
+              parsed.items?.length ? parsed.items : cachedItems,
               parsed.requisitions || [],
               parsed.userNickname || defaultUserNickname
             );
