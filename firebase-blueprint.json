@@ -39,6 +39,35 @@
         "note": { "type": "string" }
       },
       "required": ["id", "itemId", "itemName", "qty", "unit", "requestedBy", "isoDate"]
+    },
+    "User": {
+      "title": "User Account",
+      "description": "User profile and authentication data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "nickname": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "name", "role"]
+    },
+    "LineConfig": {
+      "title": "LINE Notification Configuration",
+      "description": "Configuration settings for LINE Messaging API",
+      "type": "object",
+      "properties": {
+        "channelAccessToken": { "type": "string" },
+        "channelSecret": { "type": "string" },
+        "destinationId": { "type": "string" },
+        "notifyStockOut": { "type": "boolean" },
+        "notifyStockIn": { "type": "boolean" },
+        "notifyLowStock": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -49,6 +78,14 @@
     "/requisitions/{requisitionId}": {
       "schema": "RequisitionRecord",
       "description": "Transaction logs for stock requisition and receiving"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "System user profiles"
+    },
+    "/app_settings/{settingId}": {
+      "schema": "LineConfig",
+      "description": "Application settings including LINE notification configuration"
     }
   }
 }

@@ -597,6 +597,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     setIsProcessing(true);
     
     const aiMessageId = (Date.now() + 1).toString();
+    let textBuffer = '';
 
     try {
       const res = await fetch('/api/chat', {
@@ -618,7 +619,6 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       
       const decoder = new TextDecoder();
       let done = false;
-      let textBuffer = '';
       let jsonBuffer = '';
       
       const aiMessage: ChatMessage = {
@@ -700,6 +700,11 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           }
       }
     } catch (err: any) {
+      // If the model already sent response text to the user, preserve it rather than replacing with an error message
+      if (textBuffer && textBuffer.trim().length > 0) {
+        console.warn('Stream finished with notice, preserved generated content:', err);
+        return;
+      }
       let errorText = 'ขออภัยครับ เกิดข้อผิดพลาดในการดึงข้อมูลจาก AI กรุณาลองใหม่อีกครั้ง';
       if (err.message === 'QUOTA_EXCEEDED') {
          errorText = 'ขณะนี้มีผู้ใช้งาน AI จำนวนมากจนเกินโควต้าที่กำหนดไว้ กรุณารอสักครู่ (ประมาณ 1 นาที) แล้วลองส่งคำสั่งใหม่อีกครั้งครับ';
@@ -727,6 +732,11 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   // Handle user confirming a DB action (Stock in / Stock out / update)
   const handleConfirmDbAction = useCallback(async (messageId: string, action: DbActionPayload) => {
     if (!action) return;
+
+    if ((action.action === 'update_stock' || (action.action as any) === 'edit_item') && currentUser?.role !== 'admin') {
+      alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขสต็อกหรือชื่ออะไหล่ได้');
+      return;
+    }
 
     if (action.action === 'requisition' || action.action === 'stock_in') {
       const isAllowed = await verifyLocation();
@@ -767,7 +777,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         : 'ยืนยันเรียบร้อยแล้วค่ะ';
       playSuccessSoundAndSpeak(textToSpeak);
     }
-  }, [onExecuteDbAction, setChatHistory, isLiveConnected, sendMessage, verifyLocation]);
+  }, [onExecuteDbAction, setChatHistory, isLiveConnected, sendMessage, verifyLocation, currentUser]);
 
   // Handle user cancelling a DB action
   const handleCancelDbAction = useCallback((messageId: string) => {

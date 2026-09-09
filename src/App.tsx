@@ -707,7 +707,7 @@ export default function App() {
       return;
     }
 
-    if (action.action === 'update_stock' && currentUser?.role !== 'admin') {
+    if ((action.action === 'update_stock' || (action.action as any) === 'edit_item') && currentUser?.role !== 'admin') {
       addToast({ type: 'error', title: 'ไม่มีสิทธิ์ดำเนินการ', message: 'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขสต็อกหรือชื่ออะไหล่ได้' });
       return;
     }

@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, LiveServerMessage, Modality, Type, ThinkingLevel } from "@google/genai";
 import fs from "fs";
 import { WebSocketServer } from "ws";
@@ -237,9 +236,18 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
 
-  // Health check endpoint for Cloud Run container monitoring & rollout probes
+  // Health check endpoints for Cloud Run container monitoring, startup, & rollout probes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", time: new Date().toISOString() });
+    res.status(200).json({ status: "ok", time: new Date().toISOString() });
+  });
+  app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok", time: new Date().toISOString() });
+  });
+  app.get("/healthz", (req, res) => {
+    res.status(200).send("OK");
+  });
+  app.get("/_health", (req, res) => {
+    res.status(200).send("OK");
   });
 
   // API: Get Inventory Data
@@ -592,6 +600,22 @@ async function startServer() {
   // API: AI Warehouse & Voice Assistant with DB Action execution
   
   app.post("/api/chat", async (req, res) => {
+    let isClientAborted = false;
+    const clientAbortController = new AbortController();
+
+    const handleClientClose = () => {
+      isClientAborted = true;
+      try {
+        if (!clientAbortController.signal.aborted) {
+          clientAbortController.abort(new Error("Client closed connection"));
+        }
+      } catch (e) {}
+    };
+
+    req.on("close", handleClientClose);
+    req.on("aborted", handleClientClose);
+    res.on("close", handleClientClose);
+
     try {
       const { prompt, history, isVoice, items: clientItems, requisitions: clientRequisitions, currentUser } = req.body;
       
@@ -599,6 +623,7 @@ async function startServer() {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
 
       let items: Item[] = Array.isArray(clientItems) && clientItems.length > 0
         ? clientItems
@@ -638,9 +663,9 @@ async function startServer() {
           
           // If we find direct matches, prioritize them, but also include a chunk of other items so AI doesn't miss out due to slight misspellings
           if (filtered.length > 0) {
-              matchedItems = [...new Set([...filtered, ...items])].slice(0, 500);
+              matchedItems = [...new Set([...filtered, ...items])].slice(0, 80);
           } else {
-              matchedItems = items.slice(0, 500); // fallback to first 100 items
+              matchedItems = items.slice(0, 60); // compact catalog for fast prompt processing
           }
       }
 
@@ -792,32 +817,73 @@ ${!isAdminUser ? `
 ประวัติการเบิก-รับเข้าล่าสุด (สำหรับการอ้างอิงเมื่อผู้ใช้ถามประวัติ): ${JSON.stringify(recentReqs)}\``
       const contents: any[] = [];
       if (Array.isArray(history) && history.length > 0) {
-        for (const h of history.slice(-4)) {
-          contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
+        for (const h of history.slice(-6)) {
+          const rawText = (h.text || h.content || '').trim();
+          // Filter out empty messages or previous error notification text
+          if (!rawText || rawText.includes('เกิดข้อผิดพลาดในการดึงข้อมูลจาก AI') || rawText.includes('QUOTA_EXCEEDED')) {
+            continue;
+          }
+          const role = h.role === 'user' ? 'user' : 'model';
+          // Ensure turns alternate properly
+          if (contents.length > 0 && contents[contents.length - 1].role === role) {
+            contents[contents.length - 1].parts[0].text += `\n${rawText}`;
+          } else {
+            contents.push({ role, parts: [{ text: rawText }] });
+          }
         }
       }
-      contents.push({ role: 'user', parts: [{ text: prompt }] });
+
+      // Gemini multi-turn API requires the first turn in contents to have role 'user'
+      while (contents.length > 0 && contents[0].role === 'model') {
+        contents.shift();
+      }
+
+      const safePrompt = (prompt || '').trim() || 'สวัสดีครับ';
+      if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+        contents[contents.length - 1].parts[0].text += `\n${safePrompt}`;
+      } else {
+        contents.push({ role: 'user', parts: [{ text: safePrompt }] });
+      }
 
       let rawResponseText = "";
       
       let hasSentChunks = false;
+
       const tryGenerate = async (modelName: string) => {
+        if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) {
+          return "";
+        }
+
         const config: any = { systemInstruction, temperature: 0.2 };
         // Disable reasoning latency for Flash Lite models to achieve instant sub-second TTFT (~300-400ms)
         if (modelName.includes('3.5-flash-lite') || modelName.includes('3.1-flash-lite')) {
           config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
         }
 
-        const abortController = new AbortController();
-        // If a model stalls or hangs on Google's API side for >5 seconds without sending a chunk, failover immediately
+        const modelAbortController = new AbortController();
+        let isTimedOut = false;
+
+        const onClientAbort = () => {
+          try {
+            modelAbortController.abort(new Error("Client canceled"));
+          } catch (e) {}
+        };
+
+        if (clientAbortController.signal.aborted || isClientAborted) {
+          return "";
+        }
+        clientAbortController.signal.addEventListener("abort", onClientAbort, { once: true });
+
+        // Generous TTFT timeout (25s) to avoid premature aborts under temporary load/congestion
         const ttftTimeout = setTimeout(() => {
           if (!hasSentChunks) {
-            abortController.abort(new Error(`Timeout waiting for TTFT on ${modelName}`));
+            isTimedOut = true;
+            modelAbortController.abort(new Error(`Timeout waiting for TTFT on ${modelName}`));
           }
-        }, 5000);
+        }, 25000);
 
         try {
-          config.abortSignal = abortController.signal;
+          config.abortSignal = modelAbortController.signal;
           const stream = await getAI().models.generateContentStream({
             model: modelName,
             contents,
@@ -827,64 +893,106 @@ ${!isAdminUser ? `
           let localRawText = "";
           for await (const chunk of stream) {
             clearTimeout(ttftTimeout);
+            if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) break;
             if (chunk.text) {
               hasSentChunks = true;
               localRawText += chunk.text;
-              res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk.text })}\n\n`);
+              if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk.text })}\n\n`);
+              }
             }
           }
           return localRawText;
+        } catch (err: any) {
+          if (isTimedOut) {
+            const timeoutErr = new Error(`Timeout waiting for TTFT on ${modelName}`);
+            (timeoutErr as any).isTimeout = true;
+            throw timeoutErr;
+          }
+          throw err;
         } finally {
           clearTimeout(ttftTimeout);
+          clientAbortController.signal.removeEventListener("abort", onClientAbort);
         }
       };
 
       const generateWithFallback = async (models: string[]) => {
         let lastErr = null;
         for (let i = 0; i < models.length; i++) {
+          if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) {
+            return "";
+          }
+
           const currentModel = models[i];
           try {
             return await tryGenerate(currentModel);
           } catch (err: any) {
             lastErr = err;
-            const is503 = err.status === 503 || err.status === 'UNAVAILABLE' || (err.message && err.message.includes('503')) || err.code === 503;
-            const is429 = err.status === 429 || err.status === 'RESOURCE_EXHAUSTED' || (err.message && err.message.includes('429')) || err.code === 429;
-            const is404 = err.status === 404 || err.status === 'NOT_FOUND' || (err.message && err.message.includes('404')) || err.code === 404;
-            const isTimeout = err.name === 'AbortError' || (err.message && err.message.includes('Timeout'));
-            
-            if ((is503 || is429 || is404 || isTimeout) && !hasSentChunks) {
-              if (i < models.length - 1) {
-                 const delayMs = isTimeout ? 50 : 200 + Math.random() * 200;
-                 await new Promise(r => setTimeout(r, delayMs));
-                 continue; // try next model
-              } else {
-                 if (is429) {
-                     const quotaError = new Error("QUOTA_EXCEEDED");
-                     (quotaError as any).status = 429;
-                     throw quotaError;
-                 }
-                 throw err;
-              }
+
+            // If client canceled/disconnected or connection closed, exit immediately without error log or model retries
+            const isClientCancel = isClientAborted || 
+                                   clientAbortController.signal.aborted || 
+                                   req.destroyed || 
+                                   res.destroyed || 
+                                   res.writableEnded || 
+                                   (!err?.isTimeout && (
+                                     err?.name === 'AbortError' || 
+                                     (err?.message && (err.message.includes('aborted') || err.message.includes('canceled')))
+                                   ));
+
+            if (isClientCancel) {
+              return "";
+            }
+
+            if (err?.isTimeout) {
+              console.warn(`[API CHAT] Model ${currentModel} reached TTFT timeout, switching to next model...`);
             } else {
+              console.warn(`[API CHAT] Model ${currentModel} error (attempt ${i + 1}/${models.length}):`, err?.message || err);
+            }
+            
+            // If chunks have already started streaming to the client, we cannot cleanly switch models mid-stream
+            if (hasSentChunks) {
+              throw err;
+            }
+
+            // If there are more fallback models available, try the next model immediately
+            if (i < models.length - 1) {
+              await new Promise(r => setTimeout(r, 100));
+              continue;
+            } else {
+              // All models exhausted
+              const is429 = err.status === 429 || err.status === 'RESOURCE_EXHAUSTED' || (err.message && err.message.includes('429')) || err.code === 429;
+              if (is429) {
+                const quotaError = new Error("QUOTA_EXCEEDED");
+                (quotaError as any).status = 429;
+                throw quotaError;
+              }
               throw err;
             }
           }
         }
-        throw lastErr;
+        if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) return "";
+        throw lastErr || new Error("Failed to generate response");
       };
 
       try {
-        // Primary model: Gemini 3.5 Flash Lite with ThinkingLevel.MINIMAL for fast streaming, followed by fallbacks
+        // Primary model: Gemini 3.5 Flash Lite with ThinkingLevel.MINIMAL for ultra-fast streaming (~500ms), followed by resilient fallbacks
         const fallbackModels = [
            'gemini-3.5-flash-lite',
            'gemini-3.1-flash-lite',
            'gemini-flash-lite-latest',
-           'gemini-flash-latest',
            'gemini-3.8-flash'
         ];
         rawResponseText = await generateWithFallback(fallbackModels);
       } catch (err: any) {
+        if (isClientAborted || res.destroyed || res.writableEnded) {
+          return;
+        }
         throw err;
+      }
+
+      if (isClientAborted || res.destroyed || res.writableEnded) {
+        return;
       }
 
       // Parse JSON action
@@ -1103,6 +1211,9 @@ ${!isAdminUser ? `
       res.end();
       
     } catch (error: any) {
+      if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded || error?.name === 'AbortError' || (error?.message && (error.message.includes('aborted') || error.message.includes('canceled')))) {
+        return;
+      }
       console.error("SERVER /api/chat ERROR:", error);
       if (error.message === 'QUOTA_EXCEEDED') {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'QUOTA_EXCEEDED' })}\n\n`);
@@ -1113,18 +1224,35 @@ ${!isAdminUser ? `
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Robust production vs development mode detection
+  const isRunningFromBundle = typeof __filename !== "undefined" && (__filename.endsWith(".cjs") || __filename.includes("dist"));
+  const isProduction = process.env.NODE_ENV === "production" || isRunningFromBundle || (fs.existsSync(path.join(process.cwd(), "dist", "index.html")) && process.env.NODE_ENV !== "development");
+
+  if (!isProduction) {
+    // Dynamic import to avoid loading Vite into production bundle memory
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // Serve production static build
+    const distPath = fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
+      ? path.join(process.cwd(), "dist")
+      : (typeof __dirname !== "undefined" && fs.existsSync(path.join(__dirname, "index.html"))
+        ? __dirname
+        : path.join(process.cwd(), "dist"));
+
+    console.log(`[Production] Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(200).send("<!DOCTYPE html><html><head><title>ENG SMART STORE</title></head><body><h1>ENG SMART STORE App Ready</h1></body></html>");
+      }
     });
   }
 
@@ -1680,24 +1808,38 @@ ${JSON.stringify(recentReqs)}
     console.warn("Initial inventory warm-up notice:", err?.message || err);
   });
 
+  server.on("error", (err: any) => {
+    console.error("HTTP Server error:", err?.message || err);
+  });
+
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`ENG SMART STORE Server running on http://0.0.0.0:${PORT}`);
+    console.log(`ENG SMART STORE Server running on http://0.0.0.0:${PORT} (Mode: ${isProduction ? 'Production' : 'Development'})`);
   });
 
-  // Graceful shutdown on Cloud Run revision shifts
-  process.on("SIGTERM", () => {
-    console.log("SIGTERM received, closing server...");
-    server.close(() => {
-      process.exit(0);
-    });
-  });
+  // Graceful shutdown on Cloud Run revision shifts & container rollout
+  const handleShutdown = (signal: string) => {
+    console.log(`${signal} received, closing server connections cleanly...`);
+    try {
+      wss.clients.forEach((client) => {
+        try { client.terminate(); } catch (e) {}
+      });
+    } catch (e) {}
 
-  process.on("SIGINT", () => {
-    console.log("SIGINT received, closing server...");
+    const forceExitTimer = setTimeout(() => {
+      console.log("Forced exit after shutdown timeout");
+      process.exit(0);
+    }, 2000);
+    forceExitTimer.unref();
+
     server.close(() => {
+      clearTimeout(forceExitTimer);
+      console.log("Server closed cleanly");
       process.exit(0);
     });
-  });
+  };
+
+  process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+  process.on("SIGINT", () => handleShutdown("SIGINT"));
 }
 
 // Global safety catchers to prevent container crash on transient network errors
