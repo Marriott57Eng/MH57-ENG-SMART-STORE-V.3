@@ -449,9 +449,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 transition-colors">
+    <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 pb-28 sm:pb-24 landscape:pb-8 transition-colors">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-10 px-4 pt-safe-header pb-3 flex items-center justify-between shadow-2xs transition-colors flex-wrap gap-2">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-10 px-4 sm:px-6 py-2.5 shadow-2xs transition-colors">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -484,9 +485,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             {showAddForm ? 'ปิดฟอร์ม' : 'เพิ่มผู้ใช้'}
           </button>
         </div>
+        </div>
       </div>
 
-      <div className="p-3.5 sm:p-4 max-w-5xl mx-auto space-y-4">
+      <div className="p-3.5 sm:p-5 md:p-6 max-w-7xl mx-auto w-full space-y-4">
         {/* Success / Error Alerts */}
         {successMsg && (
           <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3 rounded-xl text-xs sm:text-sm flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 animate-in fade-in duration-200 shadow-2xs">
@@ -649,7 +651,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             <p className="text-slate-600 dark:text-slate-400 font-medium">ไม่พบผู้ใช้งานที่ตรงกับคำค้นหา</p>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {filteredUsers.map((user) => {
               const isSelf = user.id === currentUser.id;
               const isAdmin = user.role === 'admin';

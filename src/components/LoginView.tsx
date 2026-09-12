@@ -231,36 +231,36 @@ const generateSafeUUID = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 dark:bg-slate-950 flex justify-center selection:bg-blue-500 selection:text-white transition-colors">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 min-h-screen sm:min-h-[auto] sm:rounded-3xl sm:my-10 sm:h-fit shadow-2xl flex flex-col p-8 pt-safe-content justify-center relative overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 transition-colors">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-900 dark:bg-slate-950 flex items-center justify-center p-3 sm:p-6 pl-safe pr-safe selection:bg-blue-500 selection:text-white transition-colors overflow-y-auto">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 my-auto rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col p-5 sm:p-8 pt-safe-content justify-center relative overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
         {/* Decorative background */}
-        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-b-[40px] opacity-10 blur-xl"></div>
+        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-b-[40px] opacity-10 blur-xl pointer-events-none"></div>
 
-        <div className="relative z-10 flex flex-col items-center mb-8">
-          <div className="w-full max-w-[500px] h-[150px] flex items-center justify-center mb-6 overflow-hidden rounded-2xl">
+        <div className="relative z-10 flex flex-col items-center mb-4 sm:mb-7">
+          <div className="w-full max-w-[500px] h-20 sm:h-[130px] flex items-center justify-center mb-3 sm:mb-5 overflow-hidden rounded-2xl">
             <EngLogo
               alt="ENG Smart Store Logo"
-              style={{ width: '500px', maxWidth: '100%', height: '150px' }}
+              style={{ width: '500px', maxWidth: '100%', height: '100%', maxHeight: '130px' }}
               className="object-contain drop-shadow-md rounded-2xl"
             />
           </div>
           <h1
             style={{ fontSize: '20.5px', fontStyle: 'normal', fontFamily: "'Fredericka the Great', cursive", textDecorationLine: 'none', textAlign: 'center' }}
-            className="font-bold text-slate-900 dark:text-white mb-2 tracking-tight"
+            className="font-bold text-slate-900 dark:text-white mb-1 tracking-tight"
           >
             ENG Smart Store App
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3 text-red-700 dark:text-red-300 relative z-10">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3 text-red-700 dark:text-red-300 relative z-10">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
             <span className="text-sm font-medium">{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="relative z-10 flex flex-col gap-5">
+        <form onSubmit={handleLogin} className="relative z-10 flex flex-col gap-3.5 sm:gap-5">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 ml-1">รหัสพนักงาน หรือ ชื่อจริง</label>
             <div className="relative">

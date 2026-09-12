@@ -22,6 +22,39 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onStartRequisition,
   onEditItem,
 }) => {
+  // Lock background scrolling when item card modal is open
+  React.useEffect(() => {
+    if (!item) return;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      // Allow smooth scrolling inside the modal's scrollable container
+      if (target && target.closest('.overflow-y-auto')) {
+        return;
+      }
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.touchAction = originalTouchAction;
+      document.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [item]);
+
   if (!item) return null;
 
   const isLow = item.status === 'low';
@@ -54,7 +87,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overscroll-none touch-none">
       {/* Smooth Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -62,7 +95,11 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         exit={{ opacity: 0 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
         onClick={onClose}
-        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          if (e.cancelable) e.preventDefault();
+        }}
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs touch-none"
       />
 
       {/* Smooth Modal Dialog */}
@@ -71,10 +108,10 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-300 dark:border-slate-700 transition-colors"
+        className="relative z-10 bg-white dark:bg-slate-900 w-full max-w-md max-h-[92dvh] landscape:max-h-[94dvh] rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-300 dark:border-slate-700 transition-colors overscroll-contain touch-auto"
       >
         {/* Header Badges & Close Button */}
-        <div className="p-3.5 pb-2.5 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+        <div className="p-3 sm:p-3.5 pb-2 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-black px-2.5 py-0.5 rounded-lg shadow-2xs border border-slate-300 dark:border-slate-800">
               {item.id}
@@ -106,14 +143,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
 
         {/* Item Title */}
-        <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-black">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-snug tracking-wide">
+        <div className="px-4 py-2.5 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-black shrink-0">
+          <h2 className="text-base sm:text-xl font-bold text-slate-900 dark:text-white leading-snug tracking-wide">
             {item.name}
           </h2>
         </div>
 
         {/* Body content */}
-        <div className="p-3.5 space-y-2.5 bg-white dark:bg-slate-900">
+        <div className="p-3.5 space-y-2.5 bg-white dark:bg-slate-900 overflow-y-auto overscroll-contain flex-1 min-h-0">
           {/* Stock Status Card */}
           <div
             className={`p-3 rounded-xl border shadow-2xs ${
@@ -224,7 +261,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
 
         {/* Footer Actions (3 Columns for fast actions) */}
-        <div className="p-3.5 pt-2 pb-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2">
+        <div className="p-3.5 pt-2 pb-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2 shrink-0">
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => {

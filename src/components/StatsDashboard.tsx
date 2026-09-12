@@ -158,7 +158,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
   };
 
   return (
-    <div className="p-3.5 sm:p-4 pt-safe-content space-y-4 pb-28 sm:pb-24 bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
+    <div className="p-3.5 sm:p-5 md:p-6 pt-3 sm:pt-4 space-y-4 pb-28 sm:pb-24 landscape:pb-8 max-w-7xl mx-auto w-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Top Header Card */}
       <div className="bg-gradient-to-tr from-slate-900 via-slate-850 to-blue-950 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 text-white rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden border border-slate-800 dark:border-slate-800">
         <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-36 h-36 bg-blue-500/15 rounded-full blur-2xl pointer-events-none" />
@@ -279,152 +279,154 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
       )}
       </div>
 
-      {/* Low Stock Alert Section */}
-      {lowStockItems.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-4.5 h-4.5 text-amber-500" />
-              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">รายการสต็อกที่ต้องเติม ({lowStockItems.length})</h2>
+      {/* Responsive Analytics & Breakdown Grid (1 col on phone, 2 cols on tablet/desktop) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Low Stock Alert Section */}
+        {lowStockItems.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4.5 h-4.5 text-amber-500" />
+                <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">รายการสต็อกที่ต้องเติม ({lowStockItems.length})</h2>
+              </div>
+              <button
+                onClick={onFilterLowStock}
+                className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
+              >
+                ดูทั้งหมด
+              </button>
             </div>
-            <button
-              onClick={onFilterLowStock}
-              className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
-            >
-              ดูทั้งหมด
-            </button>
+
+            <div className="space-y-2">
+              {lowStockItems.slice(0, 4).map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => onSelectItem(item)}
+                  className="bg-amber-50/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-2.5 flex items-center justify-between cursor-pointer transition-colors shadow-2xs"
+                >
+                  <div className="min-w-0 pr-2">
+                    <p className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate">{item.name}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {item.id} • {item.category} • ที่เก็บ: {item.location}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-xs sm:text-sm font-extrabold text-amber-700 dark:text-amber-400 block">
+                      เหลือ {item.qty} {item.unit}
+                    </span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">Min: {item.minStock}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Category Breakdown Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Layers className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">สัดส่วนสินค้าตามหมวดหมู่</h2>
           </div>
 
           <div className="space-y-2">
-            {lowStockItems.slice(0, 4).map((item) => (
-              <div
-                key={item.id}
-                onClick={() => onSelectItem(item)}
-                className="bg-amber-50/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-2.5 flex items-center justify-between cursor-pointer transition-colors shadow-2xs"
-              >
-                <div className="min-w-0 pr-2">
-                  <p className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate">{item.name}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    {item.id} • {item.category} • ที่เก็บ: {item.location}
-                  </p>
+            {summary?.categories.map((cat) => {
+              const percentage = Math.round((cat.count / (summary.totalItems || 1)) * 100);
+              return (
+                <div
+                  key={cat.name}
+                  onClick={() => onSelectCategory(cat.name)}
+                  className="p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{cat.name}</span>
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">
+                      {cat.count} รายการ ({cat.totalQty} ชิ้น)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-200/60 dark:border-slate-700/60">
+                    <div
+                      className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.max(percentage, 5)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs sm:text-sm font-extrabold text-amber-700 dark:text-amber-400 block">
-                    เหลือ {item.qty} {item.unit}
-                  </span>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500">Min: {item.minStock}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
-      )}
 
-      {/* Category Breakdown Section */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <Layers className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
-          <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">สัดส่วนสินค้าตามหมวดหมู่</h2>
-        </div>
+        {/* Analytics: Top Items This Month */}
+        {topItemsThisMonth.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="w-4.5 h-4.5 text-emerald-500 dark:text-emerald-400" />
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">รายการเบิกสูงสุดเดือนนี้</h2>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topItemsThisMonth} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.2} />
+                  <XAxis type="number" stroke="#94a3b8" />
+                  <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                  <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
+                  <Bar dataKey="qty" name="จำนวนที่เบิก" fill="#10B981" radius={[0, 4, 4, 0]}>
+                    {topItemsThisMonth.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'][index % 5]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
-        <div className="space-y-2">
-          {summary?.categories.map((cat) => {
-            const percentage = Math.round((cat.count / (summary.totalItems || 1)) * 100);
-            return (
-              <div
-                key={cat.name}
-                onClick={() => onSelectCategory(cat.name)}
-                className="p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer transition-colors"
-              >
-                <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">{cat.name}</span>
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">
-                    {cat.count} รายการ ({cat.totalQty} ชิ้น)
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-200/60 dark:border-slate-700/60">
-                  <div
-                    className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.max(percentage, 5)}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {/* Analytics: Monthly Trend */}
+        {monthlyTrend.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <ArrowUpRight className="w-4.5 h-4.5 text-blue-500 dark:text-blue-400" />
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">แนวโน้มการเบิกจ่าย (ยอดรวม)</h2>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                  <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.08)'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
+                  <Bar dataKey="qty" name="จำนวนรวม" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Analytics: Out of Stock Duration */}
+        {outOfStockDurations.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm lg:col-span-2">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-4.5 h-4.5 text-red-500 dark:text-red-400" />
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">สินค้าหมดสต๊อกนานที่สุด (วัน)</h2>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={outOfStockDurations} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={60} stroke="#94a3b8" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                  <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.08)'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
+                  <Bar dataKey="days" name="จำนวนวัน" fill="#EF4444" radius={[4, 4, 0, 0]}>
+                    {outOfStockDurations.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.days > 7 ? '#EF4444' : '#F87171'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
-
-
-      {/* Analytics: Top Items This Month */}
-      {topItemsThisMonth.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-4.5 h-4.5 text-emerald-500 dark:text-emerald-400" />
-            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">รายการเบิกสูงสุดเดือนนี้</h2>
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topItemsThisMonth} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.2} />
-                <XAxis type="number" stroke="#94a3b8" />
-                <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
-                <Bar dataKey="qty" name="จำนวนที่เบิก" fill="#10B981" radius={[0, 4, 4, 0]}>
-                  {topItemsThisMonth.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'][index % 5]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Analytics: Monthly Trend */}
-      {monthlyTrend.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <ArrowUpRight className="w-4.5 h-4.5 text-blue-500 dark:text-blue-400" />
-            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">แนวโน้มการเบิกจ่าย (ยอดรวม)</h2>
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.08)'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
-                <Bar dataKey="qty" name="จำนวนรวม" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Analytics: Out of Stock Duration */}
-      {outOfStockDurations.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-4.5 h-4.5 text-red-500 dark:text-red-400" />
-            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">สินค้าหมดสต๊อกนานที่สุด (วัน)</h2>
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={outOfStockDurations} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={60} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <RechartsTooltip cursor={{fill: 'rgba(100,116,139,0.08)'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
-                <Bar dataKey="days" name="จำนวนวัน" fill="#EF4444" radius={[4, 4, 0, 0]}>
-                  {outOfStockDurations.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.days > 7 ? '#EF4444' : '#F87171'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

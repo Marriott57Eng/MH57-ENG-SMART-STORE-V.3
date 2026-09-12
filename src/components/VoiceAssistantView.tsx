@@ -5,7 +5,7 @@ import {
   Mic, MicOff, Send, Sparkles, 
   RotateCcw, Bot, User, ArrowRight, Loader2, FileDown, FileText, 
   ArrowDownRight, ArrowUpRight, Sliders, Trash2, ExternalLink, AlertCircle, Headset, Radio,
-  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2, Globe
+  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2, Globe, Square
 } from 'lucide-react';
 import { generateAndDownloadPdf } from '../utils/pdfGenerator';
 import { generateAndDownloadExcel } from '../utils/excelGenerator';
@@ -57,6 +57,17 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     recheckLocation,
   } = useGeolocationAuth(currentUser as any);
   const liveMessageIdRef = useRef<string | null>(null);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
+
+  const stopCurrentQuery = useCallback(() => {
+    if (chatAbortControllerRef.current) {
+      try {
+        chatAbortControllerRef.current.abort();
+      } catch (e) {}
+      chatAbortControllerRef.current = null;
+    }
+    setIsProcessing(false);
+  }, []);
 
   // Download handler for PDF & Excel
   const handleDownloadReport = useCallback(async (report: any, msgId: string, isExcel: boolean = false) => {
@@ -191,19 +202,6 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         text: `📄 AI ได้สร้างและดาวน์โหลดรายงาน "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) ให้เรียบร้อยแล้ว ท่านสามารถกดดาวน์โหลดซ้ำได้จากการ์ดด้านล่างนี้`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         fileReports: [reportAction]
-      }]);
-    }
-
-    // 2.5 Agent-to-Agent Realtime Web Search
-    else if (toolCall.name === 'search_live_web_agent') {
-      const { query } = toolCall.args || {};
-      const msgId = Date.now().toString();
-      setChatHistory(prev => [...prev, {
-        id: msgId,
-        role: 'assistant',
-        source: 'live',
-        text: `🌐 **Agent-to-Agent Real-time Search**: เชื่อมต่อ AI Web Intelligence Agent ค้นหาข้อมูลสด: *"${query || 'ค้นหาข้อมูลออนไลน์'}"*`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     }
 
@@ -586,6 +584,14 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   const sendQuery = async (queryText: string) => {
     if (!queryText.trim() || isProcessing) return;
 
+    if (chatAbortControllerRef.current) {
+      try {
+        chatAbortControllerRef.current.abort();
+      } catch (e) {}
+    }
+    const abortController = new AbortController();
+    chatAbortControllerRef.current = abortController;
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -599,10 +605,19 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     const aiMessageId = (Date.now() + 1).toString();
     let textBuffer = '';
 
+    // Safety client timeout (16s) to ensure the UI never hangs indefinitely
+    const safetyTimeout = setTimeout(() => {
+      if (!textBuffer) {
+        console.warn('Chat request safety timeout reached, releasing UI');
+        abortController.abort(new Error('SafetyTimeout'));
+      }
+    }, 16000);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortController.signal,
         body: JSON.stringify({
           prompt: queryText,
           history: chatHistory.slice(-4),
@@ -637,15 +652,16 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               const chunk = decoder.decode(value, { stream: true });
               jsonBuffer += chunk;
               
-              const parts = jsonBuffer.split('\n\n');
-              // keep the last part if it doesn't end with \n\n
+              const parts = jsonBuffer.split(/\r?\n\r?\n/);
+              // keep the last part if it doesn't end with newline delimiter
               jsonBuffer = parts.pop() || '';
               
                for (const part of parts) {
-                  if (part.startsWith('data: ')) {
+                  const trimmed = part.trim();
+                  if (trimmed.startsWith('data: ')) {
                       let serverError = null;
                       try {
-                          const data = JSON.parse(part.slice(6));
+                          const data = JSON.parse(trimmed.slice(6));
                           if (data.type === 'chunk') {
                               textBuffer += data.text;
                               let displayableText = textBuffer;
@@ -700,6 +716,12 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           }
       }
     } catch (err: any) {
+      // If client aborted or stopped intentionally, keep whatever text was generated without showing an error
+      if (abortController.signal.aborted || err?.name === 'AbortError' || (err?.message && (err.message.includes('aborted') || err.message.includes('SafetyTimeout')))) {
+        if (textBuffer && textBuffer.trim().length > 0) {
+          return;
+        }
+      }
       // If the model already sent response text to the user, preserve it rather than replacing with an error message
       if (textBuffer && textBuffer.trim().length > 0) {
         console.warn('Stream finished with notice, preserved generated content:', err);
@@ -720,6 +742,10 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         return [...filtered, errorMessage];
       });
     } finally {
+      clearTimeout(safetyTimeout);
+      if (chatAbortControllerRef.current === abortController) {
+        chatAbortControllerRef.current = null;
+      }
       setIsProcessing(false);
     }
   };
@@ -804,42 +830,45 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   return (
     <div className="flex flex-col h-full max-h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Top Bar */}
-      <div className="bg-white dark:bg-slate-900 px-3.5 pt-safe-header pb-1.5 border-b border-slate-300 dark:border-slate-750 flex items-center justify-between shrink-0 shadow-2xs transition-colors duration-200 z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0">
-            <Sparkles className="w-3 h-3" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base leading-tight">AI ผู้ช่วยคลังสินค้า</h2>
-              <span className="text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.2 rounded border border-blue-300 dark:border-blue-700">
-                Gemini 3.5 Flash Lite
+      <div className="bg-white dark:bg-slate-900 px-3.5 py-2 border-b border-slate-300 dark:border-slate-750 shrink-0 shadow-2xs transition-colors duration-200 z-10">
+        <div className="max-w-4xl mx-auto w-full flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0">
+              <Sparkles className="w-3 h-3" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base leading-tight">AI ผู้ช่วยคลังสินค้า</h2>
+                <span className="text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.2 rounded border border-blue-300 dark:border-blue-700">
+                  Gemini 3.5 Flash Lite
+                </span>
+              </div>
+              <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 leading-tight">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                {isAdmin 
+                  ? 'โหมด Admin: สั่งเบิก/รับเข้า/แก้ไขสต็อก/แก้ไขชื่ออะไหล่' 
+                  : 'โหมด Staff: สั่งเบิก/รับเข้าสินค้า/ดูสต็อก/ออกรายงาน'}
               </span>
             </div>
-            <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 leading-tight">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              {isAdmin 
-                ? 'โหมด Admin: สั่งเบิก/รับเข้า/แก้ไขสต็อก/แก้ไขชื่ออะไหล่' 
-                : 'โหมด Staff: สั่งเบิก/รับเข้าสินค้า/ดูสต็อก/ออกรายงาน'}
-            </span>
           </div>
-        </div>
 
-        {/* Reset Chat */}
-        {chatHistory.length > 0 && (
-          <button
-            onClick={() => setChatHistory([])}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
-            title="ล้างข้อความ"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span className="text-[11px]">ล้างแชท</span>
-          </button>
-        )}
+          {/* Reset Chat */}
+          {chatHistory.length > 0 && (
+            <button
+              onClick={() => setChatHistory([])}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
+              title="ล้างข้อความ"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span className="text-[11px]">ล้างแชท</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages List Area (Scrolls internally while bottom controls remain locked) */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-4 space-y-2.5">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-4">
+        <div className="max-w-4xl mx-auto w-full space-y-2.5">
         {chatHistory.length === 0 && (
           <div className="text-center py-2 sm:py-3 px-2">
             <div className="w-full max-w-[240px] h-20 mx-auto mb-2 flex items-center justify-center overflow-hidden rounded-xl">
@@ -1323,14 +1352,22 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         )}
 
         {/* Thinking Indicator */}
-        {isProcessing && (
+        {isProcessing && !chatHistory.some(m => m.role === 'assistant' && m.text.length > 0 && m.id === chatHistory[chatHistory.length - 1]?.id) && (
           <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl rounded-tl-none p-3 shadow-xs w-fit">
             <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-            <span className="text-lg">AI กำลังวิเคราะห์คำสั่งและปรับปรุงฐานข้อมูล...</span>
+            <span className="text-sm sm:text-base">AI กำลังวิเคราะห์และตอบกลับ...</span>
+            <button
+              type="button"
+              onClick={stopCurrentQuery}
+              className="ml-2 px-2 py-0.5 text-xs font-semibold text-red-500 hover:text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors cursor-pointer"
+            >
+              ยกเลิก
+            </button>
           </div>
         )}
 
         <div ref={chatBottomRef} />
+        </div>
       </div>
 
       {/* Voice Control & Input Area (Permanently locked above bottom navigation bar) */}
@@ -1340,6 +1377,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         }}
         className="px-3 pt-2 pb-1 bg-white dark:bg-slate-900 border-t border-slate-300 dark:border-slate-750 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] transition-colors duration-200 z-20"
       >
+        <div className="max-w-4xl mx-auto w-full">
         {/* Live Chat Button & Voice Reactive Controls */}
         <div className="flex flex-col items-center justify-center mb-2">
           <div className="relative flex items-center justify-center">
@@ -1481,18 +1519,30 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="พิมพ์ หรือสั่งพิมพ์ด้วยเสียง..."
+            placeholder={isProcessing ? "AI กำลังตอบกลับ..." : "พิมพ์ หรือสั่งพิมพ์ด้วยเสียง..."}
             disabled={isProcessing}
             className="flex-1 bg-transparent px-2 py-1 text-sm sm:text-base text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 min-w-0"
           />
-          <button
-            type="submit"
-            disabled={!inputText.trim() || isProcessing}
-            className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 border border-blue-500"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
+          {isProcessing ? (
+            <button
+              type="button"
+              onClick={stopCurrentQuery}
+              className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 border border-red-400"
+              title="หยุดการตอบกลับ"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!inputText.trim()}
+              className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95 shrink-0 border border-blue-500"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          )}
         </form>
+        </div>
       </div>
 
       <GeoRestrictionModal

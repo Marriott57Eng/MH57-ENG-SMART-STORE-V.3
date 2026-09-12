@@ -603,26 +603,27 @@ async function startServer() {
     let isClientAborted = false;
     const clientAbortController = new AbortController();
 
-    const handleClientClose = () => {
-      isClientAborted = true;
-      try {
-        if (!clientAbortController.signal.aborted) {
-          clientAbortController.abort(new Error("Client closed connection"));
-        }
-      } catch (e) {}
-    };
-
-    req.on("close", handleClientClose);
-    req.on("aborted", handleClientClose);
-    res.on("close", handleClientClose);
+    res.on("close", () => {
+      // Only abort if the client closed connection prematurely before the response ended normally
+      if (!res.writableEnded) {
+        isClientAborted = true;
+        try {
+          if (!clientAbortController.signal.aborted) {
+            clientAbortController.abort(new Error("Client closed connection"));
+          }
+        } catch (e) {}
+      }
+    });
 
     try {
       const { prompt, history, isVoice, items: clientItems, requisitions: clientRequisitions, currentUser } = req.body;
       
       // Set SSE headers immediately to allow instant streaming of status & chunks
+      // X-Accel-Buffering: no is crucial to prevent Nginx/Cloud Run reverse proxy from buffering SSE
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders();
 
       let items: Item[] = Array.isArray(clientItems) && clientItems.length > 0
@@ -636,16 +637,15 @@ async function startServer() {
       const cleanPrompt = pLower.replace(/(เบิก|ขอ|เพิ่ม|รับเข้า|ค้นหา|มี|ไหม|สต็อก|จำนวน|ช่วย|หน่อย|อัปเดต|เอา|สินค้า|กี่|แผ่น|ชิ้น|อัน|หลอด|ม้วน|แกลลอน|กล่อง|ตัว)/g, '');
       const searchTerms = pLower.split(/\s+/).filter((t: string) => t.length > 1);
       
-      // 2. Improved Context Feeding for AI Search
+      // 2. Improved Context Feeding for AI Search (Fast & lightweight)
       let matchedItems = [];
       const isSummaryRequest = pLower.includes('สรุป') || pLower.includes('ใกล้หมด') || pLower.includes('สั่งซื้อ') || pLower.includes('วิเคราะห์') || pLower.includes('ภาพรวม');
       
       if (isSummaryRequest) {
-          // Only pass items that need attention (low or out of stock) + some random for context
+          // Only pass items that need attention (low or out of stock) + some for context
           matchedItems = items.filter(i => i.status === 'low' || i.status === 'out');
-          if (matchedItems.length < 5) matchedItems = [...matchedItems, ...items.filter(i => i.status !== 'low' && i.status !== 'out').slice(0, 10)];
+          if (matchedItems.length < 5) matchedItems = [...matchedItems, ...items.filter(i => i.status !== 'low' && i.status !== 'out').slice(0, 15)];
       } else {
-          // Pass more items to AI to let it find the right item. Since Gemini context window is huge, we can afford passing ~100 items.
           const filtered = items.filter(item => {
               const itemNameLower = (item.name || '').toLowerCase();
               const itemIdLower = (item.id || '').toLowerCase();
@@ -661,11 +661,11 @@ async function startServer() {
               return nameInPrompt || idInPrompt || catInPrompt || termInItem;
           });
           
-          // If we find direct matches, prioritize them, but also include a chunk of other items so AI doesn't miss out due to slight misspellings
+          // Prioritize direct matches, then supplement with a compact catalog to keep tokens low & responses sub-second
           if (filtered.length > 0) {
-              matchedItems = [...new Set([...filtered, ...items])].slice(0, 80);
+              matchedItems = [...new Set([...filtered, ...items])].slice(0, 45);
           } else {
-              matchedItems = items.slice(0, 60); // compact catalog for fast prompt processing
+              matchedItems = items.slice(0, 35); // compact catalog for fast prompt processing
           }
       }
 
@@ -697,7 +697,7 @@ async function startServer() {
         };
       });
 
-      const recentReqs = Array.isArray(clientRequisitions) ? clientRequisitions.slice(0, 30).map((r: any) => ({
+      const recentReqs = Array.isArray(clientRequisitions) ? clientRequisitions.slice(0, 10).map((r: any) => ({
         type: (r.type === "in") ? "รับเข้า" : "เบิกออก",
         item: r.itemName,
         qty: `${r.qty} ${r.unit}`,
@@ -850,13 +850,13 @@ ${!isAdminUser ? `
       let hasSentChunks = false;
 
       const tryGenerate = async (modelName: string) => {
-        if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) {
+        if (isClientAborted || clientAbortController.signal.aborted || res.destroyed || res.writableEnded) {
           return "";
         }
 
         const config: any = { systemInstruction, temperature: 0.2 };
         // Disable reasoning latency for Flash Lite models to achieve instant sub-second TTFT (~300-400ms)
-        if (modelName.includes('3.5-flash-lite') || modelName.includes('3.1-flash-lite')) {
+        if (modelName.includes('flash-lite')) {
           config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
         }
 
@@ -874,14 +874,24 @@ ${!isAdminUser ? `
         }
         clientAbortController.signal.addEventListener("abort", onClientAbort, { once: true });
 
-        // Generous TTFT timeout (25s) to avoid premature aborts under temporary load/congestion
+        // Responsive TTFT timeout (7s) to prevent long freezes on congested models
         const ttftTimeout = setTimeout(() => {
           if (!hasSentChunks) {
             isTimedOut = true;
             modelAbortController.abort(new Error(`Timeout waiting for TTFT on ${modelName}`));
           }
-        }, 25000);
+        }, 7000);
 
+        let chunkInactivityTimeout: NodeJS.Timeout | null = null;
+        const resetChunkTimeout = () => {
+          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
+          chunkInactivityTimeout = setTimeout(() => {
+            console.warn(`[API CHAT] Inter-chunk inactivity timeout on ${modelName}`);
+            modelAbortController.abort(new Error(`Inter-chunk timeout on ${modelName}`));
+          }, 8000);
+        };
+
+        let localRawText = "";
         try {
           config.abortSignal = modelAbortController.signal;
           const stream = await getAI().models.generateContentStream({
@@ -890,10 +900,10 @@ ${!isAdminUser ? `
             config,
           });
           
-          let localRawText = "";
           for await (const chunk of stream) {
             clearTimeout(ttftTimeout);
-            if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) break;
+            resetChunkTimeout();
+            if (isClientAborted || clientAbortController.signal.aborted || res.destroyed || res.writableEnded) break;
             if (chunk.text) {
               hasSentChunks = true;
               localRawText += chunk.text;
@@ -902,8 +912,15 @@ ${!isAdminUser ? `
               }
             }
           }
+          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
           return localRawText;
         } catch (err: any) {
+          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
+          // If we already sent substantial text to the client and stream stalled, return what we have cleanly
+          if (hasSentChunks && (err?.name === 'AbortError' || (err?.message && err.message.includes('Inter-chunk')))) {
+            console.warn(`[API CHAT] Rescuing completed chunks on stream pause for ${modelName}`);
+            return localRawText || "";
+          }
           if (isTimedOut) {
             const timeoutErr = new Error(`Timeout waiting for TTFT on ${modelName}`);
             (timeoutErr as any).isTimeout = true;
@@ -912,6 +929,7 @@ ${!isAdminUser ? `
           throw err;
         } finally {
           clearTimeout(ttftTimeout);
+          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
           clientAbortController.signal.removeEventListener("abort", onClientAbort);
         }
       };
@@ -919,7 +937,7 @@ ${!isAdminUser ? `
       const generateWithFallback = async (models: string[]) => {
         let lastErr = null;
         for (let i = 0; i < models.length; i++) {
-          if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) {
+          if (isClientAborted || clientAbortController.signal.aborted || res.destroyed || res.writableEnded) {
             return "";
           }
 
@@ -932,7 +950,6 @@ ${!isAdminUser ? `
             // If client canceled/disconnected or connection closed, exit immediately without error log or model retries
             const isClientCancel = isClientAborted || 
                                    clientAbortController.signal.aborted || 
-                                   req.destroyed || 
                                    res.destroyed || 
                                    res.writableEnded || 
                                    (!err?.isTimeout && (
@@ -971,7 +988,7 @@ ${!isAdminUser ? `
             }
           }
         }
-        if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded) return "";
+        if (isClientAborted || clientAbortController.signal.aborted || res.destroyed || res.writableEnded) return "";
         throw lastErr || new Error("Failed to generate response");
       };
 
@@ -1211,7 +1228,7 @@ ${!isAdminUser ? `
       res.end();
       
     } catch (error: any) {
-      if (isClientAborted || clientAbortController.signal.aborted || req.destroyed || res.destroyed || res.writableEnded || error?.name === 'AbortError' || (error?.message && (error.message.includes('aborted') || error.message.includes('canceled')))) {
+      if (isClientAborted || clientAbortController.signal.aborted || res.destroyed || res.writableEnded || error?.name === 'AbortError' || (error?.message && (error.message.includes('aborted') || error.message.includes('canceled')))) {
         return;
       }
       console.error("SERVER /api/chat ERROR:", error);
@@ -1223,6 +1240,22 @@ ${!isAdminUser ? `
       res.end();
     }
   });
+
+  // Explicitly serve public static assets (PWA icons, manifest.json, sw.js) with accurate headers
+  const publicPath = path.join(process.cwd(), "public");
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("manifest.json")) {
+          res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+        } else if (filePath.endsWith("sw.js")) {
+          res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+          res.setHeader("Service-Worker-Allowed", "/");
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        }
+      }
+    }));
+  }
 
   // Robust production vs development mode detection
   const isRunningFromBundle = typeof __filename !== "undefined" && (__filename.endsWith(".cjs") || __filename.includes("dist"));
@@ -1353,14 +1386,8 @@ ${!isAdminUser ? `
 
 🎯 ขอบเขตการสนทนาและความรู้ (Conversational Scope & External Knowledge):
 1. **การคุยเรื่องทั่วไป ฟุตบอล กีฬา ข่าวสาร และความรู้เชิงช่าง**: คุณเป็น AI ที่มีความรอบรู้สูง สามารถพูดคุยเรื่องทั่วไป ตอบผลฟุตบอล โปรแกรมการแข่งขัน ข่าวด่วน สภาพอากาศ และให้ความรู้เชิงช่างได้อย่างเป็นกันเอง
-2. **การตอบคำถามทั่วไป/กีฬา/ภายนอก (ห้ามปฏิเสธ)**:
-   - เมื่อผู้ใช้ถามเรื่องผลกีฬา (เช่น ผลบอล/โปรแกรมแข่ง อาร์เซนอล, แมนยู, ลิเวอร์พูล, พรีเมียร์ลีก, ยูฟ่า), ข่าวด่วน, ราคาทอง, ราคาน้ำมัน หรือสภาพอากาศ **ต้องเรียก Function Tool \`search_live_web_agent\` ทันที แล้วนำผลลัพธ์มาพูดตอบผู้ใช้โดยตรงด้วยเสียงสด**
-   - ⛔ **ห้ามตอบปฏิเสธ** ว่า 'อยู่นอกเหนือฐานข้อมูลคลังพัสดุ' หรือ 'ระบบดูแลเฉพาะงานช่าง' โดยเด็ดขาด คุณยินดีตอบทุกคำถามอย่างชาญฉลาดเสมอ
-
-🌐 การค้นหาข้อมูลสดจากอินเทอร์เน็ตผ่าน AI Agent ตัวรอง (Real-time Agent-to-Agent Web Search):
-- เมื่อผู้ใช้ถามคำถามที่ต้องใช้ข้อมูลภายนอก ข้อมูลปัจจุบัน หรือข้อมูลสดแบบเรียลไทม์ (เช่น 'เมื่อคืนแมนยูชนะเท่าไหร่', 'ผลบอลคู่ล่าสุด', 'อาร์เซนอลแข่งวันไหน', 'ข่าวด่วนวันนี้', 'ราคาน้ำมัน', 'สภาพอากาศ', 'ข้อมูลสเปก/ราคาอะไหล่ภายนอก')
-- **ให้เรียกใช้ Function Tool \`search_live_web_agent\` ทันที**: ส่งคำค้นหา \`query\` ไปยัง AI Web Intelligence Search Agent
-- เมื่อได้รับคำตอบจาก Web Agent แล้ว ให้คุณพูดสรุปผลลัพธ์นั้นให้ผู้ใช้ฟังด้วยเสียงสดทันทีอย่างกระชับ ชัดเจน 1-2 ประโยค (ปรับสำเนียงตามภาษา/ภาษาถิ่นที่สนทนาอยู่)
+2. **การตอบคำถามทั่วไป/กีฬา/ภายนอก**:
+   - สามารถสนทนาตอบคำถามทั่วไปได้อย่างสุภาพ กระชับ และเป็นกันเอง
 
 🌐 ความสามารถด้านภาษาและภาษาถิ่น (Multilingual & Regional Dialects):
 - **ปรับภาษาตามคำสั่งหรือภาษาที่ผู้ใช้พูดด้วยทันที**:
@@ -1406,17 +1433,6 @@ ${JSON.stringify(recentReqs)}
 8. **เมื่อยืนยันทำรายการ**: ตอบสั้นๆ "บันทึกการเบิก/รับเข้า...เรียบร้อยแล้วค่ะ คุณ${callingName}"`,
           tools: [{
             functionDeclarations: [
-              {
-                name: "search_live_web_agent",
-                description: "ค้นหาข้อมูลสดจากอินเทอร์เน็ต เช่น ผลกีฬา ฟุตบอล โปรแกรมการแข่งขัน ข่าวด่วน ราคาน้ำมัน ราคาทอง สภาพอากาศ หรือข้อมูลทั่วไปภายนอก",
-                parameters: {
-                  type: Type.OBJECT,
-                  properties: {
-                    query: { type: Type.STRING, description: "คำค้นหา เช่น 'ผลบอลอาร์เซนอลล่าสุด', 'ราคาน้ำมันวันนี้'" }
-                  },
-                  required: ["query"]
-                }
-              },
               {
                 name: "get_stock_extremes",
                 description: "ค้นหาสินค้าที่มีจำนวนมากที่สุดและน้อยที่สุดในคลัง",
@@ -1653,20 +1669,6 @@ ${JSON.stringify(recentReqs)}
                     }
                     
                     toolResult = resultText;
-                  } else if (fc.name === "search_live_web_agent") {
-                    const query = (fc.args?.query as string || "").trim();
-                    try {
-                      const searchRes = await getAI().models.generateContent({
-                        model: "gemini-3.5-flash-lite",
-                        contents: `ค้นหาข้อมูลสดออนไลน์และสรุปคำตอบให้ผู้ใช้: "${query}"\nตอบเป็นภาษาไทย สั้นกระชับ 1-2 ประโยค เพื่อให้ AI ตอบเป็นเสียงสดได้อย่างลื่นไหลและทันที`,
-                        config: {
-                          tools: [{ googleSearch: {} }]
-                        }
-                      });
-                      toolResult = searchRes.text || `ค้นหาข้อมูลเกี่ยวกับ ${query} เรียบร้อยแล้วค่ะ`;
-                    } catch (err: any) {
-                      toolResult = `ได้ค้นหาข้อมูลเกี่ยวกับ ${query} แล้ว แต่ขณะนี้ระบบค้นหาภายนอกตอบสนองล่าช้าเล็กน้อยค่ะ`;
-                    }
                   }
 
                   const liveTarget = activeLiveSession;

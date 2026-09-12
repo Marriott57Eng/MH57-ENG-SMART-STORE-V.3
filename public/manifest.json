@@ -1,18 +1,50 @@
 {
+  "id": "/",
   "short_name": "ENG Store",
-  "name": "ENG Smart Store App",
-  "description": "ระบบจัดการคลังสินค้าเชื่อมต่อฐานข้อมูล พร้อมระบบจัดการสต็อก",
+  "name": "MH57 ENG Store App V.2",
+  "description": "ระบบจัดการคลังสินค้าของ ENG Smart Store พร้อมระบบ AI Voice & Chat Assistant",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#03080e",
+  "theme_color": "#0f172a",
   "icons": [
+    {
+      "src": "/favicon.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    },
     {
       "src": "/logo.png",
       "type": "image/png",
-      "sizes": "192x192 512x512",
-      "purpose": "any maskable"
+      "sizes": "512x512",
+      "purpose": "any"
     }
-  ],
-  "start_url": "/",
-  "background_color": "#0f172a",
-  "theme_color": "#2563eb",
-  "display": "standalone",
-  "orientation": "portrait"
+  ]
 }

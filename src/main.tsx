@@ -14,3 +14,12 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+// Register service worker for PWA installability and home screen icon
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('ServiceWorker registration failed:', err);
+    });
+  });
+}

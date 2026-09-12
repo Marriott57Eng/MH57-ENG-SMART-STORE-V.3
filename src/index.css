@@ -17,6 +17,9 @@
   .no-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
   }
 }
 
@@ -34,12 +37,21 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #0f172a;
-  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  min-height: 100%;
+}
+
+body {
   min-height: 100%;
   min-height: 100dvh;
   overflow-x: hidden;
-  overscroll-behavior-y: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
 }
 
 #root {
@@ -58,6 +70,19 @@ html, body {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.px-safe {
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+
 .pt-safe-header {
   padding-top: max(12px, calc(env(safe-area-inset-top, 0px) + 10px));
 }
@@ -66,9 +91,58 @@ html, body {
   padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 12px));
 }
 
+/* Landscape Mode Responsive Adjustments for Phones & Tablets */
+@media (orientation: landscape) and (max-height: 520px) {
+  .pt-safe-header {
+    padding-top: max(6px, calc(env(safe-area-inset-top, 0px) + 4px));
+    padding-bottom: 6px;
+  }
+  .pt-safe-content {
+    padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+  }
+}
+
+@media (orientation: landscape) {
+  body {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+}
+
 /* Ensure inputs on iOS safari don't trigger automatic zoom */
 input, textarea, select {
   font-size: 16px;
+}
+
+/* Device-responsive Auto-scaling */
+html[data-device="desktop"] {
+  font-size: 15.5px;
+}
+
+html[data-device="tablet"] {
+  font-size: 16px;
+}
+
+html[data-device="mobile"] {
+  font-size: 15px;
+}
+
+/* Custom refined scrollbar for Tablet and Desktop */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.7);
+  }
 }
 
 code, pre {

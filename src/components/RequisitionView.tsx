@@ -101,9 +101,10 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
     .reduce((sum, r) => sum + r.qty, 0);
 
   return (
-    <div className="flex flex-col h-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
-      {/* Top Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 px-4 pt-safe-header pb-3 shrink-0 shadow-sm transition-colors duration-200">
+    <div className="flex flex-col min-h-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
+      {/* Subheader */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 px-4 sm:px-6 py-2.5 shrink-0 shadow-2xs transition-colors duration-200">
+        <div className="max-w-7xl mx-auto w-full">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs border border-blue-500">
@@ -203,12 +204,13 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             className="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm sm:text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 shadow-2xs transition-all"
           />
         </div>
+        </div>
       </div>
 
       {/* Record list container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
+      <div className="flex-1 p-3.5 sm:p-5 md:p-6 pb-28 sm:pb-24 landscape:pb-8">
         {filteredRecords.length === 0 ? (
-          <div className="text-center py-12 px-4 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-900/50">
+          <div className="max-w-md mx-auto text-center py-12 px-4 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-900/50">
             <div className="w-14 h-14 bg-slate-100 dark:bg-slate-850 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-750">
               <ClipboardList className="w-6 h-6" />
             </div>
@@ -217,19 +219,20 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                 ? 'ไม่พบประวัติที่ตรงกับคำค้นหา'
                 : 'ยังไม่มีประวัติการเบิกหรือรับเข้าสินค้า'}
             </h3>
-            <p className="text-lg text-slate-400 dark:text-slate-500 mb-4">
+            <p className="text-sm text-slate-400 dark:text-slate-500 mb-4">
               แตะปุ่ม "บันทึก เบิก/รับเข้า" ด้านบนเพื่อเริ่มบันทึกรายการ
             </p>
             <button
               onClick={onOpenNewRequisition}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer border border-blue-500"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer border border-blue-500"
             >
               <Plus className="w-4 h-4" />
               บันทึก เบิก/รับเข้า
             </button>
           </div>
         ) : (
-          filteredRecords.map((record) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 landscape:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-3.5 max-w-7xl mx-auto w-full">
+            {filteredRecords.map((record) => {
             const isStockIn = record.type === 'in';
             
             // Find current inventory item matching this record
@@ -393,7 +396,8 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
                 )}
               </div>
             );
-          })
+          })}
+          </div>
         )}
       </div>
     </div>

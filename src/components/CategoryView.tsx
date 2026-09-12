@@ -54,7 +54,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
   };
 
   return (
-    <div className="p-3.5 sm:p-4 pt-safe-content space-y-4 pb-28 sm:pb-24 bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
+    <div className="p-3.5 sm:p-5 md:p-6 pt-3 sm:pt-4 space-y-4 pb-28 sm:pb-24 landscape:pb-8 max-w-7xl mx-auto w-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -87,7 +87,7 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
       </div>
 
       {/* Category Grid with Real Photos */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {summary?.categories.map((cat, idx) => {
           const catImg = getCategoryImageUrl(cat.name);
           const outOfStockItemsInCat = items.filter(

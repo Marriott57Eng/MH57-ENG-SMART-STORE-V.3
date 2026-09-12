@@ -62,7 +62,7 @@ export const TransactionSuccessModal: React.FC<TransactionSuccessModalProps> = (
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
           transition={{ type: 'spring', damping: 26, stiffness: 360 }}
-          className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 sm:p-7 text-center"
+          className="relative w-full max-w-md max-h-[92dvh] landscape:max-h-[94dvh] my-auto overflow-y-auto bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-5 sm:p-7 text-center"
         >
           {/* Background subtle glow */}
           <div 
