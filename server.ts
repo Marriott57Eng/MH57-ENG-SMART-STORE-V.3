@@ -4,8 +4,9 @@ import { GoogleGenAI, LiveServerMessage, Modality, Type, ThinkingLevel } from "@
 import fs from "fs";
 import { WebSocketServer } from "ws";
 import http from "http";
+import webpush from "web-push";
 import { initializeApp } from 'firebase/app';
-import { getFirestore, getDocs, collection, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, getDocs, collection, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { 
   pushLineMessage, 
   createStockFlexMessage, 
@@ -14,6 +15,139 @@ import {
   getServerLineConfig, 
   updateServerLineConfig 
 } from './server/lineService';
+
+// ==========================================
+// Web Push Notifications Engine (VAPID)
+// ==========================================
+interface WebPushSubscriptionRecord {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userId?: string;
+  userName?: string;
+  deviceInfo?: string;
+  subscribedAt: string;
+}
+
+let vapidKeys: { publicKey: string; privateKey: string } | null = null;
+const memorySubscriptions: Map<string, WebPushSubscriptionRecord> = new Map();
+
+async function getOrInitVapidKeys() {
+  if (vapidKeys) return vapidKeys;
+  try {
+    if (firestoreDb) {
+      const docSnap = await getDoc(doc(firestoreDb, 'settings', 'web_push_vapid'));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && data.publicKey && data.privateKey) {
+          vapidKeys = { publicKey: data.publicKey, privateKey: data.privateKey };
+          webpush.setVapidDetails('mailto:support@engstore.app', vapidKeys.publicKey, vapidKeys.privateKey);
+          return vapidKeys;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not read vapid keys from Firestore:", err);
+  }
+
+  // Generate new persistent VAPID keys
+  const keys = webpush.generateVAPIDKeys();
+  vapidKeys = keys;
+  webpush.setVapidDetails('mailto:support@engstore.app', vapidKeys.publicKey, vapidKeys.privateKey);
+
+  try {
+    if (firestoreDb) {
+      await setDoc(doc(firestoreDb, 'settings', 'web_push_vapid'), keys);
+    }
+  } catch (err) {
+    console.warn("Could not persist vapid keys to Firestore:", err);
+  }
+
+  return vapidKeys;
+}
+
+async function loadSubscriptions(): Promise<WebPushSubscriptionRecord[]> {
+  try {
+    if (firestoreDb) {
+      const snap = await getDocs(collection(firestoreDb, 'push_subscriptions'));
+      snap.forEach(d => {
+        const data = d.data() as WebPushSubscriptionRecord;
+        if (data && data.endpoint && data.keys) {
+          memorySubscriptions.set(data.endpoint, data);
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("Failed to load push subscriptions from Firestore:", err);
+  }
+  return Array.from(memorySubscriptions.values());
+}
+
+async function sendWebPushToAll(payload: {
+  title: string;
+  body: string;
+  icon?: string;
+  badge?: string;
+  url?: string;
+  tag?: string;
+  type?: 'low_stock' | 'requisition' | 'system';
+  data?: any;
+}) {
+  try {
+    await getOrInitVapidKeys();
+    const subs = await loadSubscriptions();
+    if (subs.length === 0) {
+      console.log("Web Push: No active subscriptions registered yet.");
+      return { sent: 0, failed: 0, total: 0 };
+    }
+
+    const payloadString = JSON.stringify({
+      title: payload.title,
+      body: payload.body,
+      icon: payload.icon || '/logo.png',
+      badge: payload.badge || '/icon-192.png',
+      tag: payload.tag || `eng-push-${Date.now()}`,
+      url: payload.url || '/',
+      type: payload.type || 'system',
+      data: payload.data || {},
+    });
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification({
+          endpoint: sub.endpoint,
+          keys: sub.keys
+        }, payloadString, {
+          TTL: 60 * 60 * 24, // 24 hours
+          urgency: 'high'
+        });
+        sent++;
+      } catch (err: any) {
+        failed++;
+        // Remove dead/expired subscription (HTTP 404 or 410)
+        if (err?.statusCode === 410 || err?.statusCode === 404) {
+          memorySubscriptions.delete(sub.endpoint);
+          try {
+            if (firestoreDb) {
+              const subId = Buffer.from(sub.endpoint).toString('base64url').slice(0, 60);
+              await deleteDoc(doc(firestoreDb, 'push_subscriptions', subId));
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    return { sent, failed, total: subs.length };
+  } catch (error: any) {
+    console.error("sendWebPushToAll error:", error);
+    return { sent: 0, failed: 0, total: 0, error: error.message };
+  }
+}
 
 let ai: GoogleGenAI;
 function getAI(): GoogleGenAI {
@@ -487,6 +621,152 @@ async function startServer() {
     }
   });
 
+  // ==========================================
+  // API: Web Push Notifications Endpoints
+  // ==========================================
+
+  // Get VAPID Public Key for client subscription
+  app.get("/api/push/public-key", async (req, res) => {
+    try {
+      const keys = await getOrInitVapidKeys();
+      res.json({ success: true, publicKey: keys.publicKey });
+    } catch (err: any) {
+      console.error("Fetch VAPID public key error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Subscribe a device / browser to Web Push
+  app.post("/api/push/subscribe", async (req, res) => {
+    try {
+      const { subscription, userId, userName, deviceInfo } = req.body;
+      if (!subscription || !subscription.endpoint || !subscription.keys) {
+        return res.status(400).json({ success: false, error: "ข้อมูล Subscription ไม่ถูกต้อง" });
+      }
+
+      const record: WebPushSubscriptionRecord = {
+        endpoint: subscription.endpoint,
+        keys: subscription.keys,
+        userId: userId || 'anonymous',
+        userName: userName || 'ผู้ใช้ระบบ',
+        deviceInfo: deviceInfo || 'Browser',
+        subscribedAt: new Date().toISOString(),
+      };
+
+      memorySubscriptions.set(record.endpoint, record);
+
+      if (firestoreDb) {
+        const subId = Buffer.from(record.endpoint).toString('base64url').slice(0, 60);
+        await setDoc(doc(firestoreDb, 'push_subscriptions', subId), record, { merge: true });
+      }
+
+      // Send an instant confirmation push to verify connectivity
+      try {
+        await getOrInitVapidKeys();
+        await webpush.sendNotification({
+          endpoint: record.endpoint,
+          keys: record.keys
+        }, JSON.stringify({
+          title: "✅ เชื่อมต่อ Web Push สำเร็จ",
+          body: "ระบบพร้อมแจ้งเตือนสต็อกต่ำและการเบิกจ่ายสำคัญ แม้แอปปิดหน้าจออยู่",
+          icon: "/logo.png",
+          badge: "/icon-192.png",
+          url: "/",
+          tag: "welcome-push",
+        }), { TTL: 300 });
+      } catch (pushErr) {
+        console.warn("Welcome push test warning:", pushErr);
+      }
+
+      res.json({ success: true, message: "ลงทะเบียนรับการแจ้งเตือน Web Push สำเร็จ" });
+    } catch (err: any) {
+      console.error("Subscribe push error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Unsubscribe a device
+  app.post("/api/push/unsubscribe", async (req, res) => {
+    try {
+      const { endpoint } = req.body;
+      if (endpoint) {
+        memorySubscriptions.delete(endpoint);
+        if (firestoreDb) {
+          const subId = Buffer.from(endpoint).toString('base64url').slice(0, 60);
+          await deleteDoc(doc(firestoreDb, 'push_subscriptions', subId)).catch(() => {});
+        }
+      }
+      res.json({ success: true, message: "ยกเลิกการแจ้งเตือนเรียบร้อยแล้ว" });
+    } catch (err: any) {
+      console.error("Unsubscribe error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Broadcast push notification (Triggered on low stock or important requisitions)
+  app.post("/api/push/notify", async (req, res) => {
+    try {
+      const { title, body, icon, url, tag, type, data } = req.body;
+      if (!title || !body) {
+        return res.status(400).json({ success: false, error: "กรุณาระบุ title และ body" });
+      }
+
+      const result = await sendWebPushToAll({
+        title,
+        body,
+        icon: icon || '/logo.png',
+        url: url || '/',
+        tag: tag || `eng-push-${Date.now()}`,
+        type: type || 'system',
+        data: data || {},
+      });
+
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error("Push notify error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Test Web Push notification endpoint
+  app.post("/api/push/test", async (req, res) => {
+    try {
+      const result = await sendWebPushToAll({
+        title: "🔔 ทดสอบ Web Push Notifications",
+        body: "ระบบแจ้งเตือนคลังสินค้า Store FL.6 พร้อมทำงานแล้ว แม้ไม่ได้เปิดหน้าจออยู่!",
+        icon: "/logo.png",
+        url: "/",
+        tag: "test-push",
+        type: "system"
+      });
+
+      res.json({ 
+        success: true, 
+        message: result.sent > 0 
+          ? `ส่งการแจ้งเตือนทดสอบสำเร็จไปยัง ${result.sent} อุปกรณ์` 
+          : "ยังไม่มีอุปกรณ์ที่ลงทะเบียนเปิดรับการแจ้งเตือน Web Push", 
+        ...result 
+      });
+    } catch (err: any) {
+      console.error("Test Web Push error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Get Web Push status / subscriber count
+  app.get("/api/push/status", async (req, res) => {
+    try {
+      const subs = await loadSubscriptions();
+      res.json({
+        success: true,
+        activeSubscribers: subs.length,
+        hasVapidKey: !!vapidKeys,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // API: Analyze with Antigravity Agent (antigravity-preview-05-2026)
   app.post("/api/analyze", async (req, res) => {
     try {
@@ -576,7 +856,7 @@ async function startServer() {
         console.warn("Antigravity agent fallback to generative model:", agentError.message);
         // Seamless fallback to high-intelligence reasoning model
         const fallbackRes = await getAI().models.generateContent({
-          model: "gemini-3.7-flash",
+          model: "gemini-3.5-flash-lite",
           contents: `${deepAnalysisInstruction}\n\n${prompt || 'วิเคราะห์สถานะคลังสินค้าแบบเจาะลึก'}\n\n${summaryText}`,
           config: {
             systemInstruction: "คุณคือ Antigravity Executive Supply Chain & Inventory Analyst ผู้เชี่ยวชาญการวิเคราะห์คลังสินค้า Store FL.6 ให้รายงานเชิงลึก มีการเว้นวรรค ใช้สัญลักษณ์สวยงาม น่าอ่าน และแม่นยำ"
@@ -616,7 +896,8 @@ async function startServer() {
     });
 
     try {
-      const { prompt, history, isVoice, items: clientItems, requisitions: clientRequisitions, currentUser } = req.body;
+      const { history, isVoice, items: clientItems, requisitions: clientRequisitions, currentUser } = req.body;
+      const prompt: string = String(req.body.prompt || req.body.message || '');
       
       // Set SSE headers immediately to allow instant streaming of status & chunks
       // X-Accel-Buffering: no is crucial to prevent Nginx/Cloud Run reverse proxy from buffering SSE
@@ -731,6 +1012,17 @@ async function startServer() {
 🗓️ วันเวลาปัจจุบันในประเทศไทย: วัน${currentDateStr} (ค.ศ. ${currentYear} / พ.ศ. ${currentYearThai}) เวลา ${currentTimeStr} น.
 ⚠️ **ปีปัจจุบันคือ ค.ศ. ${currentYear} (พ.ศ. ${currentYearThai})**:
 - ห้ามใช้ปี 2024 หรือ 2023 หรือปีในอดีตเด็ดขาด ปัจจุบันคือปี ${currentYear}
+
+🎯 **กฎเหล็กเรื่องขอบเขตหน้าที่ (Strict Warehouse & Technician Domain Boundary)**:
+1. **โฟกัสเฉพาะงานคลังสินค้า Store FL.6 เป็นหลัก (Primary Focus)**:
+   - รับคำสั่งเช็คสต็อก, เบิกสินค้า, รับเข้าสินค้า, แก้ไข/เติมสต็อก, ออกรายงาน PDF/Excel, และค้นหาข้อมูลอะไหล่/ตำแหน่งจัดเก็บในคลัง
+2. **ข้อยกเว้นเพียงหนึ่งเดียวที่อนุญาตให้ตอบได้: "งานที่เกี่ยวกับงานช่าง" (Allowed Exception: Technician & Engineering Work)**:
+   - สามารถให้คำปรึกษา แนะนำวิธีการซ่อมแซม การบำรุงรักษา การเลือกใช้อุปกรณ์/เครื่องมือช่าง สเปกทางเทคนิคของอุปกรณ์ไฟฟ้า ประปา แอร์ และระบบวิศวกรรมอาคารได้
+3. **เรื่องอื่นนอกเหนือจากงานคลังและงานช่าง "ห้ามตอบเด็ดขาด" และ "ห้ามค้นหาข้อมูลจากภายนอก" (Strictly Forbidden Topics)**:
+   - หากผู้ใช้ถามเรื่องอื่นใดที่ไม่ใช่งานคลังสินค้าและไม่ใช่งานช่าง (เช่น ข่าวสารทั่วไป, ผลบอล, กีฬา, การเมือง, บันเทิง, สภาพอากาศ, ดวงชะตา, ข้อมูลทั่วไปภายนอก) -> **ห้ามตอบคำถามเหล่านั้นเด็ดขาด** และ **ห้ามค้นหาข้อมูลจากภายนอก**
+   - ให้ตอบปฏิเสธอย่างสุภาพ สั้นกระชับ 1 ประโยค เช่น:
+     "ขออภัยด้วยนะคะคุณ${callingName} 🙏 ระบบของหนูได้รับคำสั่งให้ดูแลเฉพาะงานคลังสินค้า Store FL.6 และงานที่เกี่ยวกับงานช่างเท่านั้นค่ะ หากมีเรื่องอะไหล่หรือคำถามเชิงช่าง สอบถามหนูได้ตลอดเลยนะคะ! ✨🛠️"
+   - ห้ามแนบ JSON action หรือดึงข้อมูลภายนอกใดๆ สำหรับคำถามนอกขอบเขต
 
 🌟 บุคลิกภาพและสไตล์การตอบสนอง (Personality & Tone of Voice):
 1. **รอบรู้ มีชีวิตชีวา เปี่ยมด้วยความเชี่ยวชาญ และใส่ใจ (Warm, Expert & All-Around Helpful)**: 
@@ -978,7 +1270,14 @@ ${!isAdminUser ? `
               continue;
             } else {
               // All models exhausted
-              const is429 = err.status === 429 || err.status === 'RESOURCE_EXHAUSTED' || (err.message && err.message.includes('429')) || err.code === 429;
+              const is429 = err.status === 429 || 
+                            err.status === 'RESOURCE_EXHAUSTED' || 
+                            err.code === 429 || 
+                            (err.message && (
+                              err.message.includes('429') || 
+                              err.message.toLowerCase().includes('quota') || 
+                              err.message.toLowerCase().includes('resource_exhausted')
+                            ));
               if (is429) {
                 const quotaError = new Error("QUOTA_EXCEEDED");
                 (quotaError as any).status = 429;
@@ -997,7 +1296,8 @@ ${!isAdminUser ? `
         const fallbackModels = [
            'gemini-3.5-flash-lite',
            'gemini-3.1-flash-lite',
-           'gemini-flash-lite-latest',
+           'gemini-flash-latest',
+           'gemini-3.1-pro-preview',
            'gemini-3.8-flash'
         ];
         rawResponseText = await generateWithFallback(fallbackModels);
@@ -1232,7 +1532,16 @@ ${!isAdminUser ? `
         return;
       }
       console.error("SERVER /api/chat ERROR:", error);
-      if (error.message === 'QUOTA_EXCEEDED') {
+      const isQuota = error?.message === 'QUOTA_EXCEEDED' || 
+                      error?.status === 429 || 
+                      error?.code === 429 ||
+                      (typeof error?.message === 'string' && (
+                        error.message.includes('429') || 
+                        error.message.toLowerCase().includes('quota') || 
+                        error.message.toLowerCase().includes('resource_exhausted')
+                      ));
+
+      if (isQuota) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'QUOTA_EXCEEDED' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'API_ERROR', detail: error?.message || String(error) })}\n\n`);
@@ -1384,10 +1693,12 @@ ${!isAdminUser ? `
 
 เป้าหมายสำคัญ: รับฟังเสียงคำสั่งภาษาไทยและภาษาต่างๆ อย่างแม่นยำ ตอบสนองทันที รวดเร็ว สุภาพ สั้นกระชับ และเป็นมิตร
 
-🎯 ขอบเขตการสนทนาและความรู้ (Conversational Scope & External Knowledge):
-1. **การคุยเรื่องทั่วไป ฟุตบอล กีฬา ข่าวสาร และความรู้เชิงช่าง**: คุณเป็น AI ที่มีความรอบรู้สูง สามารถพูดคุยเรื่องทั่วไป ตอบผลฟุตบอล โปรแกรมการแข่งขัน ข่าวด่วน สภาพอากาศ และให้ความรู้เชิงช่างได้อย่างเป็นกันเอง
-2. **การตอบคำถามทั่วไป/กีฬา/ภายนอก**:
-   - สามารถสนทนาตอบคำถามทั่วไปได้อย่างสุภาพ กระชับ และเป็นกันเอง
+🎯 ขอบเขตการสนทนาและความรู้ที่เข้มงวดที่สุด (Strict Domain Boundary & Technician Exception):
+1. **โฟกัสเฉพาะงานคลังสินค้า Store FL.6 เป็นหลัก**: รับฟังและสั่งการเช็คสต็อก, เบิกสินค้า, รับเข้าสินค้า, สินค้าใกล้หมด/หมดสต็อก และออกรายงาน
+2. **ข้อยกเว้นเพียงหนึ่งเดียวที่อนุญาตให้ตอบได้: "งานที่เกี่ยวกับงานช่าง"**: สามารถให้คำปรึกษา แนะนำการซ่อมบำรุง การเลือกใช้อะไหล่/เครื่องมือ และความรู้เชิงช่างได้อย่างเป็นกันเอง
+3. **เรื่องอื่นนอกเหนือจากงานคลังและงานช่าง "ห้ามตอบเด็ดขาด" และ "ห้ามค้นหาข้อมูลจากภายนอก"**:
+   - หากผู้ใช้ถามเรื่องอื่น เช่น ข่าวสาร, ผลบอล, กีฬา, การเมือง, บันเทิง, สภาพอากาศ, หรือเรื่องทั่วไปภายนอก -> **ห้ามตอบคำถามเด็ดขาด และห้ามค้นหาข้อมูลภายนอก**
+   - ให้ปฏิเสธอย่างสุภาพและสั้นกระชับ 1 ประโยค เช่น: "ขออภัยด้วยนะคะคุณ${callingName} หนูโฟกัสเฉพาะงานคลังสินค้าและงานช่างเท่านั้นค่ะ มีเรื่องอะไหล่หรือคำถามเชิงช่างให้ช่วยไหมคะ"
 
 🌐 ความสามารถด้านภาษาและภาษาถิ่น (Multilingual & Regional Dialects):
 - **ปรับภาษาตามคำสั่งหรือภาษาที่ผู้ใช้พูดด้วยทันที**:

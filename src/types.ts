@@ -125,3 +125,35 @@ export interface LineAuthNotifyData {
   role: 'admin' | 'user';
   timestamp?: string;
 }
+
+export interface WebPushNotificationConfig {
+  enabled: boolean;
+  notifyLowStock: boolean;
+  notifyRequisition?: boolean;
+  notifyImportantRequisition?: boolean;
+  importantRequisitionThreshold?: number; // e.g., qty >= 5
+  updatedAt?: string;
+}
+
+export interface WebPushPayload {
+  title: string;
+  body: string;
+  icon?: string;
+  badge?: string;
+  url?: string;
+  tag?: string;
+  type?: 'low_stock' | 'requisition' | 'system';
+  data?: Record<string, any>;
+}
+
+export interface WebPushSubscriptionData {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userId?: string;
+  userName?: string;
+  deviceInfo?: string;
+  subscribedAt: string;
+}

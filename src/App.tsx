@@ -32,6 +32,7 @@ import { GeoRestrictionModal } from './components/GeoRestrictionModal';
 import { TransactionSuccessModal, TransactionSuccessData } from './components/TransactionSuccessModal';
 import { playSuccessSoundAndSpeak } from './utils/audioUtils';
 import { notifyStockTransaction, notifyAuthEvent } from './utils/lineNotify';
+import { triggerLowStockPush, triggerImportantRequisitionPush } from './utils/webPush';
 import { LineSettingsModal } from './components/LineSettingsModal';
 import { User } from './types';
 import { useDeviceDetector } from './hooks/useDeviceDetector';
@@ -574,6 +575,30 @@ export default function App() {
           status: newStatus,
           timestamp: newRecord.timestamp,
         }).catch(err => console.warn("LINE stock notification notice:", err));
+
+        // 5. Send Web Push Notifications (Low stock alert or Important Requisition alert)
+        if (newQty <= (updatedItem.minStock || 5) || newStatus === 'low' || newStatus === 'out') {
+          triggerLowStockPush(updatedItem, newQty).catch(err => console.warn("Web Push low stock warning:", err));
+        }
+        if (recordData.type === 'out') {
+          const isImportant = recordData.qty >= 5 || (recordData.purpose && (
+            recordData.purpose.includes('ด่วน') || 
+            recordData.purpose.includes('สำคัญ') || 
+            recordData.purpose.includes('ฉุกเฉิน') || 
+            recordData.purpose.includes('เครื่อง') || 
+            recordData.purpose.includes('ระบบ')
+          ));
+          triggerImportantRequisitionPush({
+            itemId: updatedItem.id,
+            itemName: updatedItem.name,
+            qty: recordData.qty,
+            unit: updatedItem.unit,
+            requestedBy: recordData.requestedBy,
+            purpose: recordData.purpose,
+            newQty,
+            isImportant: Boolean(isImportant),
+          }).catch(err => console.warn("Web Push requisition warning:", err));
+        }
       } else {
         setDoc(doc(db, 'requisitions', newRecord.id), newRecord).catch(console.error);
       }
@@ -807,6 +832,22 @@ export default function App() {
             status: cleanItem.status,
             timestamp: action.record.timestamp,
           }).catch(err => console.warn("LINE notification error from AI action:", err));
+
+          // Web Push notification for AI-assisted stock actions
+          if (action.record.type === 'out') {
+            triggerImportantRequisitionPush({
+              itemId: cleanItem.id,
+              itemName: cleanItem.name,
+              qty: action.record.qty,
+              unit: cleanItem.unit,
+              requestedBy: action.record.requestedBy,
+              purpose: action.record.purpose,
+              newQty: cleanItem.qty,
+            }).catch(err => console.warn("Web Push AI requisition notice:", err));
+          }
+          if (cleanItem.qty <= (cleanItem.minStock || 5) || cleanItem.status === 'low' || cleanItem.status === 'out') {
+            triggerLowStockPush(cleanItem, cleanItem.qty).catch(err => console.warn("Web Push AI low stock notice:", err));
+          }
         }
       }
     } else if (action.action === 'update_stock') {
@@ -818,6 +859,11 @@ export default function App() {
             ? { outOfStockDate: oldItem?.outOfStockDate || new Date().toISOString() } 
             : {})
         });
+
+        // Trigger low stock push if direct update makes item low or out
+        if (cleanItem.qty <= (cleanItem.minStock || 5) || cleanItem.status === 'low' || cleanItem.status === 'out') {
+          triggerLowStockPush(cleanItem, cleanItem.qty).catch(err => console.warn("Web Push stock update notice:", err));
+        }
 
         // Instant optimistic update (0ms)
         setItems((prev) => {
@@ -1058,16 +1104,14 @@ export default function App() {
                   <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${refreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
                 </button>
 
-                {/* LINE Notification Settings (Admin) */}
-                {currentUser.role === 'admin' && (
-                  <button
-                    onClick={() => setIsLineSettingsModalOpen(true)}
-                    className="p-1.5 sm:p-2 rounded-xl text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 active:scale-95 transition-all flex items-center border border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/60 dark:bg-emerald-950/30 cursor-pointer shadow-2xs"
-                    title="ตั้งค่าการแจ้งเตือน LINE"
-                  >
-                    <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
-                  </button>
-                )}
+                {/* Notification Settings (Web Push for all, LINE Bot for Admin) */}
+                <button
+                  onClick={() => setIsLineSettingsModalOpen(true)}
+                  className="p-1.5 sm:p-2 rounded-xl text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 active:scale-95 transition-all flex items-center border border-blue-200 dark:border-blue-700/60 bg-blue-50/60 dark:bg-blue-950/30 cursor-pointer shadow-2xs"
+                  title={currentUser.role === 'admin' ? "การแจ้งเตือน (Web Push & LINE)" : "การแจ้งเตือน Web Push"}
+                >
+                  <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />
+                </button>
 
                 {/* Add Item (Admin) */}
                 {currentUser.role === 'admin' && (
