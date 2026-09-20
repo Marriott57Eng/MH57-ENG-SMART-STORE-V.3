@@ -10,41 +10,20 @@ interface ItemCardProps {
 }
 
 export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) => {
-  const getCategoryColor = (cat: string) => {
-    switch (cat) {
-      case 'เคมี':
-        return 'bg-gradient-to-r from-purple-500/15 via-indigo-500/10 to-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-300/80 dark:border-purple-700/80';
-      case 'ท่อ':
-        return 'bg-gradient-to-r from-cyan-500/15 via-sky-500/10 to-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-300/80 dark:border-cyan-700/80';
-      case 'ไฟฟ้า':
-      case 'Lighting':
-        return 'bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300/80 dark:border-amber-700/80';
-      case 'แอร์':
-        return 'bg-gradient-to-r from-blue-500/15 via-sky-500/10 to-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-300/80 dark:border-blue-700/80';
-      case 'สุขภัณฑ์':
-        return 'bg-gradient-to-r from-teal-500/15 via-emerald-500/10 to-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-300/80 dark:border-teal-700/80';
-      case 'สี+Grouting':
-        return 'bg-gradient-to-r from-rose-500/15 via-pink-500/10 to-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-300/80 dark:border-rose-700/80';
-      case 'Fire Alarm':
-        return 'bg-gradient-to-r from-red-500/15 via-orange-500/10 to-red-500/15 text-red-700 dark:text-red-300 border-red-300/80 dark:border-red-700/80';
-      case 'ประตู':
-        return 'bg-gradient-to-r from-stone-500/15 via-neutral-500/10 to-stone-500/15 text-stone-700 dark:text-stone-300 border-stone-300/80 dark:border-stone-700/80';
-      case 'เน็ต+โทรศัพท์':
-        return 'bg-gradient-to-r from-indigo-500/15 via-violet-500/10 to-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-300/80 dark:border-indigo-700/80';
-      default:
-        return 'bg-gradient-to-r from-slate-500/15 via-slate-600/10 to-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-300/80 dark:border-slate-700/80';
-    }
+  // Clean neutral category badge to reduce visual noise
+  const getCategoryColor = () => {
+    return 'bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border-slate-200/90 dark:border-slate-700/80';
   };
 
-  // Modern gradient status badge and visual indicators
+  // Cohesive 4-color semantic status configuration: Success (Green), Warning (Orange), Danger (Red)
   const getStatusConfig = () => {
     if (item.status === 'out' || item.qty <= 0) {
       return {
-        cardBorder: 'hover:border-red-400 dark:hover:border-red-500',
-        topGradient: 'bg-gradient-to-r from-red-600 via-rose-500 to-pink-600',
+        cardBorder: 'hover:border-red-500/70 dark:hover:border-red-500/60',
+        topAccent: 'bg-red-600',
         badge: (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-sm shadow-red-500/30 border border-red-400/40">
-            <XCircle className="w-4 h-4 text-white shrink-0" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-red-600 text-white shadow-xs border border-red-500">
+            <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
             <span>หมดจากคลัง</span>
           </span>
         ),
@@ -52,22 +31,22 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) 
     }
     if (item.status === 'low') {
       return {
-        cardBorder: 'hover:border-amber-400 dark:hover:border-amber-500',
-        topGradient: 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600',
+        cardBorder: 'hover:border-amber-500/70 dark:hover:border-amber-500/60',
+        topAccent: 'bg-amber-500',
         badge: (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-sm shadow-amber-500/30 border border-amber-300/40">
-            <AlertTriangle className="w-4 h-4 text-white shrink-0" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-amber-500 text-white shadow-xs border border-amber-400">
+            <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
             <span>ใกล้หมด</span>
           </span>
         ),
       };
     }
     return {
-      cardBorder: 'hover:border-emerald-400 dark:hover:border-emerald-500',
-      topGradient: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500',
+      cardBorder: 'hover:border-emerald-500/70 dark:hover:border-emerald-500/60',
+      topAccent: 'bg-emerald-600',
       badge: (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 text-white shadow-sm shadow-emerald-500/30 border border-emerald-300/40">
-          <CheckCircle2 className="w-4 h-4 text-white shrink-0" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-emerald-600 text-white shadow-xs border border-emerald-500">
+          <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
           <span>พร้อมเบิก</span>
         </span>
       ),
@@ -92,8 +71,8 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) 
       onClick={onClick}
       className={`bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-4.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)] ${statusConfig.cardBorder} transition-all cursor-pointer relative group flex flex-col justify-between overflow-hidden`}
     >
-      {/* Top Accent Gradient Bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 ${statusConfig.topGradient} opacity-90`} />
+      {/* Top Accent Bar */}
+      <div className={`absolute top-0 left-0 right-0 h-1 ${statusConfig.topAccent} opacity-90`} />
 
       <div className="flex gap-3 pt-0.5">
         {/* Content */}
@@ -105,9 +84,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) 
                 {item.id}
               </span>
               <span
-                className={`text-xs sm:text-sm font-semibold px-2.5 py-0.5 rounded-full border shadow-2xs ${getCategoryColor(
-                  item.category
-                )}`}
+                className={`text-xs sm:text-sm font-semibold px-2.5 py-0.5 rounded-full border shadow-2xs ${getCategoryColor()}`}
               >
                 {item.category}
               </span>
@@ -123,15 +100,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) 
           {/* Location info */}
           <div className="flex flex-col gap-1.5 mt-2.5">
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm sm:text-base">
-              <MapPin className="w-4 h-4 text-blue-500 shrink-0" />
+              <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
               <span className="truncate max-w-[260px] font-medium">{item.location || 'Store FL.6'}</span>
             </div>
             
-            {/* Days Out of Stock Alert */}
+            {/* Days Out of Stock Alert (Danger = Red) */}
             {item.status === 'out' && (
               <div className="flex flex-col gap-1 mt-1">
                 {item.outOfStockDate ? (
-                  <div className="inline-flex flex-col w-fit gap-1 text-xs sm:text-sm font-semibold text-red-700 dark:text-red-300 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/70 dark:to-rose-950/60 border border-red-200 dark:border-red-800/80 px-3 py-1.5 rounded-xl shadow-2xs">
+                  <div className="inline-flex flex-col w-fit gap-1 text-xs sm:text-sm font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 px-3 py-1.5 rounded-xl shadow-2xs">
                     <div className="flex items-center gap-1.5">
                       <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
                       <span>หมดสต็อกตั้งแต่: {new Date(item.outOfStockDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} เวลา {new Date(item.outOfStockDate).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>
@@ -141,8 +118,8 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onClick, index = 0 }) 
                     </div>
                   </div>
                 ) : (
-                  <div className="inline-flex w-fit items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-3 py-1 rounded-lg shadow-2xs">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <div className="inline-flex w-fit items-center gap-1.5 text-xs sm:text-sm font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 px-3 py-1 rounded-lg shadow-2xs">
+                    <AlertTriangle className="w-4 h-4 text-red-500" />
                     สินค้าหมด (ไม่ได้บันทึกเวลา)
                   </div>
                 )}

@@ -62,9 +62,9 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
                 whileTap={{ scale: 0.92 }}
                 className={`w-[52px] h-[52px] sm:w-[68px] sm:h-[68px] rounded-full flex items-center justify-center shadow-xl transition-all duration-200 ${
                   isLiveActive
-                    ? 'bg-gradient-to-tr from-red-500 via-rose-500 to-purple-600 text-white shadow-red-500/40 ring-4 ring-red-200 dark:ring-red-950 animate-pulse'
+                    ? 'bg-red-600 text-white shadow-red-500/40 ring-4 ring-red-200 dark:ring-red-950 animate-pulse'
                     : isActive
-                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-blue-500/45 ring-4 ring-blue-100 dark:ring-blue-900/60 scale-105'
+                    ? 'bg-blue-600 text-white shadow-blue-500/35 ring-4 ring-blue-100 dark:ring-blue-900/60 scale-105'
                     : 'bg-slate-900 dark:bg-slate-800 text-white shadow-slate-400/20 dark:shadow-none hover:bg-slate-800 dark:hover:bg-slate-700 border border-slate-700 dark:border-slate-700'
                 }`}
               >

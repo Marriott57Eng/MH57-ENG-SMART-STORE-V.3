@@ -629,7 +629,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 self-end sm:self-auto">
             <span>ทั้งหมด {users.length} คน</span>
             <span>•</span>
-            <span className="text-indigo-600 dark:text-indigo-400">
+            <span className="text-blue-600 dark:text-blue-400">
               Admin {users.filter(u => u.role === 'admin').length} คน
             </span>
             <span>•</span>
@@ -669,8 +669,8 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-xs shadow-xs ${
                       isAdmin 
-                        ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60' 
-                        : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60'
+                        ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60' 
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'
                     }`}>
                       {isAdmin ? <ShieldAlert className="w-4.5 h-4.5" /> : <User className="w-4.5 h-4.5" />}
                     </div>
@@ -699,7 +699,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                         <span>•</span>
                         <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded uppercase tracking-wider ${
                           isAdmin 
-                            ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300' 
+                            ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300' 
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                         }`}>
                           {user.role}
@@ -733,7 +733,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             onChange={(e) => handleRoleChange(user, e.target.value as 'admin' | 'user')}
                             className={`appearance-none outline-none text-xs font-bold px-2.5 py-1.5 pr-7 rounded-xl border cursor-pointer transition-colors shadow-2xs ${
                               isAdmin 
-                                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' 
+                                ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300' 
                                 : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
                             }`}
                           >
@@ -743,7 +743,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                         )}
                         {updating !== user.id && (
                           <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                            <Key className={`w-3 h-3 ${isAdmin ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400'}`} />
+                            <Key className={`w-3 h-3 ${isAdmin ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400'}`} />
                           </div>
                         )}
                       </div>

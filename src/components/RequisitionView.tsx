@@ -29,30 +29,8 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
   const [typeFilter, setTypeFilter] = useState<'all' | 'out' | 'in'>('all');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  const getCategoryColor = (cat: string) => {
-    switch (cat) {
-      case 'เคมี':
-        return 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/80';
-      case 'ท่อ':
-        return 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/80';
-      case 'ไฟฟ้า':
-      case 'Lighting':
-        return 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80';
-      case 'แอร์':
-        return 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/80';
-      case 'สุขภัณฑ์':
-        return 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800/80';
-      case 'สี+Grouting':
-        return 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/80';
-      case 'Fire Alarm':
-        return 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/80';
-      case 'ประตู':
-        return 'bg-stone-100 dark:bg-stone-800/80 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700';
-      case 'เน็ต+โทรศัพท์':
-        return 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/80';
-      default:
-        return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
-    }
+  const getCategoryColor = (_cat?: string) => {
+    return 'bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border-slate-200/90 dark:border-slate-700/80';
   };
 
   const handleExportPdf = async () => {

@@ -88,8 +88,8 @@ export const TransactionSuccessModal: React.FC<TransactionSuccessModalProps> = (
               transition={{ delay: 0.08, type: 'spring', damping: 14, stiffness: 220 }}
               className={`w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-lg border ${
                 isStockIn 
-                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 border-emerald-400 shadow-emerald-500/30' 
-                  : 'bg-gradient-to-tr from-blue-600 to-indigo-500 border-blue-400 shadow-blue-500/30'
+                  ? 'bg-emerald-600 border-emerald-500 shadow-emerald-500/30' 
+                  : 'bg-blue-600 border-blue-500 shadow-blue-500/30'
               }`}
             >
               <CheckCircle2 className="w-11 h-11 stroke-[2.2]" />

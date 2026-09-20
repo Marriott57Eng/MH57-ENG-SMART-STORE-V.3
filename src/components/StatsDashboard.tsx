@@ -160,12 +160,10 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
   return (
     <div className="p-3.5 sm:p-5 md:p-6 pt-3 sm:pt-4 space-y-4 pb-28 sm:pb-24 landscape:pb-8 max-w-7xl mx-auto w-full bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-200">
       {/* Top Header Card */}
-      <div className="bg-gradient-to-tr from-slate-900 via-slate-850 to-blue-950 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 text-white rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden border border-slate-800 dark:border-slate-800">
-        <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-36 h-36 bg-blue-500/15 rounded-full blur-2xl pointer-events-none" />
-        
+      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden border border-slate-800">
         <div className="flex items-center justify-between mb-3 relative z-10">
           <div>
-            <span className="text-xs text-blue-300 dark:text-blue-400 font-bold tracking-wider uppercase">
+            <span className="text-xs text-blue-400 font-bold tracking-wider uppercase">
               Store Database
             </span>
             <h1 className="text-lg sm:text-xl font-bold tracking-tight">ภาพรวมคลังสินค้า</h1>
@@ -173,7 +171,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white flex items-center gap-1.5 text-xs sm:text-sm font-semibold border border-white/20 dark:border-slate-700 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-white flex items-center gap-1.5 text-xs sm:text-sm font-semibold border border-slate-700 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>ซิงค์ชีต</span>
@@ -186,7 +184,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
         {/* 3 Key Metric Blocks */}
         <div className="grid grid-cols-3 gap-2 relative z-10">
-          <div className="bg-white/10 dark:bg-slate-800/80 backdrop-blur-md rounded-xl p-2.5 border border-white/15 dark:border-slate-700 text-center shadow-xs">
+          <div className="bg-slate-800/90 rounded-xl p-2.5 border border-slate-700 text-center shadow-xs">
             <span className="text-[11px] text-slate-300 uppercase tracking-wider block font-medium">สินค้าทั้งหมด</span>
             <span className="text-lg sm:text-xl font-black text-white">{summary?.totalItems || items.length}</span>
             <span className="text-[11px] text-slate-400 block font-medium">SKUs</span>
@@ -194,18 +192,18 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
           <div 
             onClick={onFilterLowStock}
-            className="bg-amber-500/20 dark:bg-amber-950/60 backdrop-blur-md rounded-xl p-2.5 border border-amber-400/40 dark:border-amber-500/60 text-center cursor-pointer active:scale-95 transition-transform shadow-xs"
+            className="bg-amber-500/20 dark:bg-amber-950/60 rounded-xl p-2.5 border border-amber-500/40 text-center cursor-pointer active:scale-95 transition-transform shadow-xs"
           >
-            <span className="text-[10px] sm:text-xs text-amber-200 dark:text-amber-300 font-semibold uppercase tracking-tight block truncate">
+            <span className="text-[10px] sm:text-xs text-amber-300 font-semibold uppercase tracking-tight block truncate">
               ใกล้หมด/หมดแล้ว
             </span>
-            <span className="text-lg sm:text-xl font-black text-amber-300 dark:text-amber-300">
+            <span className="text-lg sm:text-xl font-black text-amber-400">
               {lowStockItems.length}
             </span>
-            <span className="text-[10px] sm:text-xs text-amber-200/90 dark:text-amber-300/90 block font-medium">กดดูรายการ &gt;</span>
+            <span className="text-[10px] sm:text-xs text-amber-300/90 block font-medium">กดดูรายการ &gt;</span>
           </div>
 
-          <div className="bg-white/10 dark:bg-slate-800/80 backdrop-blur-md rounded-xl p-2.5 border border-white/15 dark:border-slate-700 text-center shadow-xs">
+          <div className="bg-slate-800/90 rounded-xl p-2.5 border border-slate-700 text-center shadow-xs">
             <span className="text-[11px] text-slate-300 uppercase tracking-wider block font-medium">จำนวนรวม</span>
             <span className="text-lg sm:text-xl font-black text-white">{summary?.totalQty || 0}</span>
             <span className="text-[11px] text-slate-400 block font-medium">หน่วย</span>
@@ -217,16 +215,16 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
       <div className="flex flex-col gap-2">
       <div 
         onClick={handleInlineAnalysis}
-        className="bg-gradient-to-r from-blue-50 to-indigo-50/80 dark:from-slate-900 dark:to-blue-950/40 border border-blue-200 dark:border-blue-800/80 rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:border-blue-400 dark:hover:border-blue-600 active:scale-[0.99] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.03)]"
+        className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:border-blue-400 dark:hover:border-blue-600 active:scale-[0.99] transition-all shadow-xs"
       >
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm border border-blue-500 shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs border border-blue-500 shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg">AI Smart Analysis</h3>
-              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/70 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-700">
+              <span className="text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
                 Antigravity
               </span>
             </div>
@@ -370,11 +368,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                   <XAxis type="number" stroke="#94a3b8" />
                   <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} stroke="#94a3b8" />
                   <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: '1px solid #475569', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.2)', backgroundColor: '#1e293b', color: '#f8fafc' }} />
-                  <Bar dataKey="qty" name="จำนวนที่เบิก" fill="#10B981" radius={[0, 4, 4, 0]}>
-                    {topItemsThisMonth.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'][index % 5]} />
-                    ))}
-                  </Bar>
+                  <Bar dataKey="qty" name="จำนวนที่เบิก" fill="#10B981" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

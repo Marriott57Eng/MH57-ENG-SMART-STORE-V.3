@@ -833,7 +833,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       <div className="bg-white dark:bg-slate-900 px-3.5 py-2 border-b border-slate-300 dark:border-slate-750 shrink-0 shadow-2xs transition-colors duration-200 z-10">
         <div className="max-w-4xl mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0">
+            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
               <Sparkles className="w-3 h-3" />
             </div>
             <div>
@@ -920,7 +920,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 ) : (
                   <>
                     {msg.source === 'live' ? (
-                      <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                      <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                         <Radio className="w-3.5 h-3.5 text-red-500 animate-pulse" />
                         AI Live Speech
                       </span>
@@ -1084,7 +1084,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                           <div className="flex flex-col sm:flex-row gap-2 mt-4 pt-2">
                             <button
                               onClick={() => handleConfirmDbAction(msg.id, msg.dbAction!)}
-                              className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                             >
                               <CheckCircle2 className="w-5 h-5" />
                               <span>กดยืนยันรายการ</span>
@@ -1388,7 +1388,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 <div 
                   className={`absolute rounded-full transition-all duration-75 pointer-events-none ${
                     isAiSpeaking 
-                      ? 'bg-purple-400/30 border border-purple-400/40' 
+                      ? 'bg-blue-400/30 border border-blue-400/40' 
                       : 'bg-emerald-400/25 border border-emerald-400/40'
                   }`}
                   style={{
@@ -1403,7 +1403,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 <div 
                   className={`absolute rounded-full transition-all duration-75 pointer-events-none ${
                     isAiSpeaking 
-                      ? 'bg-purple-500/35' 
+                      ? 'bg-blue-500/35' 
                       : 'bg-emerald-500/30'
                   }`}
                   style={{
@@ -1428,11 +1428,11 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-xl transition-transform duration-75 active:scale-95 cursor-pointer ${
                 isLiveConnected
                   ? isAiSpeaking
-                    ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white ring-4 ring-purple-200 dark:ring-purple-950 shadow-purple-500/50'
-                    : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white ring-4 ring-emerald-200 dark:ring-emerald-950 shadow-emerald-500/50'
+                    ? 'bg-blue-600 text-white ring-4 ring-blue-200 dark:ring-blue-950 shadow-blue-500/40'
+                    : 'bg-emerald-600 text-white ring-4 ring-emerald-200 dark:ring-emerald-950 shadow-emerald-500/40'
                   : isConnecting
-                  ? 'bg-indigo-600 text-white animate-pulse'
-                  : 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-purple-500/40 hover:scale-105'
+                  ? 'bg-blue-600 text-white animate-pulse'
+                  : 'bg-blue-600 text-white shadow-blue-500/30 hover:scale-105'
               }`}
             >
               {isConnecting ? (
@@ -1457,7 +1457,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                   key={i}
                   className={`w-1 rounded-full transition-all duration-75 ${
                     isAiSpeaking 
-                      ? 'bg-purple-500' 
+                      ? 'bg-blue-500' 
                       : 'bg-emerald-500'
                   }`}
                   style={{
@@ -1471,14 +1471,14 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
           {/* Voice Status Description */}
           <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 text-center">
             {isConnecting ? (
-              <span className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 justify-center">
+              <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1 justify-center">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 กำลังเชื่อมต่อ Live Speech...
               </span>
             ) : isLiveConnected ? (
               isAiSpeaking ? (
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1 justify-center">
-                  <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
+                <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1 justify-center">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
                   🔊 AI กำลังตอบด้วยเสียง...
                 </span>
               ) : (

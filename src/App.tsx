@@ -1132,7 +1132,7 @@ export default function App() {
                       });
                       setIsEditItemModalOpen(true);
                     }}
-                    className="p-1.5 sm:p-2 px-2 sm:px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500 text-white active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-amber-400 dark:border-amber-500 shadow-xs cursor-pointer"
+                    className="p-1.5 sm:p-2 px-2 sm:px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-slate-700 dark:border-slate-600 shadow-xs cursor-pointer"
                     title="เพิ่มสินค้าใหม่ (Admin)"
                   >
                     <Plus className="w-4 h-4" />
@@ -1398,7 +1398,7 @@ export default function App() {
         {isLiveActive && activeTab !== 'voice' && (
           <div 
             onClick={() => setActiveTab('voice')}
-            className="fixed top-16 left-1/2 -translate-x-1/2 z-40 bg-purple-600/95 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer backdrop-blur-xs transition-all ring-2 ring-purple-300 dark:ring-purple-900 animate-pulse"
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-40 bg-red-600/95 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30 flex items-center gap-2 cursor-pointer backdrop-blur-xs transition-all ring-2 ring-red-300 dark:ring-red-900 animate-pulse"
           >
             <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
             <span>🎙️ กำลังคุยสดกับ AI (แตะเพื่อกลับไปหน้าถาม AI / ปิด)</span>

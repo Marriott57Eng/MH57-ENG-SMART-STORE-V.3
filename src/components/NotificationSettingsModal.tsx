@@ -245,9 +245,9 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 text-white flex items-center justify-between shrink-0 shadow-xs">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-900 text-white flex items-center justify-between shrink-0 shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center border border-blue-500 shadow-xs">
               <Bell className="w-5 h-5 text-white animate-pulse" />
             </div>
             <div>
@@ -462,7 +462,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
                   type="button"
                   onClick={handleTestWebPush}
                   disabled={pushTesting}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
                 >
                   {pushTesting ? (
                     <>

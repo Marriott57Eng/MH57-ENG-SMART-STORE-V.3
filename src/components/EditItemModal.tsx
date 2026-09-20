@@ -200,7 +200,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 หมวดหมู่สินค้า *
               </label>
               <select

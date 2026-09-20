@@ -234,7 +234,7 @@ const generateSafeUUID = () => {
     <div className="min-h-screen min-h-[100dvh] bg-slate-900 dark:bg-slate-950 flex items-center justify-center p-3 sm:p-6 pl-safe pr-safe selection:bg-blue-500 selection:text-white transition-colors overflow-y-auto">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 my-auto rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col p-5 sm:p-8 pt-safe-content justify-center relative overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
         {/* Decorative background */}
-        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-b-[40px] opacity-10 blur-xl pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-40 bg-blue-600/10 rounded-b-[40px] blur-xl pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col items-center mb-4 sm:mb-7">
           <div className="w-full max-w-[500px] h-20 sm:h-[130px] flex items-center justify-center mb-3 sm:mb-5 overflow-hidden rounded-2xl">

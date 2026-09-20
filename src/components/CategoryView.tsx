@@ -24,28 +24,29 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
   isExporting,
 }) => {
   const getCategoryIcon = (name: string) => {
+    const iconClass = "w-4.5 h-4.5 text-blue-600 dark:text-blue-400";
     switch (name) {
       case 'เคมี':
-        return <Droplet className="w-4.5 h-4.5 text-purple-600" />;
+        return <Droplet className={iconClass} />;
       case 'ท่อ':
-        return <Layers className="w-4.5 h-4.5 text-cyan-600" />;
+        return <Layers className={iconClass} />;
       case 'ไฟฟ้า':
       case 'Lighting':
-        return <Zap className="w-4.5 h-4.5 text-amber-500" />;
+        return <Zap className={iconClass} />;
       case 'แอร์':
-        return <Wind className="w-4.5 h-4.5 text-blue-500" />;
+        return <Wind className={iconClass} />;
       case 'สุขภัณฑ์':
-        return <Bath className="w-4.5 h-4.5 text-teal-600" />;
+        return <Bath className={iconClass} />;
       case 'สี+Grouting':
-        return <Palette className="w-4.5 h-4.5 text-rose-500" />;
+        return <Palette className={iconClass} />;
       case 'Fire Alarm':
-        return <Flame className="w-4.5 h-4.5 text-red-500" />;
+        return <Flame className={iconClass} />;
       case 'ประตู':
-        return <DoorOpen className="w-4.5 h-4.5 text-stone-600" />;
+        return <DoorOpen className={iconClass} />;
       case 'เน็ต+โทรศัพท์':
-        return <Radio className="w-4.5 h-4.5 text-indigo-500" />;
+        return <Radio className={iconClass} />;
       default:
-        return <Package className="w-4.5 h-4.5 text-blue-600" />;
+        return <Package className={iconClass} />;
     }
   };
 
