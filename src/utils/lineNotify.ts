@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { LineNotificationConfig, LineStockNotifyData, LineAuthNotifyData } from '../types';
+import { LineNotificationConfig, LineStockNotifyData, LineBulkStockNotifyData, LineAuthNotifyData } from '../types';
 
 export const DEFAULT_LINE_CONFIG: LineNotificationConfig = {
   enabled: true,
@@ -93,6 +93,42 @@ export const notifyStockTransaction = async (data: LineStockNotifyData): Promise
     return { success: resData.success, message: resData.message };
   } catch (err: any) {
     console.warn('LINE stock notify error:', err);
+    return { success: false, message: err.message };
+  }
+};
+
+/**
+ * Send LINE notification for Bulk Stock Out
+ */
+export const notifyBulkStockTransaction = async (data: LineBulkStockNotifyData): Promise<{ success: boolean; message?: string }> => {
+  try {
+    const payload = {
+      type: 'bulk_stock_out',
+      data: {
+        ...data,
+        timestamp: data.timestamp || new Date().toLocaleString('th-TH', { 
+          timeZone: 'Asia/Bangkok', 
+          dateStyle: 'medium', 
+          timeStyle: 'short' 
+        }),
+      },
+    };
+
+    const res = await fetch('/api/line/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { success: false, message: err.error || 'Failed to send LINE bulk notification' };
+    }
+
+    const resData = await res.json();
+    return { success: resData.success, message: resData.message };
+  } catch (err: any) {
+    console.warn('LINE bulk stock notify error:', err);
     return { success: false, message: err.message };
   }
 };

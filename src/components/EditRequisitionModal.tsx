@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { RequisitionRecord, InventoryItem } from '../types';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { 
   X, Save, AlertCircle, Clock, Calendar, MapPin, 
   ArrowDownRight, ArrowUpRight, FileText, User, Package, Trash2
@@ -23,6 +25,8 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
   onSave,
   onDelete,
 }) => {
+  useScrollLock(isOpen && Boolean(record));
+
   const [type, setType] = useState<'out' | 'in'>('out');
   const [selectedItemId, setSelectedItemId] = useState('');
   const [itemName, setItemName] = useState('');
@@ -167,25 +171,34 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* Smooth Backdrop */}
+  const modalContent = (
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain"
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+        }
+      }}
+    >
+      {/* Smooth Backdrop - Solid Hardware-Accelerated Overlay */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
         onClick={onClose}
-        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+        style={{ willChange: 'opacity' }}
+        className="fixed inset-0 bg-slate-950/80 transform-gpu touch-none"
       />
 
-      {/* Smooth Modal Dialog */}
+      {/* Smooth Modal Dialog - Hardware-Accelerated without CSS transition conflicts */}
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 14 }}
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 10 }}
-        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/80 dark:border-slate-800 transition-colors"
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        style={{ willChange: 'transform, opacity' }}
+        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/80 dark:border-slate-800 transform-gpu"
       >
         
         {/* Modal Header */}
@@ -467,5 +480,7 @@ export const EditRequisitionModal: React.FC<EditRequisitionModalProps> = ({
       </motion.div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
 

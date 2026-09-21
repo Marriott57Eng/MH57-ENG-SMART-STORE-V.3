@@ -10,6 +10,7 @@ import { getFirestore, getDocs, collection, doc, setDoc, getDoc, deleteDoc } fro
 import { 
   pushLineMessage, 
   createStockFlexMessage, 
+  createBulkStockFlexMessage,
   createAuthFlexMessage, 
   createTestFlexMessage, 
   getServerLineConfig, 
@@ -594,6 +595,11 @@ async function startServer() {
           return res.json({ success: false, skipped: true, reason: 'Stock out notification disabled' });
         }
         flexMessage = createStockFlexMessage(data);
+      } else if (type === 'bulk_stock_out') {
+        if (!config.notifyStockOut) {
+          return res.json({ success: false, skipped: true, reason: 'Stock out notification disabled' });
+        }
+        flexMessage = createBulkStockFlexMessage(data);
       } else if (type === 'login' || type === 'logout') {
         const isLogin = type === 'login';
         if (isLogin && !config.notifyLogin) {

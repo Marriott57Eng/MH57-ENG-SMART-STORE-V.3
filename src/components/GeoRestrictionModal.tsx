@@ -1,6 +1,8 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, AlertTriangle, ShieldAlert, CheckCircle2, RefreshCw, X, Navigation } from 'lucide-react';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { STORE_LOCATION, MAX_DISTANCE_METERS } from '../utils/geo';
 
 export interface GeoModalState {
@@ -23,25 +25,32 @@ export const GeoRestrictionModal: React.FC<GeoRestrictionModalProps> = ({
   onRetry,
   isChecking = false,
 }) => {
+  useScrollLock(state.isOpen);
+
   if (!state.isOpen) return null;
 
   const isPermission = state.type === 'permission_denied';
   const isActionBlocked = state.type === 'action_blocked';
   const isLoginNotice = state.type === 'login_notice';
 
-  return (
-    <AnimatePresence>
-      <div 
-        id="geo-restriction-modal-overlay"
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto"
+  const modalContent = (
+    <div 
+      id="geo-restriction-modal-overlay"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 overflow-y-auto transform-gpu overscroll-contain"
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ willChange: 'transform, opacity' }}
+        className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-red-200 dark:border-red-900/60 shadow-2xl overflow-hidden p-6 sm:p-7 text-center transform-gpu"
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.92, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.92, y: 16 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-          className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-red-200 dark:border-red-900/60 shadow-2xl overflow-hidden p-6 sm:p-7 text-center"
-        >
           {/* Close button */}
           <button
             id="close-geo-modal-btn"
@@ -143,6 +152,7 @@ export const GeoRestrictionModal: React.FC<GeoRestrictionModalProps> = ({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

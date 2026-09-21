@@ -116,6 +116,20 @@ export interface LineStockNotifyData {
   status?: 'normal' | 'low' | 'out';
 }
 
+export interface LineBulkStockNotifyData {
+  items: Array<{
+    itemId: string;
+    itemName: string;
+    qty: number;
+    unit: string;
+    newQty?: number;
+  }>;
+  requestedBy: string;
+  purpose: string;
+  note?: string;
+  timestamp?: string;
+}
+
 export interface LineAuthNotifyData {
   type: 'login' | 'logout';
   userId?: string;

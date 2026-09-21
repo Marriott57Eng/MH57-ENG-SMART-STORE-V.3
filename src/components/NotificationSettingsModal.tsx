@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { 
   Bell, 
   Check, 
@@ -235,19 +237,31 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
 
   if (!isOpen) return null;
 
+  useScrollLock(isOpen);
+
   const isConfigured = Boolean(config.channelAccessToken && config.destinationId);
   const isAdmin = currentUser.role === 'admin';
 
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
+  const modalContent = (
+    <div 
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 animate-in fade-in duration-150 transform-gpu overscroll-contain"
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+        }
+      }}
+    >
       <div 
-        className="bg-white dark:bg-slate-900 w-full max-w-2xl max-h-[92dvh] rounded-3xl shadow-2xl overflow-hidden border border-slate-300 dark:border-slate-800 flex flex-col animate-in zoom-in-95 duration-200 transition-colors"
+        className="bg-white dark:bg-slate-900 w-full max-w-2xl max-h-[92dvh] rounded-[32px] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col animate-in zoom-in-95 duration-150 relative transform-gpu"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Specular Rim Light */}
+        <div className="absolute top-0 left-8 right-8 h-[1.5px] bg-gradient-to-r from-transparent via-white/90 dark:via-white/40 to-transparent pointer-events-none rounded-full z-10" />
+
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-900 text-white flex items-center justify-between shrink-0 shadow-xs">
+        <div className="px-5 py-4 border-b border-white/40 dark:border-white/10 bg-slate-950/85 backdrop-blur-xl text-white flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center border border-blue-500 shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center border border-blue-400/40 shadow-md shadow-blue-500/25">
               <Bell className="w-5 h-5 text-white animate-pulse" />
             </div>
             <div>
@@ -255,31 +269,31 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
                 <h3 className="font-extrabold text-base sm:text-lg tracking-tight">
                   ศูนย์รวมการแจ้งเตือน (Notifications)
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-white/20 border border-white/30">
+                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black bg-white/20 border border-white/30 backdrop-blur-xs">
                   Store FL.6
                 </span>
               </div>
-              <p className="text-xs text-white/90 font-medium">
+              <p className="text-xs text-white/80 font-medium">
                 Web Push แจ้งเตือนแม้อยู่นอกแอป และ LINE Messaging API
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-white/80 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+            className="text-white/80 hover:text-white p-2 rounded-full liquid-glass-pill transition-colors cursor-pointer border border-white/30"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Top Navigation Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-850 p-1.5 gap-1.5 shrink-0">
+        <div className="flex border-b border-white/40 dark:border-white/10 bg-white/30 dark:bg-slate-900/40 backdrop-blur-md p-2 gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('webpush')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
               activeTab === 'webpush'
-                ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                ? 'liquid-glass text-blue-600 dark:text-blue-400 shadow-md border border-white/80 dark:border-white/20'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -294,9 +308,9 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
             <button
               type="button"
               onClick={() => setActiveTab('line')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
                 activeTab === 'line'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                  ? 'liquid-glass text-emerald-600 dark:text-emerald-400 shadow-md border border-white/80 dark:border-white/20'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -749,4 +763,6 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

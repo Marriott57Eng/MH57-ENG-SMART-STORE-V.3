@@ -520,6 +520,162 @@ export const createAuthFlexMessage = (data: {
 };
 
 /**
+ * Build Flex Message for Bulk Stock Out
+ */
+export const createBulkStockFlexMessage = (data: {
+  items: Array<{
+    itemId: string;
+    itemName: string;
+    qty: number;
+    unit: string;
+    newQty?: number;
+  }>;
+  requestedBy: string;
+  purpose: string;
+  timestamp?: string;
+}) => {
+  const headerBgColor = '#2563EB'; // Blue
+  const headerTitle = `📤 แจ้งเตือนการเบิกหลายรายการ (${data.items.length} รายการ)`;
+  const totalUnits = data.items.reduce((sum, i) => sum + i.qty, 0);
+
+  const timeStr = data.timestamp || new Date().toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const itemBoxes: any[] = data.items.slice(0, 10).map((item) => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      {
+        type: 'text',
+        text: `• ${item.itemName}`,
+        size: 'xs',
+        color: '#1E293B',
+        flex: 3,
+        wrap: true,
+      },
+      {
+        type: 'text',
+        text: `-${item.qty} ${item.unit}`,
+        size: 'xs',
+        weight: 'bold',
+        color: '#DC2626',
+        align: 'end',
+        flex: 1,
+      }
+    ]
+  }));
+
+  return {
+    type: 'flex',
+    altText: `${headerTitle}: รวม ${totalUnits} ชิ้น โดย ${data.requestedBy}`,
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: headerBgColor,
+        paddingAll: '18px',
+        contents: [
+          {
+            type: 'text',
+            text: headerTitle,
+            weight: 'bold',
+            color: '#FFFFFF',
+            size: 'md',
+          },
+          {
+            type: 'text',
+            text: 'ENG SMART STORE • Store FL.6',
+            color: '#FFFFFFCC',
+            size: 'xxs',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: '18px',
+        contents: [
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: 'รายการสินค้าที่เบิก:',
+                weight: 'bold',
+                size: 'sm',
+                color: '#334155',
+              },
+              {
+                type: 'text',
+                text: `รวม ${totalUnits} ชิ้น`,
+                weight: 'bold',
+                size: 'xs',
+                color: '#2563EB',
+                align: 'end',
+              }
+            ]
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            margin: 'sm',
+            spacing: 'xs',
+            contents: itemBoxes
+          },
+          {
+            type: 'separator',
+            margin: 'md',
+            color: '#E2E8F0',
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            margin: 'md',
+            spacing: 'sm',
+            contents: [
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  { type: 'text', text: '👤 ผู้เบิก:', size: 'xs', color: '#64748B', flex: 2 },
+                  { type: 'text', text: data.requestedBy, size: 'xs', weight: 'bold', color: '#1E293B', flex: 4, align: 'end' },
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  { type: 'text', text: '🎯 วัตถุประสงค์:', size: 'xs', color: '#64748B', flex: 2 },
+                  { type: 'text', text: data.purpose || 'ใช้งานทั่วไป', size: 'xs', color: '#1E293B', flex: 4, align: 'end', wrap: true },
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  { type: 'text', text: '🕒 เวลาบันทึก:', size: 'xs', color: '#64748B', flex: 2 },
+                  { type: 'text', text: timeStr, size: 'xs', color: '#64748B', flex: 4, align: 'end' },
+                ]
+              },
+            ]
+          }
+        ],
+      },
+    },
+  };
+};
+
+/**
  * Build Test Flex Message
  */
 export const createTestFlexMessage = () => {

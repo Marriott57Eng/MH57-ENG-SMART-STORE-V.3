@@ -231,12 +231,20 @@ const generateSafeUUID = () => {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-slate-900 dark:bg-slate-950 flex items-center justify-center p-3 sm:p-6 pl-safe pr-safe selection:bg-blue-500 selection:text-white transition-colors overflow-y-auto">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 my-auto rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col p-5 sm:p-8 pt-safe-content justify-center relative overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
-        {/* Decorative background */}
-        <div className="absolute top-0 left-0 w-full h-40 bg-blue-600/10 rounded-b-[40px] blur-xl pointer-events-none"></div>
+    <div className="min-h-screen min-h-[100dvh] bg-slate-900 dark:bg-slate-950 flex items-center justify-center p-3.5 sm:p-6 pl-safe pr-safe selection:bg-blue-500 selection:text-white transition-colors overflow-y-auto relative">
+      {/* iOS 27 Ambient Light Orbs for Liquid Glass Refraction */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-2/3 right-1/4 w-72 h-72 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col items-center mb-4 sm:mb-7">
+      <div className="w-full max-w-md my-auto liquid-glass rounded-[32px] sm:rounded-[38px] shadow-[0_25px_70px_-15px_rgba(0,0,0,0.6)] flex flex-col p-6 sm:p-9 pt-safe-content justify-center relative overflow-hidden border border-white/70 dark:border-white/12 transition-all">
+        {/* Specular top rim shine */}
+        <div className="absolute top-0 left-10 right-10 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 dark:via-white/30 to-transparent pointer-events-none rounded-full" />
+        
+        {/* Ambient top liquid tint */}
+        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-blue-500/15 via-blue-500/5 to-transparent rounded-b-[40px] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center mb-5 sm:mb-7">
           <div className="w-full max-w-[500px] h-20 sm:h-[130px] flex items-center justify-center mb-3 sm:mb-5 overflow-hidden rounded-2xl">
             <EngLogo
               alt="ENG Smart Store Logo"
@@ -245,22 +253,22 @@ const generateSafeUUID = () => {
             />
           </div>
           <h1
-            style={{ fontSize: '20.5px', fontStyle: 'normal', fontFamily: "'Fredericka the Great', cursive", textDecorationLine: 'none', textAlign: 'center' }}
-            className="font-bold text-slate-900 dark:text-white mb-1 tracking-tight"
+            style={{ fontSize: '21px', fontStyle: 'normal', fontFamily: "'Fredericka the Great', cursive", textDecorationLine: 'none', textAlign: 'center' }}
+            className="font-bold text-slate-900 dark:text-white mb-1 tracking-tight drop-shadow-xs"
           >
             ENG Smart Store App
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium">เข้าสู่ระบบเพื่อจัดการคลังสินค้า</p>
         </div>
 
         {error && (
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3 text-red-700 dark:text-red-300 relative z-10">
+          <div className="mb-4 sm:mb-6 p-3.5 sm:p-4 bg-red-50/90 dark:bg-red-950/60 border border-red-200/80 dark:border-red-800/80 rounded-2xl flex items-start gap-3 text-red-700 dark:text-red-300 relative z-10 backdrop-blur-md shadow-xs">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
-            <span className="text-sm font-medium">{error}</span>
+            <span className="text-sm font-medium leading-relaxed">{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="relative z-10 flex flex-col gap-3.5 sm:gap-5">
+        <form onSubmit={handleLogin} className="relative z-10 flex flex-col gap-4 sm:gap-5">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 ml-1">รหัสพนักงาน หรือ ชื่อจริง</label>
             <div className="relative">
@@ -271,7 +279,7 @@ const generateSafeUUID = () => {
                 type="text"
                 value={loginInput}
                 onChange={(e) => setLoginInput(e.target.value)}
-                className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white outline-none placeholder:text-slate-400"
+                className="block w-full pl-11 pr-4 py-3.5 bg-white/60 dark:bg-slate-800/60 border border-slate-200/80 dark:border-white/10 rounded-2xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all text-slate-900 dark:text-white outline-none placeholder:text-slate-400 backdrop-blur-md shadow-xs text-base"
                 placeholder="กรอกรหัสพนักงาน หรือ ชื่อจริง"
                 disabled={loading}
                 autoFocus
@@ -282,12 +290,14 @@ const generateSafeUUID = () => {
           <button
             type="submit"
             disabled={loading}
-            className="mt-4 w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-70 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer border border-blue-500"
+            className="mt-2 w-full bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] disabled:opacity-70 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer border border-blue-400/40 relative overflow-hidden"
           >
+            {/* Liquid specular shine overlay */}
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin relative z-10" />
             ) : (
-              'เข้าสู่ระบบ'
+              <span className="relative z-10 text-base">เข้าสู่ระบบ</span>
             )}
           </button>
         </form>

@@ -599,6 +599,18 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const offlineAiMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: '📡 ขณะนี้ระบบอยู่ในโหมดออฟไลน์ (Offline Mode) ไม่สามารถติดต่อโมเดล Gemini AI ได้ ข้อมูลสินค้าและประวัติการเบิกในเครื่องยังคงค้นหาและเปิดดูได้ตามปกติที่แท็บ "คลังสินค้า" ครับ',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setChatHistory(prev => [...prev, userMessage, offlineAiMessage]);
+      setInputText('');
+      return;
+    }
+
     setChatHistory(prev => [...prev, userMessage]);
     setIsProcessing(true);
     
@@ -728,8 +740,10 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         return;
       }
       let errorText = 'ขออภัยครับ เกิดข้อผิดพลาดในการดึงข้อมูลจาก AI กรุณาลองใหม่อีกครั้ง';
-      if (err.message === 'QUOTA_EXCEEDED') {
-         errorText = 'ขณะนี้มีผู้ใช้งาน AI จำนวนมากจนเกินโควต้าที่กำหนดไว้ กรุณารอสักครู่ (ประมาณ 1 นาที) แล้วลองส่งคำสั่งใหม่อีกครั้งครับ';
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        errorText = '📡 ขณะนี้ระบบขาดการเชื่อมต่ออินเทอร์เน็ต (Offline) กรุณาตรวจสอบการเชื่อมต่อ Wi-Fi หรือ Cellular แล้วลองส่งใหม่อีกครั้งครับ';
+      } else if (err.message === 'QUOTA_EXCEEDED') {
+        errorText = 'ขณะนี้มีผู้ใช้งาน AI จำนวนมากจนเกินโควต้าที่กำหนดไว้ กรุณารอสักครู่ (ประมาณ 1 นาที) แล้วลองส่งคำสั่งใหม่อีกครั้งครับ';
       }
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
