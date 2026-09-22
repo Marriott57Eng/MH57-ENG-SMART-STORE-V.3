@@ -773,7 +773,7 @@ async function startServer() {
     }
   });
 
-  // API: Analyze with Antigravity Agent (antigravity-preview-05-2026)
+  // API: Analyze with Ai Agent (antigravity-preview-05-2026)
   app.post("/api/analyze", async (req, res) => {
     try {
       const { prompt, items, requisitions } = req.body;
@@ -802,7 +802,7 @@ async function startServer() {
 - ประวัติการเบิกล่าสุด (${currentReqs.length} รายการ): ${JSON.stringify(currentReqs.slice(0, 20).map(r => ({ item: r.itemName, qty: r.qty, user: r.requestedBy, date: r.timestamp, type: r.type })))}
 `;
 
-      const deepAnalysisInstruction = `คุณคือ Antigravity Executive Supply Chain & Inventory Analyst ผู้เชี่ยวชาญระดับสูงด้านการวิเคราะห์คลังสินค้า Store FL.6 ของ ENG Smart Store
+      const deepAnalysisInstruction = `คุณคือ Ai Executive Supply Chain & Inventory Analyst ผู้เชี่ยวชาญระดับสูงด้านการวิเคราะห์คลังสินค้า Store FL.6 ของ ENG Smart Store
 
 กรุณาวิเคราะห์ข้อมูลสต็อกและประวัติการเบิกใช้อย่างละเอียดเชิงลึก (Deep-dive Strategic Analytics) โดยจัดโครงสร้างรายงานให้น่าอ่านอย่างมืออาชีพ:
 - ใช้การเว้นวรรค (Spacing) จัดย่อหน้าชัดเจน มีบรรทัดว่างคั่นแต่ละประเด็น
@@ -836,7 +836,7 @@ async function startServer() {
       let analysisResult = '';
 
       try {
-        // Run deep reasoning analysis with Antigravity Agent
+        // Run deep reasoning analysis with Ai Agent
         const interaction = await getAI().interactions.create({
           agent: "antigravity-preview-05-2026",
           input: `${deepAnalysisInstruction}\n\n${prompt || 'วิเคราะห์สถานะคลังสินค้าแบบเจาะลึก'}\n\n${summaryText}`,
@@ -859,16 +859,28 @@ async function startServer() {
           analysisResult = interaction.output_text;
         }
       } catch (agentError: any) {
-        console.warn("Antigravity agent fallback to generative model:", agentError.message);
+        console.warn("Ai agent fallback to generative model:", agentError.message);
         // Seamless fallback to high-intelligence reasoning model
-        const fallbackRes = await getAI().models.generateContent({
-          model: "gemini-3.5-flash-lite",
-          contents: `${deepAnalysisInstruction}\n\n${prompt || 'วิเคราะห์สถานะคลังสินค้าแบบเจาะลึก'}\n\n${summaryText}`,
-          config: {
-            systemInstruction: "คุณคือ Antigravity Executive Supply Chain & Inventory Analyst ผู้เชี่ยวชาญการวิเคราะห์คลังสินค้า Store FL.6 ให้รายงานเชิงลึก มีการเว้นวรรค ใช้สัญลักษณ์สวยงาม น่าอ่าน และแม่นยำ"
+        const analysisModels = ["gemini-3.5-flash-lite", "gemma-4-26b-a4b-it", "gemini-flash-lite-latest"];
+        for (const am of analysisModels) {
+          try {
+            const config: any = {
+              systemInstruction: "คุณคือ Ai Executive Supply Chain & Inventory Analyst ผู้เชี่ยวชาญการวิเคราะห์คลังสินค้า Store FL.6 ให้รายงานเชิงลึก มีการเว้นวรรค ใช้สัญลักษณ์สวยงาม น่าอ่าน และแม่นยำ"
+            };
+            if (am.startsWith('gemini-')) {
+              config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
+            }
+            const fallbackRes = await getAI().models.generateContent({
+              model: am,
+              contents: `${deepAnalysisInstruction}\n\n${prompt || 'วิเคราะห์สถานะคลังสินค้าแบบเจาะลึก'}\n\n${summaryText}`,
+              config
+            });
+            analysisResult = fallbackRes.text || '';
+            if (analysisResult) break;
+          } catch (mErr: any) {
+            console.warn(`Analysis model ${am} error:`, mErr?.message);
           }
-        });
-        analysisResult = fallbackRes.text || '';
+        }
       }
 
       res.write(`data: ${JSON.stringify({ type: 'chunk', text: analysisResult })}\n\n`);
@@ -1153,8 +1165,8 @@ ${!isAdminUser ? `
         }
 
         const config: any = { systemInstruction, temperature: 0.2 };
-        // Disable reasoning latency for Flash Lite models to achieve instant sub-second TTFT (~300-400ms)
-        if (modelName.includes('flash-lite')) {
+        // Set minimal thinking for Gemini models to ensure instant sub-second response
+        if (modelName.startsWith('gemini-')) {
           config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
         }
 
@@ -1172,62 +1184,31 @@ ${!isAdminUser ? `
         }
         clientAbortController.signal.addEventListener("abort", onClientAbort, { once: true });
 
-        // Responsive TTFT timeout (7s) to prevent long freezes on congested models
+        // Responsive timeout: 5s for primary model to quickly switch if under high demand, 8s for others
+        const timeoutMs = modelName === 'gemini-3.5-flash-lite' ? 5000 : 8000;
         const ttftTimeout = setTimeout(() => {
-          if (!hasSentChunks) {
-            isTimedOut = true;
-            modelAbortController.abort(new Error(`Timeout waiting for TTFT on ${modelName}`));
-          }
-        }, 7000);
+          isTimedOut = true;
+          modelAbortController.abort(new Error(`Timeout waiting for response on ${modelName}`));
+        }, timeoutMs);
 
-        let chunkInactivityTimeout: NodeJS.Timeout | null = null;
-        const resetChunkTimeout = () => {
-          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
-          chunkInactivityTimeout = setTimeout(() => {
-            console.warn(`[API CHAT] Inter-chunk inactivity timeout on ${modelName}`);
-            modelAbortController.abort(new Error(`Inter-chunk timeout on ${modelName}`));
-          }, 8000);
-        };
-
-        let localRawText = "";
         try {
           config.abortSignal = modelAbortController.signal;
-          const stream = await getAI().models.generateContentStream({
+          const response = await getAI().models.generateContent({
             model: modelName,
             contents,
             config,
           });
-          
-          for await (const chunk of stream) {
-            clearTimeout(ttftTimeout);
-            resetChunkTimeout();
-            if (isClientAborted || clientAbortController.signal.aborted || res.destroyed || res.writableEnded) break;
-            if (chunk.text) {
-              hasSentChunks = true;
-              localRawText += chunk.text;
-              if (!res.writableEnded) {
-                res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk.text })}\n\n`);
-              }
-            }
-          }
-          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
-          return localRawText;
+          clearTimeout(ttftTimeout);
+          return response.text || "";
         } catch (err: any) {
-          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
-          // If we already sent substantial text to the client and stream stalled, return what we have cleanly
-          if (hasSentChunks && (err?.name === 'AbortError' || (err?.message && err.message.includes('Inter-chunk')))) {
-            console.warn(`[API CHAT] Rescuing completed chunks on stream pause for ${modelName}`);
-            return localRawText || "";
-          }
           if (isTimedOut) {
-            const timeoutErr = new Error(`Timeout waiting for TTFT on ${modelName}`);
+            const timeoutErr = new Error(`Timeout waiting for response on ${modelName}`);
             (timeoutErr as any).isTimeout = true;
             throw timeoutErr;
           }
           throw err;
         } finally {
           clearTimeout(ttftTimeout);
-          if (chunkInactivityTimeout) clearTimeout(chunkInactivityTimeout);
           clientAbortController.signal.removeEventListener("abort", onClientAbort);
         }
       };
@@ -1260,19 +1241,14 @@ ${!isAdminUser ? `
             }
 
             if (err?.isTimeout) {
-              console.warn(`[API CHAT] Model ${currentModel} reached TTFT timeout, switching to next model...`);
+              console.warn(`[API CHAT] Model ${currentModel} reached timeout, switching to next model...`);
             } else {
               console.warn(`[API CHAT] Model ${currentModel} error (attempt ${i + 1}/${models.length}):`, err?.message || err);
-            }
-            
-            // If chunks have already started streaming to the client, we cannot cleanly switch models mid-stream
-            if (hasSentChunks) {
-              throw err;
             }
 
             // If there are more fallback models available, try the next model immediately
             if (i < models.length - 1) {
-              await new Promise(r => setTimeout(r, 100));
+              await new Promise(r => setTimeout(r, 50));
               continue;
             } else {
               // All models exhausted
@@ -1298,13 +1274,11 @@ ${!isAdminUser ? `
       };
 
       try {
-        // Primary model: Gemini 3.5 Flash Lite with ThinkingLevel.MINIMAL for ultra-fast streaming (~500ms), followed by resilient fallbacks
+        // Always try the fastest verified model gemini-3.5-flash-lite first, backed by ultra-fast gemma-4-26b-a4b-it and gemini-flash-lite-latest
         const fallbackModels = [
            'gemini-3.5-flash-lite',
-           'gemini-3.1-flash-lite',
-           'gemini-flash-latest',
-           'gemini-3.1-pro-preview',
-           'gemini-3.8-flash'
+           'gemma-4-26b-a4b-it',
+           'gemini-flash-lite-latest'
         ];
         rawResponseText = await generateWithFallback(fallbackModels);
       } catch (err: any) {
@@ -1524,8 +1498,30 @@ ${!isAdminUser ? `
         }
       }
 
+      // Clean and format text (strip raw json:action block from conversational text)
+      let displayableText = rawResponseText;
+      let blockStart = displayableText.indexOf('```json:action');
+      if (blockStart === -1) blockStart = displayableText.indexOf('```json');
+      if (blockStart === -1) blockStart = displayableText.indexOf('```');
+      
+      if (blockStart !== -1 && rawResponseText.includes('"action":')) {
+        displayableText = displayableText.substring(0, blockStart).trim();
+      }
+
+      // Send the complete answer all at once in one go
+      res.write(`data: ${JSON.stringify({ 
+        type: 'complete',
+        text: displayableText || rawResponseText,
+        fullText: rawResponseText,
+        dbAction, 
+        fileReport: fileReports?.[0], 
+        fileReports: fileReports,
+        suggestedItems: itemCards
+      })}\n\n`);
+
       res.write(`data: ${JSON.stringify({ 
         type: 'done', 
+        text: displayableText || rawResponseText,
         dbAction, 
         fileReport: fileReports?.[0], 
         fileReports: fileReports,

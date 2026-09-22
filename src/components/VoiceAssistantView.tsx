@@ -603,7 +603,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       const offlineAiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        text: '📡 ขณะนี้ระบบอยู่ในโหมดออฟไลน์ (Offline Mode) ไม่สามารถติดต่อโมเดล Gemini AI ได้ ข้อมูลสินค้าและประวัติการเบิกในเครื่องยังคงค้นหาและเปิดดูได้ตามปกติที่แท็บ "คลังสินค้า" ครับ',
+        text: '📡 ขณะนี้ระบบอยู่ในโหมดออฟไลน์ (Offline Mode) ไม่สามารถติดต่อ AI ได้ ข้อมูลสินค้าและประวัติการเบิกในเครื่องยังคงค้นหาและเปิดดูได้ตามปกติที่แท็บ "คลังสินค้า" ครับ',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setChatHistory(prev => [...prev, userMessage, offlineAiMessage]);
@@ -617,13 +617,13 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     const aiMessageId = (Date.now() + 1).toString();
     let textBuffer = '';
 
-    // Safety client timeout (16s) to ensure the UI never hangs indefinitely
+    // Safety client timeout (60s) to allow seamless fallback without premature interruption
     const safetyTimeout = setTimeout(() => {
       if (!textBuffer) {
         console.warn('Chat request safety timeout reached, releasing UI');
         abortController.abort(new Error('SafetyTimeout'));
       }
-    }, 16000);
+    }, 60000);
 
     try {
       const res = await fetch('/api/chat', {
@@ -647,15 +647,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       const decoder = new TextDecoder();
       let done = false;
       let jsonBuffer = '';
-      
-      const aiMessage: ChatMessage = {
-          id: aiMessageId,
-          role: 'assistant',
-          text: '',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      
-      setChatHistory(prev => [...prev, aiMessage]);
+      let hasAddedAiMessage = false;
 
       while (!done) {
           const { value, done: readerDone } = await reader.read();
@@ -676,16 +668,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                           const data = JSON.parse(trimmed.slice(6));
                           if (data.type === 'chunk') {
                               textBuffer += data.text;
-                              let displayableText = textBuffer;
-                              let blockStart = displayableText.indexOf('```json:action');
-                              if (blockStart === -1) blockStart = displayableText.indexOf('```json');
-                              if (blockStart === -1) blockStart = displayableText.indexOf('```');
-                              
-                              if (blockStart !== -1 && textBuffer.includes('"action":')) {
-                                displayableText = displayableText.substring(0, blockStart);
-                              }
-                              setChatHistory(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: displayableText } : msg));
-                          } else if (data.type === 'done') {
+                          } else if (data.type === 'complete' || data.type === 'done') {
                               let isPending = false;
                               if (data.dbAction && (data.dbAction.action === 'requisition' || data.dbAction.action === 'stock_in' || data.dbAction.action === 'update_stock')) {
                                   isPending = true;
@@ -693,12 +676,14 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                   onExecuteDbAction(data.dbAction);
                               }
 
+                              const finalText = data.text || textBuffer || '';
+
                               // Fallback client-side matching if server didn't provide suggestedItems
                               let finalSuggestedItems = data.suggestedItems;
                               if (!finalSuggestedItems && !data.dbAction && !data.fileReport && !data.fileReports) {
-                                const fullText = (queryText + ' ' + textBuffer).toLowerCase();
+                                const fullText = (queryText + ' ' + finalText).toLowerCase();
                                 const clientMatches = items.filter(item => {
-                                  const idMatch = queryText.includes(item.id) || textBuffer.includes(item.id);
+                                  const idMatch = queryText.includes(item.id) || finalText.includes(item.id);
                                   const nameMatch = queryText.toLowerCase().includes(item.name.toLowerCase()) || 
                                                     (item.name.length >= 4 && fullText.includes(item.name.toLowerCase()));
                                   return idMatch || nameMatch;
@@ -708,14 +693,24 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                 }
                               }
 
-                              setChatHistory(prev => prev.map(msg => msg.id === aiMessageId ? {
-                                  ...msg,
+                              const completedMessage: ChatMessage = {
+                                  id: aiMessageId,
+                                  role: 'assistant',
+                                  text: finalText,
+                                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                                   suggestedItems: finalSuggestedItems,
                                   fileReport: data.fileReport || data.pdfReport,
                                   fileReports: data.fileReports,
                                   dbAction: data.dbAction,
                                   isPendingConfirmation: isPending
-                              } : msg));
+                              };
+
+                              if (!hasAddedAiMessage) {
+                                hasAddedAiMessage = true;
+                                setChatHistory(prev => [...prev.filter(m => m.id !== aiMessageId), completedMessage]);
+                              } else {
+                                setChatHistory(prev => prev.map(msg => msg.id === aiMessageId ? completedMessage : msg));
+                              }
                           } else if (data.type === 'error') {
                               serverError = new Error(data.message);
                           }
@@ -744,6 +739,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         errorText = '📡 ขณะนี้ระบบขาดการเชื่อมต่ออินเทอร์เน็ต (Offline) กรุณาตรวจสอบการเชื่อมต่อ Wi-Fi หรือ Cellular แล้วลองส่งใหม่อีกครั้งครับ';
       } else if (err.message === 'QUOTA_EXCEEDED') {
         errorText = 'ขณะนี้มีผู้ใช้งาน AI จำนวนมากจนเกินโควต้าที่กำหนดไว้ กรุณารอสักครู่ (ประมาณ 1 นาที) แล้วลองส่งคำสั่งใหม่อีกครั้งครับ';
+      } else if (err.message && (err.message.includes('503') || err.message.includes('UNAVAILABLE') || err.message.includes('high demand'))) {
+        errorText = 'ขณะนี้ระบบ AI ให้บริการหนาแน่นชั่วคราว กรุณากดลองส่งคำถามใหม่อีกครั้งได้เลยครับ';
       }
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -853,9 +850,6 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base leading-tight">AI ผู้ช่วยคลังสินค้า</h2>
-                <span className="text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.2 rounded border border-blue-300 dark:border-blue-700">
-                  Gemini 3.5 Flash Lite
-                </span>
               </div>
               <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 leading-tight">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />

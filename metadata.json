@@ -1,6 +1,6 @@
 {
   "name": "MH57 ENG Store App V.2",
-  "description": "แอปพลิเคชันจัดการคลังสินค้าของ ENG Smart Store พร้อมระบบ AI Voice & Chat Assistant (Gemini 3.5 Flash Lite & Gemini Live Speech) และระบบวิเคราะห์เชิงลึกด้วย Antigravity Agent",
+  "description": "แอปพลิเคชันจัดการคลังสินค้าของ ENG Smart Store พร้อมระบบ AI Voice & Chat Assistant (Gemini 3.5 Flash Lite & Gemini Live Speech) และระบบวิเคราะห์เชิงลึกด้วย Ai",
   "requestFramePermissions": [
     "microphone",
     "geolocation"

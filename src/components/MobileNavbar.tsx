@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Package, BarChart3, Bot, ClipboardList, Layers, Users } from 'lucide-react';
+import { Package, BarChart3, Bot, ClipboardList, Layers, ShieldCheck } from 'lucide-react';
 
-export type AppTab = 'inventory' | 'history' | 'voice' | 'dashboard' | 'categories' | 'users';
+export type AppTab = 'inventory' | 'history' | 'voice' | 'dashboard' | 'categories' | 'admin' | 'users';
 
 interface MobileNavbarProps {
   activeTab: AppTab;
@@ -34,7 +34,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
     { id: 'voice' as AppTab, label: isLiveActive ? '🔴 คุยสด AI' : 'ถาม AI', icon: Bot, isCenter: true },
     { id: 'dashboard' as AppTab, label: 'ภาพรวม', icon: BarChart3, dot: lowStockCount > 0 },
     { id: 'categories' as AppTab, label: 'หมวด', icon: Layers },
-    ...(isAdmin ? [{ id: 'users' as AppTab, label: 'ผู้ใช้', icon: Users }] : []),
+    ...(isAdmin ? [{ id: 'admin' as AppTab, label: 'Admin', icon: ShieldCheck }] : []),
   ];
 
   const navContent = (
@@ -58,7 +58,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
 
       {tabs.map((tab) => {
         const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
+        const isActive = activeTab === tab.id || (tab.id === 'admin' && activeTab === 'users');
 
         if (tab.isCenter) {
           return (

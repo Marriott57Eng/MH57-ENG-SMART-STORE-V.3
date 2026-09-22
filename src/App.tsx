@@ -17,6 +17,7 @@ import { EditItemModal } from './components/EditItemModal';
 import { EditRequisitionModal } from './components/EditRequisitionModal';
 import { LoginView } from './components/LoginView';
 import { UserManagementView } from './components/UserManagementView';
+import { AdminHubView } from './components/AdminHubView';
 import { ThemeToggle } from './components/ThemeToggle';
 import { EngLogo } from './components/EngLogo';
 import { TopNavTabs } from './components/TopNavTabs';
@@ -221,7 +222,25 @@ export default function App() {
   const [requisitionToEdit, setRequisitionToEdit] = useState<RequisitionRecord | null>(null);
   const [isEditRequisitionModalOpen, setIsEditRequisitionModalOpen] = useState(false);
   const [isLineSettingsModalOpen, setIsLineSettingsModalOpen] = useState(false);
+  const [lineSettingsInitialTab, setLineSettingsInitialTab] = useState<'webpush' | 'line'>('line');
   const [transactionSuccess, setTransactionSuccess] = useState<TransactionSuccessData | null>(null);
+
+  const handleOpenAddItemModal = () => {
+    setItemToEdit({
+      id: `A${Date.now().toString().slice(-9)}`,
+      name: '',
+      category: categoryList[0] || 'เคมี',
+      unit: 'ชิ้น',
+      qty: 0,
+      minStock: 5,
+      location: 'Store FL.6',
+      note: '',
+      ordered: '',
+      orderedDate: '',
+      status: 'out',
+    });
+    setIsEditItemModalOpen(true);
+  };
   
   const [isRequisitionMenuOpen, setIsRequisitionMenuOpen] = useState(false);
   const requisitionMenuRef = useRef<HTMLDivElement>(null);
@@ -1326,15 +1345,12 @@ export default function App() {
                 </div>
 
                 {/* User Info Badge */}
-                <div className="flex items-center gap-1.5 liquid-glass-pill px-2.5 sm:px-3 py-1 rounded-2xl shadow-2xs min-w-0 border border-white/70 dark:border-white/10">
+                <div className="flex items-center gap-1.5 liquid-glass-pill px-2.5 sm:px-3 py-1 rounded-2xl shadow-2xs min-w-0 border border-white/70 dark:border-white/10" title={currentUser.name}>
                   <div className="w-5 h-5 rounded-full bg-blue-500/20 dark:bg-blue-400/20 border border-blue-400/30 flex items-center justify-center shrink-0 shadow-xs">
                     <UserIcon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate max-w-[90px] sm:max-w-[150px] md:max-w-none" title={currentUser.name}>
-                      {currentUser.name}
-                    </span>
-                    <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-semibold truncate leading-tight">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate leading-tight">
                       {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}
                     </span>
                   </div>
@@ -1381,7 +1397,10 @@ export default function App() {
 
                 {/* Notification Settings (Web Push for all, LINE Bot for Admin) */}
                 <button
-                  onClick={() => setIsLineSettingsModalOpen(true)}
+                  onClick={() => {
+                    setLineSettingsInitialTab('line');
+                    setIsLineSettingsModalOpen(true);
+                  }}
                   className="p-2 sm:p-2.5 rounded-2xl text-blue-700 dark:text-blue-300 hover:bg-blue-500/15 active:scale-95 transition-all flex items-center border border-blue-400/30 bg-blue-500/10 dark:bg-blue-400/10 cursor-pointer shadow-2xs backdrop-blur-md"
                   title={currentUser.role === 'admin' ? "การแจ้งเตือน (Web Push & LINE)" : "การแจ้งเตือน Web Push"}
                 >
@@ -1391,22 +1410,7 @@ export default function App() {
                 {/* Add Item (Admin) */}
                 {currentUser.role === 'admin' && (
                   <button
-                    onClick={() => {
-                      setItemToEdit({
-                        id: `A${Date.now().toString().slice(-9)}`,
-                        name: '',
-                        category: categoryList[0] || 'เคมี',
-                        unit: 'ชิ้น',
-                        qty: 0,
-                        minStock: 5,
-                        location: 'Store FL.6',
-                        note: '',
-                        ordered: '',
-                        orderedDate: '',
-                        status: 'out',
-                      });
-                      setIsEditItemModalOpen(true);
-                    }}
+                    onClick={handleOpenAddItemModal}
                     className="p-2 sm:p-2.5 px-2.5 sm:px-3 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 dark:from-slate-700 dark:to-slate-850 text-white active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1 border border-white/15 shadow-sm cursor-pointer relative overflow-hidden"
                     title="เพิ่มสินค้าใหม่ (Admin)"
                   >
@@ -1792,19 +1796,38 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* TAB 6: Users Management */}
-          {activeTab === 'users' && currentUser?.role === 'admin' && (
+          {/* TAB 6: Admin Console & All Admin Functions */}
+          {(activeTab === 'admin' || activeTab === 'users') && currentUser?.role === 'admin' && (
             <motion.div
-              key="users"
+              key="admin-hub"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="flex-1 flex flex-col pb-28 sm:pb-32"
+              className="flex-1 flex flex-col"
             >
-              <UserManagementView 
+              <AdminHubView 
                 currentUser={currentUser} 
                 onUpdateCurrentUser={handleUpdateCurrentUser}
+                onOpenAddItem={handleOpenAddItemModal}
+                onOpenNotificationSettings={(tab) => {
+                  setLineSettingsInitialTab(tab || 'line');
+                  setIsLineSettingsModalOpen(true);
+                }}
+                onExportInventoryPdf={handleExportInventoryPdf}
+                isExportingInventoryPdf={isExportingInventoryPdf}
+                summary={summary}
+                items={items}
+                requisitions={requisitions}
+                onNavigateToTab={(tab) => setActiveTab(tab)}
+                onFilterLowStock={() => {
+                  setStatusFilter('low_or_out');
+                  setActiveTab('inventory');
+                }}
+                onEditItem={(item) => {
+                  setItemToEdit(item);
+                  setIsEditItemModalOpen(true);
+                }}
               />
             </motion.div>
           )}
@@ -2161,6 +2184,7 @@ export default function App() {
           isOpen={isLineSettingsModalOpen}
           onClose={() => setIsLineSettingsModalOpen(false)}
           currentUser={currentUser}
+          initialTab={lineSettingsInitialTab}
         />
       </div>
     </div>

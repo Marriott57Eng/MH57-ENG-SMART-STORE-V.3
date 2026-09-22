@@ -51,6 +51,8 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
   currentUser,
   initialTab = 'webpush'
 }) => {
+  useScrollLock(isOpen);
+
   const [activeTab, setActiveTab] = useState<'webpush' | 'line'>(initialTab);
   
   // LINE State
@@ -82,13 +84,14 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
 
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) setActiveTab(initialTab);
       loadConfig();
       checkWebPushStatus();
       setTestResult(null);
       setSaveSuccess(false);
       setPushMessage(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   const checkWebPushStatus = async () => {
     const supported = isWebPushSupported();
@@ -236,8 +239,6 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
   };
 
   if (!isOpen) return null;
-
-  useScrollLock(isOpen);
 
   const isConfigured = Boolean(config.channelAccessToken && config.destinationId);
   const isAdmin = currentUser.role === 'admin';

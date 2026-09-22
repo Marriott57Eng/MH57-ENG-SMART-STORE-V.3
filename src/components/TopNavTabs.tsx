@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, ClipboardList, Bot, BarChart3, Layers, Users } from 'lucide-react';
+import { Package, ClipboardList, Bot, BarChart3, Layers, ShieldCheck } from 'lucide-react';
 import { AppTab } from './MobileNavbar';
 
 interface TopNavTabsProps {
@@ -42,7 +42,7 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
       dot: lowStockCount > 0 
     },
     { id: 'categories' as AppTab, label: 'หมวด', icon: Layers },
-    ...(isAdmin ? [{ id: 'users' as AppTab, label: 'ผู้ใช้', icon: Users }] : []),
+    ...(isAdmin ? [{ id: 'admin' as AppTab, label: 'Admin', icon: ShieldCheck }] : []),
   ];
 
   return (
@@ -52,7 +52,7 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
     >
       {tabs.map((tab) => {
         const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
+        const isActive = activeTab === tab.id || (tab.id === 'admin' && activeTab === 'users');
 
         return (
           <button

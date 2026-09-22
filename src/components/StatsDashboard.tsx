@@ -1,14 +1,31 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { InventoryItem, InventorySummary, RequisitionRecord } from '../types';
-import { useState, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
+  ResponsiveContainer, Cell, Legend, PieChart, Pie 
+} from 'recharts';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, format, differenceInDays } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { 
   Package, AlertTriangle, XCircle, CheckCircle2, 
-  Layers, MapPin, ArrowUpRight, ShieldAlert, Sparkles, RefreshCw, Loader2, ChevronDown, ChevronUp
+  Layers, MapPin, ArrowUpRight, ShieldAlert, Sparkles, RefreshCw, Loader2, 
+  ChevronDown, ChevronUp, BarChart3, PieChart as PieChartIcon, TrendingUp, 
+  TrendingDown, Boxes, ArrowDownRight, Calendar, ArrowUpDown, Filter
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+
+const CATEGORY_CHART_COLORS = [
+  '#3B82F6', // Blue
+  '#10B981', // Emerald
+  '#F59E0B', // Amber
+  '#8B5CF6', // Violet
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#F97316', // Orange
+  '#14B8A6', // Teal
+  '#6366F1', // Indigo
+  '#E11D48', // Rose
+];
 
 interface StatsDashboardProps {
   summary: InventorySummary | null;
@@ -35,9 +52,111 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 }) => {
   const lowStockItems = items.filter(i => i.status === 'low' || i.status === 'out');
 
-  // --- NEW ANALYTICS ---
+  // --- TIME BOUNDARIES & ANALYTICS ---
   const currentMonthStart = startOfMonth(new Date());
   const currentMonthEnd = endOfMonth(new Date());
+
+  // Category Movement Filter States
+  const [categoryTimeRange, setCategoryTimeRange] = useState<'30days' | 'month' | 'all'>('30days');
+  const [categoryChartType, setCategoryChartType] = useState<'bar' | 'pie'>('bar');
+  const [selectedCategoryDetail, setSelectedCategoryDetail] = useState<string | null>(null);
+
+  // Category-wise Requisition & Movement Analytics
+  const categoryDisbursementData = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startOfCurMonth = startOfMonth(now);
+    const endOfCurMonth = endOfMonth(now);
+
+    // Filter requisitions based on selected time range
+    const filteredReqs = requisitions.filter(req => {
+      if (!req.isoDate) return true;
+      try {
+        const d = parseISO(req.isoDate);
+        if (categoryTimeRange === '30days') {
+          return d >= thirtyDaysAgo;
+        } else if (categoryTimeRange === 'month') {
+          return isWithinInterval(d, { start: startOfCurMonth, end: endOfCurMonth });
+        }
+        return true;
+      } catch (e) {
+        return true;
+      }
+    });
+
+    // Aggregate by category
+    const catMap: Record<string, {
+      category: string;
+      disbursedQty: number;
+      stockInQty: number;
+      disbursedCount: number;
+      stockInCount: number;
+      totalStock: number;
+    }> = {};
+
+    // Initialize with all categories present in items
+    items.forEach(item => {
+      const cat = item.category || 'ทั่วไป';
+      if (!catMap[cat]) {
+        catMap[cat] = {
+          category: cat,
+          disbursedQty: 0,
+          stockInQty: 0,
+          disbursedCount: 0,
+          stockInCount: 0,
+          totalStock: 0,
+        };
+      }
+      catMap[cat].totalStock += (item.qty || 0);
+    });
+
+    // Aggregate transaction movements
+    filteredReqs.forEach(req => {
+      const cat = req.category || 'ทั่วไป';
+      if (!catMap[cat]) {
+        catMap[cat] = {
+          category: cat,
+          disbursedQty: 0,
+          stockInQty: 0,
+          disbursedCount: 0,
+          stockInCount: 0,
+          totalStock: 0,
+        };
+      }
+      if (req.type === 'out') {
+        catMap[cat].disbursedQty += (req.qty || 0);
+        catMap[cat].disbursedCount += 1;
+      } else if (req.type === 'in') {
+        catMap[cat].stockInQty += (req.qty || 0);
+        catMap[cat].stockInCount += 1;
+      }
+    });
+
+    const list = Object.values(catMap);
+    const totalDisbursedOverall = list.reduce((acc, curr) => acc + curr.disbursedQty, 0);
+
+    return list.map(item => ({
+      ...item,
+      netMovement: item.stockInQty - item.disbursedQty,
+      percentage: totalDisbursedOverall > 0 ? Math.round((item.disbursedQty / totalDisbursedOverall) * 100) : 0,
+    })).sort((a, b) => b.disbursedQty - a.disbursedQty);
+  }, [requisitions, items, categoryTimeRange]);
+
+  // Key Category KPI Highlights
+  const categoryKpis = useMemo(() => {
+    const totalDisbursed = categoryDisbursementData.reduce((acc, c) => acc + c.disbursedQty, 0);
+    const totalStockIn = categoryDisbursementData.reduce((acc, c) => acc + c.stockInQty, 0);
+    const topCategory = categoryDisbursementData[0] || null;
+    const totalTransactions = categoryDisbursementData.reduce((acc, c) => acc + c.disbursedCount + c.stockInCount, 0);
+
+    return {
+      totalDisbursed,
+      totalStockIn,
+      topCategory: topCategory && topCategory.disbursedQty > 0 ? topCategory : null,
+      totalTransactions,
+      netTotal: totalStockIn - totalDisbursed,
+    };
+  }, [categoryDisbursementData]);
 
   const currentMonthRequisitions = useMemo(() => {
     return requisitions.filter(req => {
@@ -74,7 +193,6 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
         trend[monthYear] = (trend[monthYear] || 0) + req.qty;
       } catch (e) {}
     });
-    // For sorting, keep it simple by mapping entries and returning the top 6 (already mostly in order due to query)
     return Object.entries(trend).map(([month, qty]) => ({ month, qty })).reverse().slice(0, 6).reverse(); 
   }, [requisitions]);
 
@@ -234,10 +352,10 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base sm:text-lg">AI Smart Analysis</h3>
               <span className="text-[10px] bg-blue-500/15 text-blue-700 dark:text-blue-300 font-extrabold px-2.5 py-0.5 rounded-full border border-blue-400/30">
-                Antigravity
+                Ai
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">แตะเพื่อให้ Antigravity Agent วิเคราะห์สถานะคลังสินค้า</p>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">แตะเพื่อให้ Ai วิเคราะห์สถานะคลังสินค้า</p>
           </div>
         </div>
         {isAnalyzing ? <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin shrink-0" /> : (showAnalysis ? <ChevronUp className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" /> : <ChevronDown className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />)}
@@ -251,7 +369,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                 AI
               </div>
               <div>
-                <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">รายงานวิเคราะห์เชิงลึก (Antigravity Engine)</h4>
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">รายงานวิเคราะห์เชิงลึก (Ai Engine)</h4>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">อัปเดตตามข้อมูลสต็อกและประวัติการเบิกใช้จริง</p>
               </div>
             </div>
@@ -273,7 +391,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
             <div className="flex flex-col items-center justify-center gap-3 text-slate-500 dark:text-slate-400 py-6">
               <Loader2 className="w-7 h-7 animate-spin text-blue-600 dark:text-blue-400" />
               <div className="text-center">
-                <p className="font-semibold text-slate-700 dark:text-slate-200 text-xs sm:text-sm">Antigravity Agent กำลังประมวลผลข้อมูลคลังสินค้า...</p>
+                <p className="font-semibold text-slate-700 dark:text-slate-200 text-xs sm:text-sm">Ai กำลังประมวลผลข้อมูลคลังสินค้า...</p>
                 <p className="text-xs text-slate-400 mt-0.5">คำนวณอัตราหมุนเวียน ดัชนีสุขภาพ และจุดสั่งซื้อฉุกเฉิน</p>
               </div>
             </div>
@@ -284,6 +402,344 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
           )}
         </div>
       )}
+      </div>
+
+      {/* =========================================================
+          NEW: กราฟแสดงสถานะการเบิกจ่ายสินค้าแยกตามหมวดหมู่ (RECHARTS)
+          ========================================================= */}
+      <div className="liquid-glass-card rounded-[32px] border border-white/70 dark:border-white/10 p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        {/* Top Header with Title and Interactive Toggles */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-200/60 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-md shadow-blue-500/25 border border-white/30 shrink-0">
+              <BarChart3 className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                  สถานะการเบิกจ่ายและเคลื่อนไหวแยกตามหมวดหมู่
+                </h2>
+                <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-400/30">
+                  Recharts Analytics
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                เปรียบเทียบยอดเบิกใช้ (ออก) และรับเข้าสต็อก (เข้า) ของแต่ละหมวดหมู่งาน
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive Filters (Time Range & Chart Type) */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Time Range Filter */}
+            <div className="flex items-center p-1 rounded-2xl liquid-glass-pill border border-white/60 dark:border-white/10 text-xs shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setCategoryTimeRange('30days')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                  categoryTimeRange === '30days'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                30 วันล่าสุด
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryTimeRange('month')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                  categoryTimeRange === 'month'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                เดือนนี้
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryTimeRange('all')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                  categoryTimeRange === 'all'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                ทั้งหมด
+              </button>
+            </div>
+
+            {/* Chart Type Toggle */}
+            <div className="flex items-center p-1 rounded-2xl liquid-glass-pill border border-white/60 dark:border-white/10 text-xs shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setCategoryChartType('bar')}
+                title="ดูกราฟแท่งเปรียบเทียบ"
+                className={`p-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 font-bold ${
+                  categoryChartType === 'bar'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span className="hidden sm:inline">กราฟแท่ง</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryChartType('pie')}
+                title="ดูกราฟสัดส่วน"
+                className={`p-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 font-bold ${
+                  categoryChartType === 'pie'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <PieChartIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">สัดส่วน %</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick KPI Strip for Category Movement */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+          <div className="liquid-glass-pill rounded-2xl p-3 border border-blue-400/20 bg-blue-500/5 dark:bg-blue-950/20 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 text-xs font-bold mb-1">
+              <TrendingDown className="w-3.5 h-3.5" />
+              <span>เบิกจ่ายรวม</span>
+            </div>
+            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+              {categoryKpis.totalDisbursed} <span className="text-xs font-semibold text-slate-400">ชิ้น</span>
+            </div>
+          </div>
+
+          <div className="liquid-glass-pill rounded-2xl p-3 border border-emerald-400/20 bg-emerald-500/5 dark:bg-emerald-950/20 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold mb-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>รับเข้ารวม</span>
+            </div>
+            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+              {categoryKpis.totalStockIn} <span className="text-xs font-semibold text-slate-400">ชิ้น</span>
+            </div>
+          </div>
+
+          <div className="liquid-glass-pill rounded-2xl p-3 border border-indigo-400/20 bg-indigo-500/5 dark:bg-indigo-950/20 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 text-xs font-bold mb-1 truncate">
+              <Boxes className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">หมวดที่เบิกสูงสุด</span>
+            </div>
+            <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate" title={categoryKpis.topCategory?.category || '-'}>
+              {categoryKpis.topCategory ? categoryKpis.topCategory.category : '-'}
+            </div>
+            {categoryKpis.topCategory && (
+              <span className="text-[10.5px] text-indigo-500 font-bold block">
+                {categoryKpis.topCategory.disbursedQty} ชิ้น ({categoryKpis.topCategory.percentage}%)
+              </span>
+            )}
+          </div>
+
+          <div className="liquid-glass-pill rounded-2xl p-3 border border-violet-400/20 bg-violet-500/5 dark:bg-violet-950/20 shadow-2xs">
+            <div className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400 text-xs font-bold mb-1">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              <span>การเคลื่อนไหวสุทธิ</span>
+            </div>
+            <div className={`text-lg sm:text-xl font-black ${
+              categoryKpis.netTotal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+            }`}>
+              {categoryKpis.netTotal >= 0 ? `+${categoryKpis.netTotal}` : categoryKpis.netTotal}{' '}
+              <span className="text-xs font-semibold text-slate-400">ชิ้น</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Chart Area */}
+        <div className="w-full">
+          {categoryDisbursementData.length === 0 || (categoryKpis.totalDisbursed === 0 && categoryKpis.totalStockIn === 0) ? (
+            <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+              <Boxes className="w-8 h-8 opacity-40" />
+              <p className="text-xs sm:text-sm font-semibold">ยังไม่มีประวัติการเบิกจ่ายหรือรับเข้าในหมวดหมู่ช่วงเวลานี้</p>
+            </div>
+          ) : categoryChartType === 'bar' ? (
+            <div className="h-72 sm:h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={categoryDisbursementData.slice(0, 10)}
+                  margin={{ top: 10, right: 15, left: -10, bottom: 25 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#64748b" opacity={0.15} />
+                  <XAxis 
+                    dataKey="category" 
+                    tick={{ fontSize: 11 }} 
+                    stroke="#94a3b8" 
+                    interval={0}
+                    angle={-25}
+                    textAnchor="end"
+                    height={45}
+                  />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                  <RechartsTooltip
+                    cursor={{ fill: 'rgba(100, 116, 139, 0.08)' }}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="liquid-glass-card rounded-2xl p-3.5 border border-white/40 dark:border-white/10 shadow-2xl backdrop-blur-2xl text-xs space-y-1.5 min-w-[190px]">
+                            <p className="font-extrabold text-sm text-slate-900 dark:text-white border-b border-white/20 pb-1 flex items-center justify-between">
+                              <span>{label}</span>
+                              <span className="text-[10px] text-blue-500 font-bold">{data.percentage}% ของยอดเบิก</span>
+                            </p>
+                            <div className="space-y-1 pt-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
+                                  เบิกจ่าย (ออก):
+                                </span>
+                                <span className="font-black text-slate-900 dark:text-white">
+                                  {data.disbursedQty} ชิ้น ({data.disbursedCount} ครั้ง)
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                                  รับเข้า (เข้า):
+                                </span>
+                                <span className="font-black text-slate-900 dark:text-white">
+                                  {data.stockInQty} ชิ้น ({data.stockInCount} ครั้ง)
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between border-t border-slate-200/40 dark:border-white/10 pt-1 text-[11px]">
+                                <span className="text-slate-500 dark:text-slate-400">สต็อกคงเหลือปัจจุบัน:</span>
+                                <span className="font-extrabold text-slate-700 dark:text-slate-200">{data.totalStock} ชิ้น</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    align="right" 
+                    wrapperStyle={{ fontSize: '11.5px', paddingBottom: '12px' }} 
+                  />
+                  <Bar 
+                    dataKey="disbursedQty" 
+                    name="ยอดเบิกจ่าย (ออก)" 
+                    fill="#3B82F6" 
+                    radius={[6, 6, 0, 0]} 
+                    cursor="pointer"
+                    onClick={(entry: any) => {
+                      const cat = entry?.category || entry?.payload?.category;
+                      if (cat) onSelectCategory(cat);
+                    }}
+                  />
+                  <Bar 
+                    dataKey="stockInQty" 
+                    name="ยอดรับเข้า (เข้า)" 
+                    fill="#10B981" 
+                    radius={[6, 6, 0, 0]} 
+                    cursor="pointer"
+                    onClick={(entry: any) => {
+                      const cat = entry?.category || entry?.payload?.category;
+                      if (cat) onSelectCategory(cat);
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              {/* Donut / Pie Chart */}
+              <div className="h-72 md:col-span-6 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryDisbursementData.filter(d => d.disbursedQty > 0)}
+                      dataKey="disbursedQty"
+                      nameKey="category"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={95}
+                      paddingAngle={3}
+                      cursor="pointer"
+                      onClick={(entry: any) => {
+                        const cat = entry?.category || entry?.name || entry?.payload?.category;
+                        if (cat) onSelectCategory(cat);
+                      }}
+                    >
+                      {categoryDisbursementData.filter(d => d.disbursedQty > 0).map((entry, index) => (
+                        <Cell 
+                          key={`cell-${entry.category}`} 
+                          fill={CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length]} 
+                        />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="liquid-glass-card rounded-2xl p-3 border border-white/40 dark:border-white/10 shadow-2xl backdrop-blur-2xl text-xs">
+                              <p className="font-extrabold text-slate-900 dark:text-white mb-1">{data.category}</p>
+                              <p className="text-blue-600 dark:text-blue-400 font-bold">
+                                ยอดเบิก: {data.disbursedQty} ชิ้น ({data.percentage}%)
+                              </p>
+                              <p className="text-slate-500 text-[11px]">จำนวนครั้งที่เบิก: {data.disbursedCount} ครั้ง</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Pie Chart Legend & Breakdown List */}
+              <div className="md:col-span-6 space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-none">
+                {categoryDisbursementData.filter(d => d.disbursedQty > 0).slice(0, 7).map((cat, idx) => (
+                  <div
+                    key={cat.category}
+                    onClick={() => onSelectCategory(cat.category)}
+                    className="flex items-center justify-between p-2 rounded-xl liquid-glass-pill hover:bg-blue-500/10 transition-all cursor-pointer border border-white/40 dark:border-white/5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span 
+                        className="w-3 h-3 rounded-full shrink-0 shadow-2xs" 
+                        style={{ backgroundColor: CATEGORY_CHART_COLORS[idx % CATEGORY_CHART_COLORS.length] }} 
+                      />
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">{cat.category}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-extrabold text-xs text-slate-900 dark:text-white block">
+                        {cat.disbursedQty} ชิ้น
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                        {cat.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Detailed Category Movement Expandable Badges Strip */}
+        <div className="mt-4 pt-3.5 border-t border-slate-200/60 dark:border-white/10 flex items-center justify-between flex-wrap gap-2 text-xs">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+            💡 คลิกที่แท่งกราฟหรือชื่อหมวดหมู่เพื่อกรองรายการสินค้าในหมวดนั้นทันที
+          </span>
+          <div className="flex items-center gap-2 text-[11px] font-bold">
+            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+              <span className="w-2 h-2 rounded-full bg-blue-500" /> เบิกออก
+            </span>
+            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" /> รับเข้า
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Responsive Analytics & Breakdown Grid (1 col on phone, 2 cols on tablet/desktop) */}
@@ -433,3 +889,4 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
     </div>
   );
 };
+
