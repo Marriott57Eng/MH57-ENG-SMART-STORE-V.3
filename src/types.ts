@@ -95,8 +95,46 @@ export interface LineNotificationConfig {
   notifyLogin: boolean;
   notifyLogout: boolean;
   notifyLowStock?: boolean;
+  notifyPurchaseOrder?: boolean;
+  // Dedicated Destination & Token for Purchase Orders
+  useSeparateOrderDestination?: boolean;
+  purchaseOrderDestinationId?: string; // Group ID or User ID specifically for purchase orders
+  purchaseOrderChannelAccessToken?: string; // Optional separate Bot Token for purchase orders
   updatedAt?: string;
   updatedBy?: string;
+}
+
+export interface PurchaseOrder {
+  id: string; // Order Code / PO Code (e.g. PO-2026-001 or editable)
+  itemId: string; // Item Code (editable)
+  itemName: string; // Item Name (editable)
+  category: string;
+  qty: number; // Order Quantity (editable)
+  unit: string; // Unit (editable)
+  currentQty?: number;
+  minStock?: number;
+  location?: string;
+  requestedBy: string; // Requester name
+  brand?: string; // ยี่ห้อ
+  model?: string; // รุ่น
+  supplier?: string;
+  note?: string;
+  urgency?: 'normal' | 'urgent' | 'critical';
+  status: 'pending' | 'confirmed' | 'received' | 'cancelled';
+  createdAt: string;
+  isoDate: string;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  receivedAt?: string;
+  receivedBy?: string;
+  confirmationToken?: string | null;
+  confirmationTokenUsed?: boolean;
+  isLocked?: boolean;
+}
+
+export interface LinePurchaseOrderNotifyData {
+  order: PurchaseOrder;
+  baseUrl?: string;
 }
 
 export interface LineStockNotifyData {

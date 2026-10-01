@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { InventoryItem, InventorySummary, RequisitionRecord } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
@@ -10,9 +10,11 @@ import {
   Package, AlertTriangle, XCircle, CheckCircle2, 
   Layers, MapPin, ArrowUpRight, ShieldAlert, Sparkles, RefreshCw, Loader2, 
   ChevronDown, ChevronUp, BarChart3, PieChart as PieChartIcon, TrendingUp, 
-  TrendingDown, Boxes, ArrowDownRight, Calendar, ArrowUpDown, Filter
+  TrendingDown, Boxes, ArrowDownRight, Calendar, ArrowUpDown, Filter,
+  ChevronRight, ArrowLeft
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { CategoryView } from './CategoryView';
 
 const CATEGORY_CHART_COLORS = [
   '#3B82F6', // Blue
@@ -37,6 +39,9 @@ interface StatsDashboardProps {
   onAskAI: (prompt: string) => void;
   onRefresh: () => void;
   loading: boolean;
+  onExportPdf?: () => void;
+  isExportingPdf?: boolean;
+  initialSubTab?: 'overview' | 'categories';
 }
 
 export const StatsDashboard: React.FC<StatsDashboardProps> = ({
@@ -49,7 +54,18 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
   onAskAI,
   onRefresh,
   loading,
+  onExportPdf,
+  isExportingPdf = false,
+  initialSubTab = 'overview',
 }) => {
+  const [viewMode, setViewMode] = useState<'overview' | 'categories'>(initialSubTab || 'overview');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setViewMode(initialSubTab);
+    }
+  }, [initialSubTab]);
+
   const lowStockItems = items.filter(i => i.status === 'low' || i.status === 'out');
 
   // --- TIME BOUNDARIES & ANALYTICS ---
@@ -283,60 +299,164 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 
   return (
     <div className="p-3.5 sm:p-5 md:p-6 pt-3 sm:pt-4 space-y-4.5 pb-28 sm:pb-32 max-w-7xl mx-auto w-full transition-colors duration-200">
-      {/* Top Header Card */}
-      <div className="liquid-glass-card rounded-[32px] p-5 sm:p-6 shadow-xl relative overflow-hidden border border-white/70 dark:border-white/10">
-        {/* Specular top highlight */}
-        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/25 to-transparent pointer-events-none rounded-full" />
-
-        <div className="flex items-center justify-between mb-3 relative z-10">
-          <div>
-            <span className="text-xs text-blue-600 dark:text-blue-400 font-extrabold tracking-wider uppercase">
-              Store Database
-            </span>
-            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">ภาพรวมคลังสินค้า</h1>
-          </div>
+      {/* Sub-Navigation Switcher (ภาพรวมสถิติ vs หมวดหมู่สินค้า) */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 p-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="px-3.5 py-2 rounded-2xl liquid-glass-pill hover:bg-white/80 dark:hover:bg-slate-700 active:scale-95 transition-all text-slate-800 dark:text-slate-100 flex items-center gap-1.5 text-xs sm:text-sm font-bold border border-white/60 dark:border-white/10 shadow-2xs cursor-pointer"
+            type="button"
+            onClick={() => setViewMode('overview')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === 'overview'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>ซิงค์ชีต</span>
+            <BarChart3 className="w-4 h-4" />
+            <span>ภาพรวมสถิติ</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('categories')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === 'categories'
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md shadow-indigo-500/25'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>หมวดหมู่สินค้า</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              viewMode === 'categories'
+                ? 'bg-white/20 text-white'
+                : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+            }`}>
+              {summary?.categories.length || 0}
+            </span>
           </button>
         </div>
 
-        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-4.5 leading-relaxed">
-          เชื่อมต่อกับ Store Data คลัง Store FL.6 พร้อมอัปเดตและมี AI วิเคราะห์ข้อมูลอัตโนมัติ
-        </p>
-
-        {/* 3 Key Metric Blocks */}
-        <div className="grid grid-cols-3 gap-2.5 relative z-10">
-          <div className="liquid-glass-pill rounded-2xl p-3 sm:p-3.5 border border-white/60 dark:border-white/10 text-center shadow-xs">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-semibold">สินค้าทั้งหมด</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary?.totalItems || items.length}</span>
-            <span className="text-[11px] text-slate-400 dark:text-slate-500 block font-medium">SKUs</span>
-          </div>
-
-          <div 
-            onClick={onFilterLowStock}
-            className="bg-amber-500/15 dark:bg-amber-950/40 rounded-2xl p-3 sm:p-3.5 border border-amber-500/30 dark:border-amber-500/30 text-center cursor-pointer active:scale-95 transition-all shadow-xs backdrop-blur-md"
+        {viewMode === 'categories' && (
+          <button
+            type="button"
+            onClick={() => setViewMode('overview')}
+            className="px-3.5 py-2 rounded-2xl liquid-glass-pill hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/60 dark:border-white/10"
           >
-            <span className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-300 font-bold uppercase tracking-tight block truncate">
-              ใกล้หมด/หมดแล้ว
-            </span>
-            <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
-              {lowStockItems.length}
-            </span>
-            <span className="text-[10px] sm:text-xs text-amber-600/90 dark:text-amber-400/90 block font-bold">กดดูรายการ &gt;</span>
+            <ArrowLeft className="w-4 h-4" />
+            <span>กลับไปหน้าภาพรวมสถิติ</span>
+          </button>
+        )}
+      </div>
+
+      {viewMode === 'categories' ? (
+        <div className="pt-1">
+          <CategoryView
+            summary={summary}
+            items={items}
+            onSelectCategory={onSelectCategory}
+            onExportPdf={onExportPdf}
+            isExporting={isExportingPdf}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Top Header Card */}
+          <div className="liquid-glass-card rounded-[32px] p-5 sm:p-6 shadow-xl relative overflow-hidden border border-white/70 dark:border-white/10">
+            {/* Specular top highlight */}
+            <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/25 to-transparent pointer-events-none rounded-full" />
+
+            <div className="flex items-center justify-between mb-3 relative z-10 flex-wrap gap-2">
+              <div>
+                <span className="text-xs text-blue-600 dark:text-blue-400 font-extrabold tracking-wider uppercase">
+                  Store Database
+                </span>
+                <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">ภาพรวมคลังสินค้า</h1>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Button to open Categories in Overview */}
+                <button
+                  type="button"
+                  onClick={() => setViewMode('categories')}
+                  className="px-3 sm:px-3.5 py-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 active:scale-95 transition-all text-xs sm:text-sm font-bold flex items-center gap-1.5 border border-indigo-200 dark:border-indigo-800/60 shadow-2xs cursor-pointer"
+                  title="เปิดดูหมวดหมู่สินค้าทั้งหมด"
+                >
+                  <Boxes className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>หมวดหมู่ ({summary?.categories.length || 0})</span>
+                </button>
+
+                <button
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="px-3.5 py-2 rounded-2xl liquid-glass-pill hover:bg-white/80 dark:hover:bg-slate-700 active:scale-95 transition-all text-slate-800 dark:text-slate-100 flex items-center gap-1.5 text-xs sm:text-sm font-bold border border-white/60 dark:border-white/10 shadow-2xs cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>ซิงค์ชีต</span>
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-4.5 leading-relaxed">
+              เชื่อมต่อกับ Store Data คลัง Store FL.6 พร้อมอัปเดตและมี AI วิเคราะห์ข้อมูลอัตโนมัติ
+            </p>
+
+            {/* 3 Key Metric Blocks */}
+            <div className="grid grid-cols-3 gap-2.5 relative z-10">
+              <div className="liquid-glass-pill rounded-2xl p-3 sm:p-3.5 border border-white/60 dark:border-white/10 text-center shadow-xs">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-semibold">สินค้าทั้งหมด</span>
+                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary?.totalItems || items.length}</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 block font-medium">SKUs</span>
+              </div>
+
+              <div 
+                onClick={onFilterLowStock}
+                className="bg-amber-500/15 dark:bg-amber-950/40 rounded-2xl p-3 sm:p-3.5 border border-amber-500/30 dark:border-amber-500/30 text-center cursor-pointer active:scale-95 transition-all shadow-xs backdrop-blur-md"
+              >
+                <span className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-300 font-bold uppercase tracking-tight block truncate">
+                  ใกล้หมด/หมดแล้ว
+                </span>
+                <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
+                  {lowStockItems.length}
+                </span>
+                <span className="text-[10px] sm:text-xs text-amber-600/90 dark:text-amber-400/90 block font-bold">กดดูรายการ &gt;</span>
+              </div>
+
+              <div className="liquid-glass-pill rounded-2xl p-3 sm:p-3.5 border border-white/60 dark:border-white/10 text-center shadow-xs">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-semibold">จำนวนรวม</span>
+                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary?.totalQty || 0}</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 block font-medium">หน่วย</span>
+              </div>
+            </div>
           </div>
 
-          <div className="liquid-glass-pill rounded-2xl p-3 sm:p-3.5 border border-white/60 dark:border-white/10 text-center shadow-xs">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-semibold">จำนวนรวม</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary?.totalQty || 0}</span>
-            <span className="text-[11px] text-slate-400 dark:text-slate-500 block font-medium">หน่วย</span>
+          {/* Dedicated Category Mode Banner Card in Overview */}
+          <div 
+            onClick={() => setViewMode('categories')}
+            className="liquid-glass-card rounded-[28px] p-4 sm:p-5 border border-indigo-500/25 dark:border-indigo-400/20 bg-gradient-to-r from-indigo-500/10 via-blue-500/5 to-purple-500/10 flex items-center justify-between cursor-pointer hover:border-indigo-400/50 active:scale-[0.99] transition-all shadow-md group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 border border-indigo-400/30 shrink-0 group-hover:scale-105 transition-transform">
+                <Boxes className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    หมวดหมู่สินค้าในคลัง (Categories)
+                  </h3>
+                  <span className="text-[10px] bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-400/30">
+                    {summary?.categories.length || 0} หมวด
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  แตะเพื่อเปิดดูสินค้าแยกตามหมวดหมู่งาน รูปภาพประกอบ และดาวน์โหลดรายงาน PDF
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 shrink-0 group-hover:translate-x-1 transition-transform pr-1">
+              <span>เปิดดูหมวด</span>
+              <ChevronRight className="w-4 h-4" />
+            </div>
           </div>
-        </div>
-      </div>
 
       {/* AI Quick Insight Prompt Card */}
       <div className="flex flex-col gap-2">
@@ -886,6 +1006,8 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };

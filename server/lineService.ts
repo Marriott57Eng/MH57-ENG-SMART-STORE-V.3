@@ -7,6 +7,10 @@ export interface ServerLineConfig {
   notifyLogin: boolean;
   notifyLogout: boolean;
   notifyLowStock?: boolean;
+  notifyPurchaseOrder?: boolean;
+  useSeparateOrderDestination?: boolean;
+  purchaseOrderDestinationId?: string;
+  purchaseOrderChannelAccessToken?: string;
 }
 
 // In-memory config initialized from environment variables or Firestore updates
@@ -19,6 +23,10 @@ let serverLineConfig: ServerLineConfig = {
   notifyLogin: true,
   notifyLogout: true,
   notifyLowStock: true,
+  notifyPurchaseOrder: true,
+  useSeparateOrderDestination: false,
+  purchaseOrderDestinationId: process.env.LINE_PO_DESTINATION_ID || '',
+  purchaseOrderChannelAccessToken: process.env.LINE_PO_CHANNEL_ACCESS_TOKEN || '',
 };
 
 export const updateServerLineConfig = (newConfig: Partial<ServerLineConfig>) => {
@@ -95,6 +103,27 @@ export const pushLineMessage = async (
     console.warn('Failed to call LINE API:', err?.message || err);
     return { success: false, error: err?.message || 'Network connection to LINE API failed' };
   }
+};
+
+/**
+ * Send Purchase Order message (Order request / Order Confirmed) specifically to the
+ * dedicated Purchase Order LINE Destination and Token if configured, or general LINE destination.
+ */
+export const pushPurchaseOrderLineMessage = async (
+  messages: any[]
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> => {
+  const config = getServerLineConfig();
+  const useDedicatedOrder = Boolean(config.useSeparateOrderDestination && config.purchaseOrderDestinationId);
+
+  const targetDestination = useDedicatedOrder 
+    ? config.purchaseOrderDestinationId! 
+    : config.destinationId;
+
+  const targetToken = (useDedicatedOrder && config.purchaseOrderChannelAccessToken)
+    ? config.purchaseOrderChannelAccessToken
+    : config.channelAccessToken;
+
+  return pushLineMessage(messages, targetToken, targetDestination);
 };
 
 /**
@@ -786,3 +815,623 @@ export const createTestFlexMessage = () => {
     },
   };
 };
+
+/**
+ * Build Flex Message for Purchase Order (สั่งซื้อสินค้าใกล้หมด/หมด)
+ * Contains interactive button to confirm order directly from LINE!
+ */
+export const createPurchaseOrderFlexMessage = (data: {
+  order: {
+    id: string;
+    itemId: string;
+    itemName: string;
+    category?: string;
+    qty: number;
+    unit: string;
+    currentQty?: number;
+    minStock?: number;
+    location?: string;
+    requestedBy: string;
+    brand?: string;
+    model?: string;
+    supplier?: string;
+    note?: string;
+    urgency?: 'normal' | 'urgent' | 'critical';
+    status?: 'pending' | 'confirmed' | 'received' | 'cancelled';
+    confirmedBy?: string;
+    confirmedAt?: string;
+    createdAt?: string;
+    confirmationToken?: string | null;
+  };
+  baseUrl?: string;
+}) => {
+  const order = data.order;
+  const isConfirmed = order.status === 'confirmed' || order.status === 'received' || Boolean(order.confirmedAt);
+  const rawBaseUrl = data.baseUrl || process.env.APP_URL || 'https://ais-dev-oelm7wpwekrdqmpyz7nr3j-465902865130.asia-southeast1.run.app';
+  const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+  
+  const tokenParam = order.confirmationToken ? `&token=${encodeURIComponent(order.confirmationToken)}` : '';
+  const confirmUrl = `${cleanBaseUrl}/api/orders/confirm?orderId=${encodeURIComponent(order.id)}${tokenParam}`;
+  const webAppUrl = `${cleanBaseUrl}/?tab=admin&subtab=orders&orderId=${encodeURIComponent(order.id)}`;
+
+  const urgencyText = order.urgency === 'critical' 
+    ? '🔥 ด่วนที่สุด (Critical)' 
+    : order.urgency === 'urgent' 
+    ? '⚡ ด่วน (Urgent)' 
+    : 'ปกติ';
+  const urgencyColor = order.urgency === 'critical' 
+    ? '#DC2626' 
+    : order.urgency === 'urgent' 
+    ? '#EA580C' 
+    : '#475569';
+
+  return {
+    type: 'flex',
+    altText: isConfirmed 
+      ? `✅ ยืนยันแล้ว: ${order.itemName} (${order.qty} ${order.unit})` 
+      : `🛒 แจ้งเตือนสั่งซื้อสินค้า: ${order.itemName} (${order.qty} ${order.unit})`,
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: isConfirmed ? '#059669' : '#D97706', // Emerald if confirmed, Amber if pending
+        paddingAll: '18px',
+        contents: [
+          {
+            type: 'text',
+            text: isConfirmed ? '✅ คำสั่งซื้อได้รับการยืนยันแล้ว' : '🛒 คำสั่งซื้อสินค้าใหม่ (Purchase Order)',
+            weight: 'bold',
+            color: '#FFFFFF',
+            size: 'md',
+          },
+          {
+            type: 'text',
+            text: `เลขที่ใบสั่งซื้อ: ${order.id}`,
+            color: isConfirmed ? '#D1FAE5' : '#FEF3C7',
+            size: 'xs',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: '18px',
+        contents: [
+          // Item Name
+          {
+            type: 'text',
+            text: order.itemName,
+            weight: 'bold',
+            size: 'lg',
+            color: '#1E293B',
+            wrap: true,
+          },
+          // Item Code & Category
+          {
+            type: 'box',
+            layout: 'horizontal',
+            margin: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: `รหัส: ${order.itemId}`,
+                size: 'xs',
+                color: '#64748B',
+                flex: 0,
+              },
+              ...(order.category ? [{
+                type: 'text',
+                text: ` • หมวด: ${order.category}`,
+                size: 'xs',
+                color: '#64748B',
+                flex: 1,
+              }] : []),
+            ],
+          },
+          {
+            type: 'separator',
+            margin: 'md',
+            color: '#F1F5F9',
+          },
+          // Quantity ordered highlight box
+          {
+            type: 'box',
+            layout: 'horizontal',
+            margin: 'md',
+            backgroundColor: isConfirmed ? '#ECFDF5' : '#FFFBEB',
+            cornerRadius: '12px',
+            paddingAll: '12px',
+            contents: [
+              {
+                type: 'box',
+                layout: 'vertical',
+                flex: 1,
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'จำนวนที่สั่งซื้อ:',
+                    size: 'xs',
+                    color: isConfirmed ? '#047857' : '#92400E',
+                    weight: 'bold',
+                  },
+                  {
+                    type: 'text',
+                    text: `${order.qty} ${order.unit}`,
+                    size: 'xl',
+                    color: isConfirmed ? '#059669' : '#B45309',
+                    weight: 'bold',
+                  },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'สต็อกคงเหลือ:',
+                    size: 'xxs',
+                    color: '#64748B',
+                    align: 'end',
+                  },
+                  {
+                    type: 'text',
+                    text: `${order.currentQty ?? '-'} ${order.unit}`,
+                    size: 'sm',
+                    color: '#DC2626',
+                    weight: 'bold',
+                    align: 'end',
+                  },
+                  {
+                    type: 'text',
+                    text: `(ขั้นต่ำ ${order.minStock ?? '-'})`,
+                    size: 'xxs',
+                    color: '#94A3B8',
+                    align: 'end',
+                  },
+                ],
+              },
+            ],
+          },
+          // Key details table
+          {
+            type: 'box',
+            layout: 'vertical',
+            margin: 'md',
+            spacing: 'sm',
+            contents: [
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'ผู้ขอสั่งซื้อ:',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: order.requestedBy || 'ไม่ระบุ',
+                    size: 'xs',
+                    color: '#1E293B',
+                    weight: 'bold',
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              },
+              ...(order.brand ? [{
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'ยี่ห้อ (Brand):',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: order.brand,
+                    size: 'xs',
+                    color: '#D97706',
+                    weight: 'bold',
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              }] : []),
+              ...(order.model ? [{
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'รุ่น (Model):',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: order.model,
+                    size: 'xs',
+                    color: '#2563EB',
+                    weight: 'bold',
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              }] : []),
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'ความเร่งด่วน:',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: urgencyText,
+                    size: 'xs',
+                    color: urgencyColor,
+                    weight: 'bold',
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'หมายเหตุ:',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: order.note || 'เติมสต็อกตามเกณฑ์ขั้นต่ำ',
+                    size: 'xs',
+                    color: '#334155',
+                    wrap: true,
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'สถานะ:',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: isConfirmed ? `✅ ยืนยันแล้ว (${order.confirmedBy || 'ผู้ดูแลระบบ'})` : '⏳ รอการยืนยันสั่งซื้อ',
+                    size: 'xs',
+                    color: isConfirmed ? '#059669' : '#D97706',
+                    weight: 'bold',
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              },
+              ...(isConfirmed && order.confirmedAt ? [{
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'เวลายืนยัน:',
+                    size: 'xs',
+                    color: '#64748B',
+                    flex: 4,
+                  },
+                  {
+                    type: 'text',
+                    text: order.confirmedAt,
+                    size: 'xs',
+                    color: '#059669',
+                    weight: 'bold',
+                    flex: 6,
+                    align: 'end',
+                  },
+                ],
+              }] : []),
+            ],
+          },
+          {
+            type: 'separator',
+            margin: 'md',
+            color: '#E2E8F0',
+          },
+          {
+            type: 'text',
+            text: `สั่งซื้อเมื่อ: ${order.createdAt || new Date().toLocaleString('th-TH')}`,
+            size: 'xxs',
+            color: '#94A3B8',
+            margin: 'md',
+            align: 'end',
+          },
+        ],
+      },
+      // If confirmed, footer is completely omitted (no confirm button, no lock bar, no check items button).
+      // If pending, only show the one-click confirm button.
+      ...(!isConfirmed ? {
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          paddingAll: '14px',
+          backgroundColor: '#F8FAFC',
+          contents: [
+            {
+              type: 'button',
+              style: 'primary',
+              color: '#059669',
+              height: 'sm',
+              action: {
+                type: 'uri',
+                label: '✅ ยืนยันการสั่งซื้อทันที',
+                uri: confirmUrl,
+              },
+            },
+          ],
+        },
+      } : {}),
+    },
+  };
+};
+
+/**
+ * Build Flex Message for Purchase Order Confirmation notification
+ */
+export const createOrderConfirmedFlexMessage = (data: {
+  order: {
+    id: string;
+    itemId: string;
+    itemName: string;
+    qty: number;
+    unit: string;
+    confirmedBy: string;
+    confirmedAt: string;
+  };
+  baseUrl?: string;
+}) => {
+  const { order } = data;
+  const rawBaseUrl = data.baseUrl || process.env.APP_URL || 'https://ais-dev-oelm7wpwekrdqmpyz7nr3j-465902865130.asia-southeast1.run.app';
+  const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+  const webAppUrl = `${cleanBaseUrl}/?tab=admin&subtab=orders&orderId=${encodeURIComponent(order.id)}`;
+
+  return {
+    type: 'flex',
+    altText: `✅ ยืนยันการสั่งซื้อแล้ว: ${order.itemName} (${order.qty} ${order.unit})`,
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#059669', // Emerald
+        paddingAll: '18px',
+        contents: [
+          {
+            type: 'text',
+            text: '✅ อนุมัติ/ยืนยันการสั่งซื้อแล้ว',
+            weight: 'bold',
+            color: '#FFFFFF',
+            size: 'md',
+          },
+          {
+            type: 'text',
+            text: `ใบสั่งซื้อ: ${order.id}`,
+            color: '#D1FAE5',
+            size: 'xs',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: '18px',
+        contents: [
+          {
+            type: 'text',
+            text: order.itemName,
+            weight: 'bold',
+            size: 'md',
+            color: '#1E293B',
+          },
+          {
+            type: 'text',
+            text: `รหัสอะไหล่: ${order.itemId}`,
+            size: 'xs',
+            color: '#64748B',
+            margin: 'xs',
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            margin: 'md',
+            contents: [
+              {
+                type: 'text',
+                text: 'จำนวนสั่งซื้อ:',
+                size: 'xs',
+                color: '#64748B',
+              },
+              {
+                type: 'text',
+                text: `${order.qty} ${order.unit}`,
+                size: 'xs',
+                color: '#059669',
+                weight: 'bold',
+                align: 'end',
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            margin: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: 'ยืนยันโดย:',
+                size: 'xs',
+                color: '#64748B',
+              },
+              {
+                type: 'text',
+                text: order.confirmedBy || 'ผู้ดูแลระบบ',
+                size: 'xs',
+                color: '#1E293B',
+                weight: 'bold',
+                align: 'end',
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            margin: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: 'เวลายืนยัน:',
+                size: 'xs',
+                color: '#64748B',
+              },
+              {
+                type: 'text',
+                text: order.confirmedAt || new Date().toLocaleString('th-TH'),
+                size: 'xs',
+                color: '#1E293B',
+                align: 'end',
+              },
+            ],
+          },
+          {
+            type: 'separator',
+            margin: 'md',
+            color: '#E2E8F0',
+          },
+          {
+            type: 'text',
+            text: 'สถานะ: ยืนยันแล้ว กำลังจัดส่งเข้าคลังสินค้า',
+            size: 'xs',
+            color: '#059669',
+            weight: 'bold',
+            margin: 'md',
+          },
+        ],
+      },
+    },
+  };
+};
+
+/**
+ * Send reply message using LINE Messaging API replyToken (Instant chat response)
+ */
+export const replyLineMessage = async (
+  replyToken: string,
+  messages: any[],
+  customToken?: string
+): Promise<{ success: boolean; error?: string }> => {
+  const rawToken = (customToken || serverLineConfig.channelAccessToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+  const token = rawToken.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+
+  if (!token) {
+    return { success: false, error: 'LINE Channel Access Token ยังไม่ได้กำหนดค่า' };
+  }
+  if (!replyToken) {
+    return { success: false, error: 'replyToken หายไป' };
+  }
+
+  try {
+    const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        replyToken,
+        messages,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.warn('LINE reply API error:', response.status, errorBody);
+      return { success: false, error: `LINE reply error ${response.status}: ${errorBody}` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.warn('Failed to reply to LINE:', err?.message || err);
+    return { success: false, error: err?.message || 'Network error' };
+  }
+};
+
+/**
+ * Retrieve user profile from LINE (User display name, picture)
+ */
+export const getLineUserProfile = async (
+  userId?: string,
+  groupId?: string,
+  customToken?: string
+): Promise<{ displayName?: string; pictureUrl?: string; userId?: string } | null> => {
+  if (!userId) return null;
+  const rawToken = (customToken || serverLineConfig.channelAccessToken || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+  const token = rawToken.replace(/^Bearer\s+/i, '').replace(/^["']|["']$/g, '').trim();
+  if (!token) return null;
+
+  try {
+    // If in group chat, query member profile
+    if (groupId) {
+      try {
+        const groupRes = await fetch(`https://api.line.me/v2/bot/group/${groupId}/member/${userId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (groupRes.ok) {
+          const profile = await groupRes.json();
+          return profile;
+        }
+      } catch (_) {}
+    }
+
+    // Direct 1-on-1 user profile
+    const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const profile = await res.json();
+      return profile;
+    }
+  } catch (err) {
+    console.warn('Could not fetch LINE profile:', err);
+  }
+  return null;
+};
+

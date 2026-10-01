@@ -2,7 +2,7 @@ import { db } from './firebase';
 import { collection, query, orderBy, limit, getDocs, setDoc, doc, deleteDoc, getDoc, onSnapshot, updateDoc, writeBatch } from 'firebase/firestore';
 import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { InventoryItem, InventorySummary, ChatMessage, RequisitionRecord, DbActionPayload } from './types';
+import { InventoryItem, InventorySummary, ChatMessage, RequisitionRecord, DbActionPayload, PurchaseOrder } from './types';
 import { ItemCard } from './components/ItemCard';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { MobileNavbar, AppTab } from './components/MobileNavbar';
@@ -15,6 +15,8 @@ import { RequisitionModal } from './components/RequisitionModal';
 import { BulkRequisitionModal, BulkRequisitionSubmitData } from './components/BulkRequisitionModal';
 import { EditItemModal } from './components/EditItemModal';
 import { EditRequisitionModal } from './components/EditRequisitionModal';
+import { CreateOrderModal } from './components/CreateOrderModal';
+import { OrdersManagementView } from './components/OrdersManagementView';
 import { LoginView } from './components/LoginView';
 import { UserManagementView } from './components/UserManagementView';
 import { AdminHubView } from './components/AdminHubView';
@@ -27,14 +29,15 @@ import { InventorySkeleton } from './components/InventorySkeleton';
 import { 
   Package, Search, RefreshCw, Filter, ClipboardList, Plus,
   AlertTriangle, CheckCircle2, XCircle, Bot, X, FileDown, Loader2, LogOut, User as UserIcon, Bell,
-  BarChart3, Layers, Users, CheckSquare, Zap, Check, ChevronDown
+  BarChart3, Layers, Users, CheckSquare, Zap, Check, ChevronDown, ShoppingCart
 } from 'lucide-react';
 import { generateAndDownloadPdf } from './utils/pdfGenerator';
 import { useGeolocationAuth } from './hooks/useGeolocationAuth';
+import { getSavedGeoLocationEnabled, saveGeoLocationSetting, subscribeGeoLocationSetting } from './utils/geo';
 import { GeoRestrictionModal } from './components/GeoRestrictionModal';
 import { TransactionSuccessModal, TransactionSuccessData } from './components/TransactionSuccessModal';
 import { playSuccessSoundAndSpeak } from './utils/audioUtils';
-import { notifyStockTransaction, notifyBulkStockTransaction, notifyAuthEvent } from './utils/lineNotify';
+import { notifyStockTransaction, notifyBulkStockTransaction, notifyAuthEvent, notifyPurchaseOrder } from './utils/lineNotify';
 import { triggerLowStockPush, triggerImportantRequisitionPush } from './utils/webPush';
 import { LineSettingsModal } from './components/LineSettingsModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -161,9 +164,35 @@ const getInitialUser = (): User | null => {
   return null;
 };
 
+const getInitialOrders = (): PurchaseOrder[] => {
+  try {
+    const saved = localStorage.getItem('warehouse_orders');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (_) {}
+  return [];
+};
+
 export default function App() {
   const deviceInfo = useDeviceDetector();
   const [currentUser, setCurrentUser] = useState<User | null>(getInitialUser);
+  const [orders, setOrders] = useState<PurchaseOrder[]>(getInitialOrders);
+  const [orderModalItem, setOrderModalItem] = useState<InventoryItem | null>(null);
+  const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const pendingOrdersCount = useMemo(() => orders.filter(o => o.status === 'pending').length, [orders]);
+  const [isGeoLocationEnabled, setIsGeoLocationEnabled] = useState<boolean>(getSavedGeoLocationEnabled);
+
+  // Subscribe to real-time Geo Location settings from Firestore
+  useEffect(() => {
+    const unsub = subscribeGeoLocationSetting((enabled) => {
+      setIsGeoLocationEnabled(enabled);
+    });
+    return () => unsub();
+  }, []);
+
   const {
     verifyLocation,
     isCheckingGeo,
@@ -171,15 +200,15 @@ export default function App() {
     geoModalState,
     closeGeoModal,
     recheckLocation,
-  } = useGeolocationAuth(currentUser);
+  } = useGeolocationAuth(currentUser, isGeoLocationEnabled);
   
   // Check location on initial login/load
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && isGeoLocationEnabled) {
       checkInitialLocation();
     }
-  }, [currentUser, checkInitialLocation]);
-  
+  }, [currentUser, checkInitialLocation, isGeoLocationEnabled]);
+
   const [items, setItems] = useState<InventoryItem[]>(getInitialInventory);
   const [summary, setSummary] = useState<InventorySummary | null>(getInitialSummary);
   const [loading, setLoading] = useState(() => getInitialInventory().length === 0);
@@ -198,6 +227,7 @@ export default function App() {
   // Alert state
   const [showLowStockAlert, setShowLowStockAlert] = useState(false);
   const [hasShownAlert, setHasShownAlert] = useState(false);
+  const [isExportingInventoryPdf, setIsExportingInventoryPdf] = useState(false);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -487,9 +517,27 @@ export default function App() {
       console.warn('Real-time requisitions snapshot warning:', err);
     });
 
+    // Real-time Firestore Purchase Orders Listener (อัปเดตอัตโนมัติทันทีเมื่อยืนยันใน LINE หรือเว็บ)
+    const qOrders = query(collection(db, 'orders'), orderBy('isoDate', 'desc'), limit(200));
+    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
+      if (!snapshot.empty) {
+        const realTimeOrders: PurchaseOrder[] = [];
+        snapshot.forEach(d => {
+          realTimeOrders.push(d.data() as PurchaseOrder);
+        });
+        setOrders(realTimeOrders);
+        try {
+          localStorage.setItem('warehouse_orders', JSON.stringify(realTimeOrders));
+        } catch (_) {}
+      }
+    }, (err) => {
+      console.warn('Real-time orders snapshot warning:', err);
+    });
+
     return () => {
       unsubInventory();
       unsubReqs();
+      unsubOrders();
     };
   }, []);
 
@@ -786,6 +834,253 @@ export default function App() {
     } catch (err) {
       console.error("Failed to delete requisition", err);
       alert('เกิดข้อผิดพลาดในการลบประวัติรายการ');
+    }
+  };
+
+  // ==========================================
+  // Purchase Order Handlers (ฟังก์ชันสั่งซื้อสินค้า)
+  // ==========================================
+  const handleOpenOrderModal = (item: InventoryItem) => {
+    setOrderModalItem(item);
+  };
+
+  const handleSubmitOrder = async (orderData: Partial<PurchaseOrder>) => {
+    try {
+      setIsSubmittingOrder(true);
+      const newOrder: PurchaseOrder = {
+        id: orderData.id || `PO-${Date.now()}`,
+        itemId: orderData.itemId || '',
+        itemName: orderData.itemName || '',
+        category: orderData.category || '',
+        qty: Number(orderData.qty) || 1,
+        unit: orderData.unit || 'ชิ้น',
+        currentQty: orderData.currentQty,
+        minStock: orderData.minStock,
+        location: orderData.location,
+        requestedBy: orderData.requestedBy || currentUser?.name || 'ช่างเทคนิค',
+        brand: orderData.brand || '',
+        model: orderData.model || '',
+        supplier: orderData.supplier || '',
+        note: orderData.note || '',
+        urgency: orderData.urgency || 'normal',
+        status: 'pending',
+        createdAt: new Date().toLocaleString('th-TH', {
+          timeZone: 'Asia/Bangkok',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        isoDate: new Date().toISOString(),
+        confirmationToken: Math.random().toString(36).substring(2, 10),
+      };
+
+      // 1. Save order to Firestore
+      await setDoc(doc(db, 'orders', newOrder.id), cleanForFirestore(newOrder));
+
+      // 2. Mark item as ordered in Firestore
+      if (newOrder.itemId) {
+        try {
+          const itemRef = doc(db, 'inventory', newOrder.itemId);
+          await setDoc(itemRef, {
+            ordered: `สั่งซื้อแล้ว ${newOrder.qty} ${newOrder.unit}`,
+            orderedDate: new Date().toISOString(),
+          }, { merge: true });
+        } catch (itemErr) {
+          console.warn("Could not update item ordered date:", itemErr);
+        }
+      }
+
+      // 3. Update local state for 0ms response
+      setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
+
+      // 4. Send interactive notification to LINE (with One-Click Confirm button)
+      try {
+        await notifyPurchaseOrder(newOrder);
+      } catch (lineErr) {
+        console.warn("LINE notification error:", lineErr);
+      }
+
+      // 5. Sound & User Feedback
+      playSuccessSoundAndSpeak(`บันทึกคำสั่งซื้อ ${newOrder.itemName} เรียบร้อยแล้ว`);
+      addToast({
+        type: 'success',
+        title: 'สร้างคำสั่งซื้อสำเร็จ',
+        message: `ส่งคำสั่งซื้อ ${newOrder.id} และแจ้งเตือนไปยัง LINE เรียบร้อยแล้ว`
+      });
+
+      setOrderModalItem(null);
+      setIsCreateOrderModalOpen(false);
+    } catch (err: any) {
+      console.error("Submit order error:", err);
+      addToast({
+        type: 'error',
+        title: 'สร้างคำสั่งซื้อไม่สำเร็จ',
+        message: err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
+      });
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const handleConfirmOrder = async (orderId: string) => {
+    try {
+      const res = await fetch('/api/orders/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          confirmedBy: currentUser?.name || 'ผู้ดูแลระบบ (Admin Web)',
+          userRole: currentUser?.role || 'user',
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.order) {
+          setOrders(prev => prev.map(o => o.id === orderId ? data.order : o));
+        }
+        addToast({
+          type: 'success',
+          title: 'ยืนยันการสั่งซื้อสำเร็จ',
+          message: `ใบสั่งซื้อ ${orderId} ได้รับการยืนยันแล้ว`,
+        });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 409 || errData.alreadyConfirmed) {
+          if (errData.order) {
+            setOrders(prev => prev.map(o => o.id === orderId ? errData.order : o));
+          }
+          addToast({
+            type: 'warning',
+            title: 'คำสั่งซื้อนี้ยืนยันไปแล้ว',
+            message: errData.error || `ใบสั่งซื้อ ${orderId} ได้รับการยืนยันไปแล้ว ไม่สามารถกดยืนยันซ้ำได้`,
+          });
+          return;
+        }
+
+        // Fallback update Firestore directly only if still pending
+        const nowTimeStr = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+        await setDoc(doc(db, 'orders', orderId), {
+          status: 'confirmed',
+          confirmedAt: nowTimeStr,
+          confirmedBy: currentUser?.name || 'ผู้ดูแลระบบ',
+          confirmationTokenUsed: true,
+          confirmationToken: null,
+          isLocked: true,
+        }, { merge: true });
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed', confirmedAt: nowTimeStr } : o));
+        addToast({
+          type: 'success',
+          title: 'ยืนยันการสั่งซื้อสำเร็จ',
+          message: `ใบสั่งซื้อ ${orderId} ได้รับการยืนยันแล้ว`,
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        message: err.message || 'ไม่สามารถยืนยันคำสั่งซื้อได้',
+      });
+    }
+  };
+
+  const handleReceiveOrder = async (orderId: string, receivedQty: number, note?: string) => {
+    try {
+      const res = await fetch('/api/orders/receive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          receivedQty,
+          receivedBy: currentUser?.name || 'ผู้ดูแลระบบ',
+          note,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.order) {
+          setOrders(prev => prev.map(o => o.id === orderId ? data.order : o));
+        }
+        if (data.item) {
+          setItems(prev => prev.map(i => i.id === data.item.id ? data.item : i));
+          recalculateSummary(items.map(i => i.id === data.item.id ? data.item : i));
+        }
+        playSuccessSoundAndSpeak(`รับสินค้าเข้าคลังเรียบร้อยแล้ว`);
+        addToast({
+          type: 'success',
+          title: 'รับสินค้าเข้าคลังเรียบร้อย',
+          message: `นำเข้าสต็อกและบันทึกประวัติรับเข้าสำหรับ ${orderId} สำเร็จ`,
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          message: 'ไม่สามารถรับสินค้าเข้าคลังได้',
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        message: err.message || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้',
+      });
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string, reason?: string) => {
+    try {
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          reason,
+          cancelledBy: currentUser?.name || 'ผู้ดูแลระบบ',
+        }),
+      });
+
+      if (res.ok) {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+        addToast({
+          type: 'info',
+          title: 'ยกเลิกคำสั่งซื้อแล้ว',
+          message: `ยกเลิกใบสั่งซื้อ ${orderId} เรียบร้อย`,
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        message: err.message || 'ไม่สามารถยกเลิกคำสั่งซื้อได้',
+      });
+    }
+  };
+
+  const handleResendLineNotification = async (order: PurchaseOrder) => {
+    try {
+      const res = await notifyPurchaseOrder(order);
+      if (res.success) {
+        addToast({
+          type: 'success',
+          title: 'ส่ง LINE สำเร็จ',
+          message: `ส่งการแจ้งเตือนคำสั่งซื้อ ${order.id} ไปยัง LINE แล้ว`,
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'ส่ง LINE ไม่สำเร็จ',
+          message: res.message || 'กรุณาตรวจสอบการตั้งค่า LINE Token',
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        message: err.message,
+      });
     }
   };
 
@@ -1230,8 +1525,6 @@ export default function App() {
     'เคมี', 'ท่อ', 'ไฟฟ้า', 'Lighting', 'แอร์', 'สุขภัณฑ์', 'สี+Grouting', 'Fire Alarm', 'ประตู', 'เน็ต+โทรศัพท์'
   ];
 
-  const [isExportingInventoryPdf, setIsExportingInventoryPdf] = useState(false);
-
   const handleExportInventoryPdf = async () => {
     try {
       setIsExportingInventoryPdf(true);
@@ -1247,6 +1540,19 @@ export default function App() {
     } finally {
       setIsExportingInventoryPdf(false);
     }
+  };
+
+  // Handle toggle Geo Location Geofencing system
+  const handleToggleGeoLocation = async (enabled: boolean) => {
+    setIsGeoLocationEnabled(enabled);
+    await saveGeoLocationSetting(enabled, currentUser?.name || currentUser?.username || 'Admin');
+    addToast({
+      title: enabled ? 'เปิดระบบ Geo Location แล้ว' : 'ปิดระบบ Geo Location แล้ว',
+      message: enabled
+        ? 'จำกัดให้เจ้าหน้าที่ต้องอยู่ในรัศมี 100 เมตรจึงจะทำรายการเบิก-รับได้'
+        : 'อนุญาตให้เจ้าหน้าที่เบิก-รับสินค้าได้จากทุกสถานที่ (ข้ามการตรวจสอบพิกัด)',
+      type: enabled ? 'success' : 'info'
+    });
   };
 
   // Ask AI about specific item or query
@@ -1312,8 +1618,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-slate-900 flex justify-center pl-safe pr-safe selection:bg-blue-500 selection:text-white relative overflow-x-hidden">
-      {/* iOS 27 Ambient Light Glows for Liquid Glass depth */}
+    <div className="min-h-screen min-h-[100dvh] bg-slate-900 flex justify-center pl-safe pr-safe selection:bg-blue-500 selection:text-white relative overflow-x-clip">
+      {/* iOS Ambient Light Glows */}
       <div className="fixed top-0 left-1/4 w-[500px] h-[500px] bg-blue-500/10 dark:bg-blue-600/15 rounded-full blur-[130px] pointer-events-none -z-0" />
       <div className="fixed top-1/3 right-1/4 w-[450px] h-[450px] bg-indigo-500/10 dark:bg-indigo-600/12 rounded-full blur-[140px] pointer-events-none -z-0" />
       <div className="fixed bottom-10 left-1/3 w-[400px] h-[400px] bg-teal-500/8 dark:bg-teal-600/10 rounded-full blur-[120px] pointer-events-none -z-0" />
@@ -1330,28 +1636,19 @@ export default function App() {
         }`}
       >
         
-        {/* Universal Sticky Top Header with Auto-Adaptive Navigation */}
-        <header className="liquid-glass sticky top-0 z-30 px-3 sm:px-5 md:px-6 pt-safe-header pb-2.5 shadow-[0_6px_28px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)] border-b border-white/60 dark:border-white/10 transition-colors duration-200">
-          {/* Specular top rim shine */}
-          <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/20 to-transparent pointer-events-none rounded-full" />
-
+        {/* Universal Sticky Top Header: Solid opaque background to prevent any blurry bleed-through on mobile/iOS */}
+        <header className="bg-white dark:bg-slate-900 sticky top-0 z-30 px-3 sm:px-5 md:px-6 pt-safe-header pb-2.5 shadow-xs border-b border-slate-200/90 dark:border-slate-800 transition-colors duration-200">
           <div className="max-w-7xl mx-auto w-full">
             <div className="flex items-center justify-between gap-2 sm:gap-3">
-              {/* Brand Logo & User Info Badge (Left) */}
+              {/* User Info Badge (Left) */}
               <div className="flex items-center gap-2 min-w-0">
-                {/* 3D Official App Logo */}
-                <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-2xl overflow-hidden shadow-xs border border-white/60 dark:border-white/10 bg-slate-950 flex items-center justify-center p-0.5">
-                  <EngLogo alt="ENG Smart Store Logo" className="w-full h-full object-contain" />
-                </div>
-
-                {/* User Info Badge */}
                 <div className="flex items-center gap-1.5 liquid-glass-pill px-2.5 sm:px-3 py-1 rounded-2xl shadow-2xs min-w-0 border border-white/70 dark:border-white/10" title={currentUser.name}>
                   <div className="w-5 h-5 rounded-full bg-blue-500/20 dark:bg-blue-400/20 border border-blue-400/30 flex items-center justify-center shrink-0 shadow-xs">
                     <UserIcon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate leading-tight">
-                      {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate leading-tight max-w-[130px] sm:max-w-[180px]">
+                      {currentUser.name || currentUser.username}
                     </span>
                   </div>
                 </div>
@@ -1363,6 +1660,7 @@ export default function App() {
                 setActiveTab={setActiveTab}
                 requisitionCount={requisitions.length}
                 lowStockCount={summary?.lowStockCount || 0}
+                pendingOrdersCount={pendingOrdersCount}
                 isAdmin={currentUser.role === 'admin'}
                 isLiveActive={isLiveActive}
                 className="hidden xl:flex"
@@ -1395,17 +1693,19 @@ export default function App() {
                   <RefreshCw className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${refreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
                 </button>
 
-                {/* Notification Settings (Web Push for all, LINE Bot for Admin) */}
-                <button
-                  onClick={() => {
-                    setLineSettingsInitialTab('line');
-                    setIsLineSettingsModalOpen(true);
-                  }}
-                  className="p-2 sm:p-2.5 rounded-2xl text-blue-700 dark:text-blue-300 hover:bg-blue-500/15 active:scale-95 transition-all flex items-center border border-blue-400/30 bg-blue-500/10 dark:bg-blue-400/10 cursor-pointer shadow-2xs backdrop-blur-md"
-                  title={currentUser.role === 'admin' ? "การแจ้งเตือน (Web Push & LINE)" : "การแจ้งเตือน Web Push"}
-                >
-                  <Bell className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-blue-600 dark:text-blue-400" />
-                </button>
+                {/* Notification Settings (Web Push & LINE Bot for Admin only) */}
+                {currentUser.role === 'admin' && (
+                  <button
+                    onClick={() => {
+                      setLineSettingsInitialTab('line');
+                      setIsLineSettingsModalOpen(true);
+                    }}
+                    className="p-2 sm:p-2.5 rounded-2xl text-blue-700 dark:text-blue-300 hover:bg-blue-500/15 active:scale-95 transition-all flex items-center border border-blue-400/30 bg-blue-500/10 dark:bg-blue-400/10 cursor-pointer shadow-2xs backdrop-blur-md"
+                    title="การแจ้งเตือน (Web Push & LINE)"
+                  >
+                    <Bell className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-blue-600 dark:text-blue-400" />
+                  </button>
+                )}
 
                 {/* Add Item (Admin) */}
                 {currentUser.role === 'admin' && (
@@ -1444,46 +1744,55 @@ export default function App() {
                     <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isRequisitionMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* Dropdown Options for Requisition Mode */}
-                  {isRequisitionMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200/90 dark:border-slate-800 py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRequisitionMenuOpen(false);
-                          handleOpenRequisitionModal();
-                        }}
-                        className="w-full px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  {/* Dropdown Options for Requisition Mode with Smooth Spring & Liquid Glass Animation */}
+                  <AnimatePresence>
+                    {isRequisitionMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: -6 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.92, y: -4 }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 380, mass: 0.8 }}
+                        style={{ transformOrigin: 'top right' }}
+                        className="absolute right-0 top-full mt-2 w-60 rounded-2xl backdrop-blur-2xl bg-white/95 dark:bg-slate-900/90 shadow-2xl shadow-indigo-500/10 dark:shadow-black/60 border border-slate-200/80 dark:border-white/10 p-1.5 z-50 overflow-hidden"
                       >
-                        <div className="w-7 h-7 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                          <ClipboardList className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 dark:text-white">เบิกทั่วไป (1 รายการ)</div>
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500">เปิดหน้าต่างบันทึกการเบิก</div>
-                        </div>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsRequisitionMenuOpen(false);
+                            handleOpenRequisitionModal();
+                          }}
+                          className="group w-full px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 active:scale-[0.98] rounded-xl flex items-center gap-3 transition-all cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+                            <ClipboardList className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900 dark:text-white">เบิกทั่วไป (1 รายการ)</div>
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500">เปิดหน้าต่างบันทึกการเบิก</div>
+                          </div>
+                        </button>
 
-                      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                        <div className="my-1 border-t border-slate-100/80 dark:border-slate-800/80" />
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRequisitionMenuOpen(false);
-                          handleStartMultiSelect();
-                        }}
-                        className="w-full px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                          <CheckSquare className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-blue-600 dark:text-blue-400">เลือกหลายชิ้น (เบิกเป็นชุด)</div>
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500">ติ๊กเลือกหลายรายการเพื่อตัดยอดพร้อมกัน</div>
-                        </div>
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsRequisitionMenuOpen(false);
+                            handleStartMultiSelect();
+                          }}
+                          className="group w-full px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 active:scale-[0.98] rounded-xl flex items-center gap-3 transition-all cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+                            <CheckSquare className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-blue-600 dark:text-blue-400">เลือกหลายชิ้น (เบิกเป็นชุด)</div>
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500">ติ๊กเลือกหลายรายการเพื่อตัดยอดพร้อมกัน</div>
+                          </div>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>
@@ -1502,7 +1811,7 @@ export default function App() {
               className="flex-1 flex flex-col pb-28 sm:pb-32"
             >
               {/* Search & Filter Bar */}
-              <div className="liquid-glass border-b border-white/60 dark:border-white/10 sticky top-[53px] sm:top-[57px] z-20 px-3.5 sm:px-5 md:px-6 py-2.5 shadow-[0_6px_20px_rgba(15,23,42,0.03)] transition-all duration-200">
+              <div className="bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/80 dark:border-slate-800 px-3.5 sm:px-5 md:px-6 py-2.5 shadow-2xs transition-all duration-200">
                 <div className="max-w-7xl mx-auto w-full">
                   {/* Search Bar */}
                   <div className="relative mb-2.5">
@@ -1585,28 +1894,13 @@ export default function App() {
                         {cat}
                       </button>
                     ))}
-
-                    {/* Performance / Smooth Mode Indicator & Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => deviceInfo.setPerfMode(deviceInfo.isLowSpec ? 'high' : 'smooth')}
-                      title={deviceInfo.isLowSpec ? 'เปิดโหมดลื่นไหลพิเศษอยู่ (ลดแอนิเมชันเพื่อความเร็วสูงสุด)' : 'เปิดโหมดกราฟิกเต็มรูปแบบ คลิกเพื่อสลับเป็นโหมดลื่นไหล'}
-                      className={`px-3 py-1 rounded-full shrink-0 transition-all shadow-2xs cursor-pointer font-bold text-xs sm:text-sm flex items-center gap-1.5 ml-auto ${
-                        deviceInfo.isLowSpec
-                          ? 'bg-emerald-600 text-white border border-emerald-400/50 shadow-xs'
-                          : 'liquid-glass-pill text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-300" />
-                      <span>{deviceInfo.isLowSpec ? '⚡ โหมดลื่นไหล 60fps' : 'โหมดปกติ'}</span>
-                    </button>
                   </div>
                 </div>
               </div>
 
               {/* Multi-Select Active Action Bar */}
               {isMultiSelectMode && (
-                <div className="sticky top-[108px] sm:top-[112px] z-25 px-3.5 sm:px-5 md:px-6 py-2 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white shadow-lg border-b border-blue-400/30">
+                <div className="sticky top-[calc(env(safe-area-inset-top,0px)+52px)] z-25 px-3.5 sm:px-5 md:px-6 py-2 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white shadow-lg border-b border-blue-400/30">
                   <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2 sm:gap-3">
                       <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-black text-sm text-white">
@@ -1710,6 +2004,7 @@ export default function App() {
                         isSelected={selectedItemIds.has(item.id)}
                         onToggleSelect={handleToggleSelectItem}
                         isLowSpec={deviceInfo.isLowSpec}
+                        onOrderClick={handleOpenOrderModal}
                       />
                     ))}
                   </div>
@@ -1743,6 +2038,36 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* TAB: Orders & Procurement (สั่งของ) - Accessible to both Staff and Admin */}
+          {activeTab === 'orders' && (
+            <motion.div
+              key="orders-mode"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex-1 flex flex-col pb-28 sm:pb-32"
+            >
+              <OrdersManagementView
+                orders={orders}
+                items={items}
+                currentUser={currentUser}
+                onConfirmOrder={handleConfirmOrder}
+                onReceiveOrder={handleReceiveOrder}
+                onCancelOrder={handleCancelOrder}
+                onResendLineNotification={handleResendLineNotification}
+                onOpenCreateOrder={(item) => {
+                  setOrderModalItem(item || null);
+                  setIsCreateOrderModalOpen(true);
+                }}
+                onOpenLineSettings={() => {
+                  setLineSettingsInitialTab('line');
+                  setIsLineSettingsModalOpen(true);
+                }}
+              />
+            </motion.div>
+          )}
+
           {/* TAB 4: Dashboard Stats */}
           {activeTab === 'dashboard' && (
             <motion.div
@@ -1769,6 +2094,8 @@ export default function App() {
                 onAskAI={(prompt) => handleAskAIQuery(prompt)}
                 onRefresh={() => fetchInventory(true)}
                 loading={refreshing}
+                onExportPdf={handleExportInventoryPdf}
+                isExportingPdf={isExportingInventoryPdf}
               />
             </motion.div>
           )}
@@ -1819,6 +2146,15 @@ export default function App() {
                 summary={summary}
                 items={items}
                 requisitions={requisitions}
+                orders={orders}
+                onConfirmOrder={handleConfirmOrder}
+                onReceiveOrder={handleReceiveOrder}
+                onCancelOrder={handleCancelOrder}
+                onResendLineNotification={handleResendLineNotification}
+                onOpenCreateOrder={(item) => {
+                  setOrderModalItem(item || null);
+                  setIsCreateOrderModalOpen(true);
+                }}
                 onNavigateToTab={(tab) => setActiveTab(tab)}
                 onFilterLowStock={() => {
                   setStatusFilter('low_or_out');
@@ -1828,6 +2164,8 @@ export default function App() {
                   setItemToEdit(item);
                   setIsEditItemModalOpen(true);
                 }}
+                isGeoLocationEnabled={isGeoLocationEnabled}
+                onToggleGeoLocation={handleToggleGeoLocation}
               />
             </motion.div>
           )}
@@ -1858,6 +2196,7 @@ export default function App() {
             clearPendingQuery={() => setPendingQuery('')}
             currentUser={currentUser!}
             onLiveStateChange={setIsLiveActive}
+            isGeoLocationEnabled={isGeoLocationEnabled}
           />
         </div>
 
@@ -1875,6 +2214,26 @@ export default function App() {
                 setItemToEdit(item);
                 setIsEditItemModalOpen(true);
               }}
+              onOrderClick={handleOpenOrderModal}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Create Purchase Order Modal */}
+        <AnimatePresence>
+          {(isCreateOrderModalOpen || orderModalItem) && (
+            <CreateOrderModal
+              key={`create-order-${orderModalItem ? orderModalItem.id : 'custom'}`}
+              isOpen={Boolean(isCreateOrderModalOpen || orderModalItem)}
+              onClose={() => {
+                setIsCreateOrderModalOpen(false);
+                setOrderModalItem(null);
+              }}
+              item={orderModalItem}
+              items={items}
+              currentUser={currentUser}
+              onSubmitOrder={handleSubmitOrder}
+              isSubmitting={isSubmittingOrder}
             />
           )}
         </AnimatePresence>
@@ -2160,6 +2519,7 @@ export default function App() {
             setActiveTab={setActiveTab}
             lowStockCount={summary?.lowStockCount || 0}
             requisitionCount={requisitions.length}
+            pendingOrdersCount={pendingOrdersCount}
             isAdmin={currentUser?.role === 'admin'}
             isLiveActive={isLiveActive}
           />

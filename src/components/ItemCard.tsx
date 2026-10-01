@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { InventoryItem } from '../types';
-import { MapPin, AlertTriangle, CheckCircle2, XCircle, ChevronRight, Check } from 'lucide-react';
+import { MapPin, AlertTriangle, CheckCircle2, XCircle, ChevronRight, Check, ShoppingCart } from 'lucide-react';
 
 interface ItemCardProps {
   item: InventoryItem;
@@ -11,6 +11,7 @@ interface ItemCardProps {
   isSelected?: boolean;
   onToggleSelect?: (item: InventoryItem) => void;
   isLowSpec?: boolean;
+  onOrderClick?: (item: InventoryItem) => void;
 }
 
 export const ItemCard: React.FC<ItemCardProps> = React.memo(({ 
@@ -21,6 +22,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
   isSelected = false,
   onToggleSelect,
   isLowSpec = false,
+  onOrderClick,
 }) => {
   // Clean neutral category badge to reduce visual noise
   const getCategoryColor = () => {
@@ -164,13 +166,37 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
         </div>
       </div>
 
-      {/* Bottom Bar: Stock Balance & Arrow */}
-      <div className="flex items-center justify-between pt-3.5 border-t border-slate-200/60 dark:border-slate-800/80 mt-3.5">
-        <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-          เกณฑ์ขั้นต่ำ: <span className="font-bold text-slate-700 dark:text-slate-200">{item.minStock} {item.unit}</span>
+      {/* Bottom Bar: Stock Balance, Order Button & Arrow */}
+      <div className="flex items-center justify-between pt-3.5 border-t border-slate-200/60 dark:border-slate-800/80 mt-3.5 gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            เกณฑ์: <span className="font-bold text-slate-700 dark:text-slate-200">{item.minStock} {item.unit}</span>
+          </div>
+
+          {/* Prominent Order Button for low/out-of-stock items */}
+          {(item.status === 'out' || item.status === 'low' || item.qty <= item.minStock) && onOrderClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOrderClick(item);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs shadow-md shadow-orange-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/30"
+              title={`กดเพื่อสั่งซื้อ ${item.name}`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>สั่งซื้อ</span>
+            </button>
+          )}
+
+          {item.ordered && (
+            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-300 dark:border-emerald-800" title={item.ordered}>
+              ✓ สั่งซื้อแล้ว
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0 ml-auto">
           <div className="text-right">
             <span className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 mr-1.5 font-medium">คงเหลือ:</span>
             <span className="font-black text-slate-900 dark:text-white text-xl sm:text-2xl">

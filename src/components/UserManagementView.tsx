@@ -454,7 +454,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   return (
     <div className="flex-1 overflow-y-auto pb-28 sm:pb-32 transition-colors">
       {/* Header */}
-      <div className="liquid-glass border-b border-white/60 dark:border-white/10 sticky top-0 z-10 px-4 sm:px-6 py-3 shadow-sm backdrop-blur-2xl transition-colors">
+      <div className="bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 py-3 shadow-xs transition-colors">
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">

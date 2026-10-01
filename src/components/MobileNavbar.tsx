@@ -1,17 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Package, BarChart3, Bot, ClipboardList, Layers, ShieldCheck } from 'lucide-react';
+import { Package, BarChart3, Bot, ClipboardList, Layers, ShieldCheck, ShoppingCart } from 'lucide-react';
 
-export type AppTab = 'inventory' | 'history' | 'voice' | 'dashboard' | 'categories' | 'admin' | 'users';
+export type AppTab = 'inventory' | 'history' | 'orders' | 'voice' | 'dashboard' | 'categories' | 'admin' | 'users';
 
 interface MobileNavbarProps {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
   lowStockCount?: number;
   requisitionCount?: number;
+  pendingOrdersCount?: number;
   isAdmin?: boolean;
   isLiveActive?: boolean;
+}
+
+interface NavItem {
+  id: AppTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: number;
+  dot?: boolean;
+  isCenter?: boolean;
 }
 
 export const MobileNavbar: React.FC<MobileNavbarProps> = ({
@@ -19,6 +29,7 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
   setActiveTab,
   lowStockCount = 0,
   requisitionCount = 0,
+  pendingOrdersCount = 0,
   isAdmin = false,
   isLiveActive = false,
 }) => {
@@ -28,14 +39,25 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
     setMounted(true);
   }, []);
 
-  const tabs = [
-    { id: 'inventory' as AppTab, label: 'อะไหล่', icon: Package },
-    { id: 'history' as AppTab, label: 'เบิก/รับ', icon: ClipboardList, badge: requisitionCount },
-    { id: 'voice' as AppTab, label: isLiveActive ? '🔴 คุยสด AI' : 'ถาม AI', icon: Bot, isCenter: true },
-    { id: 'dashboard' as AppTab, label: 'ภาพรวม', icon: BarChart3, dot: lowStockCount > 0 },
-    { id: 'categories' as AppTab, label: 'หมวด', icon: Layers },
-    ...(isAdmin ? [{ id: 'admin' as AppTab, label: 'Admin', icon: ShieldCheck }] : []),
-  ];
+  // For regular user: exactly 5 items (2 on left, AI in center, 2 on right)
+  // For admin user: exactly 7 items (3 on left, AI in center, 3 on right)
+  const tabs: NavItem[] = isAdmin
+    ? [
+        { id: 'inventory', label: 'อะไหล่', icon: Package },
+        { id: 'history', label: 'เบิก/รับ', icon: ClipboardList, badge: requisitionCount },
+        { id: 'categories', label: 'หมวด', icon: Layers },
+        { id: 'voice', label: isLiveActive ? '🔴 คุยสด AI' : 'ถาม AI', icon: Bot, isCenter: true },
+        { id: 'orders', label: 'สั่งของ', icon: ShoppingCart, badge: pendingOrdersCount },
+        { id: 'dashboard', label: 'ภาพรวม', icon: BarChart3, dot: lowStockCount > 0 },
+        { id: 'admin', label: 'Admin', icon: ShieldCheck },
+      ]
+    : [
+        { id: 'inventory', label: 'อะไหล่', icon: Package },
+        { id: 'history', label: 'เบิก/รับ', icon: ClipboardList, badge: requisitionCount },
+        { id: 'voice', label: isLiveActive ? '🔴 คุยสด AI' : 'ถาม AI', icon: Bot, isCenter: true },
+        { id: 'orders', label: 'สั่งของ', icon: ShoppingCart, badge: pendingOrdersCount },
+        { id: 'dashboard', label: 'ภาพรวม', icon: BarChart3, dot: lowStockCount > 0 },
+      ];
 
   const navContent = (
     <nav 
@@ -149,4 +171,3 @@ export const MobileNavbar: React.FC<MobileNavbarProps> = ({
 
   return createPortal(navContent, document.body);
 };
-

@@ -66,8 +66,40 @@
         "notifyStockOut": { "type": "boolean" },
         "notifyStockIn": { "type": "boolean" },
         "notifyLowStock": { "type": "boolean" },
+        "notifyPurchaseOrder": { "type": "boolean" },
         "updatedAt": { "type": "string" }
       }
+    },
+    "PurchaseOrder": {
+      "title": "Purchase Order",
+      "description": "Purchase order records for restocking low or out of stock items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "category": { "type": "string" },
+        "qty": { "type": "number" },
+        "unit": { "type": "string" },
+        "currentQty": { "type": "number" },
+        "minStock": { "type": "number" },
+        "location": { "type": "string" },
+        "requestedBy": { "type": "string" },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "supplier": { "type": "string" },
+        "note": { "type": "string" },
+        "urgency": { "type": "string", "enum": ["normal", "urgent", "critical"] },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "received", "cancelled"] },
+        "createdAt": { "type": "string" },
+        "isoDate": { "type": "string" },
+        "confirmedAt": { "type": "string" },
+        "confirmedBy": { "type": "string" },
+        "receivedAt": { "type": "string" },
+        "receivedBy": { "type": "string" },
+        "confirmationToken": { "type": "string" }
+      },
+      "required": ["id", "itemId", "itemName", "qty", "unit", "requestedBy", "status", "isoDate"]
     }
   },
   "firestore": {
@@ -82,6 +114,10 @@
     "/users/{userId}": {
       "schema": "User",
       "description": "System user profiles"
+    },
+    "/orders/{orderId}": {
+      "schema": "PurchaseOrder",
+      "description": "Purchase orders and approval workflow"
     },
     "/app_settings/{settingId}": {
       "schema": "LineConfig",

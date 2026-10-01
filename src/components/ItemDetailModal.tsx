@@ -14,6 +14,7 @@ interface ItemDetailModalProps {
   onAskAI: (item: InventoryItem) => void;
   onStartRequisition: (item: InventoryItem) => void;
   onEditItem?: (item: InventoryItem) => void;
+  onOrderClick?: (item: InventoryItem) => void;
 }
 
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
@@ -23,6 +24,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onAskAI,
   onStartRequisition,
   onEditItem,
+  onOrderClick,
 }) => {
   useScrollLock(Boolean(item));
 
@@ -213,8 +215,30 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions (3 Columns for fast actions) */}
+        {/* Footer Actions */}
         <div className="p-4 pt-2.5 pb-4 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 flex flex-col gap-2 shrink-0">
+          {/* Order Button in Item Detail Modal */}
+          {onOrderClick && (
+            <button
+              onClick={() => {
+                onOrderClick(item);
+                onClose();
+              }}
+              className={`w-full py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer border ${
+                (isLow || isOut || item.qty <= item.minStock)
+                  ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white shadow-orange-500/25 border-amber-400/40'
+                  : 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-amber-500/10'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4 shrink-0" />
+              <span>
+                {(isLow || isOut || item.qty <= item.minStock)
+                  ? 'สั่งซื้อสินค้านี้ (Purchase Order)'
+                  : 'สั่งซื้อสินค้าล่วงหน้า (Purchase Order)'}
+              </span>
+            </button>
+          )}
+
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => {

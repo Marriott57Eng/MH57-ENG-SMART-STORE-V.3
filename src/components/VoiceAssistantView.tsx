@@ -28,6 +28,7 @@ interface VoiceAssistantViewProps {
   pendingQuery?: string;
   clearPendingQuery?: () => void;
   onLiveStateChange?: (connected: boolean) => void;
+  isGeoLocationEnabled?: boolean;
 }
 
 export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
@@ -42,6 +43,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   pendingQuery,
   clearPendingQuery,
   onLiveStateChange,
+  isGeoLocationEnabled = true,
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -55,7 +57,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     geoModalState,
     closeGeoModal,
     recheckLocation,
-  } = useGeolocationAuth(currentUser as any);
+  } = useGeolocationAuth(currentUser as any, isGeoLocationEnabled);
   const liveMessageIdRef = useRef<string | null>(null);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
 

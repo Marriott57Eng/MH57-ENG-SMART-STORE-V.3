@@ -6,16 +6,21 @@ import { WebSocketServer } from "ws";
 import http from "http";
 import webpush from "web-push";
 import { initializeApp } from 'firebase/app';
-import { getFirestore, getDocs, collection, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, getDocs, collection, doc, setDoc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { 
   pushLineMessage, 
+  pushPurchaseOrderLineMessage,
+  replyLineMessage,
+  getLineUserProfile,
   createStockFlexMessage, 
   createBulkStockFlexMessage,
   createAuthFlexMessage, 
   createTestFlexMessage, 
+  createPurchaseOrderFlexMessage,
+  createOrderConfirmedFlexMessage,
   getServerLineConfig, 
   updateServerLineConfig 
-} from './server/lineService';
+} from './server/lineService.ts';
 
 // ==========================================
 // Web Push Notifications Engine (VAPID)
@@ -367,7 +372,7 @@ async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: "50mb" }));
 
@@ -502,10 +507,15 @@ async function startServer() {
       const maskedToken = config.channelAccessToken 
         ? `${config.channelAccessToken.slice(0, 8)}...${config.channelAccessToken.slice(-6)}` 
         : '';
+      const maskedPoToken = config.purchaseOrderChannelAccessToken 
+        ? `${config.purchaseOrderChannelAccessToken.slice(0, 8)}...${config.purchaseOrderChannelAccessToken.slice(-6)}` 
+        : '';
       res.json({
         ...config,
         hasToken: !!config.channelAccessToken,
         maskedToken,
+        hasPoToken: !!config.purchaseOrderChannelAccessToken,
+        maskedPoToken,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -523,9 +533,14 @@ async function startServer() {
         ? updated.channelAccessToken
         : current.channelAccessToken;
 
+      const poToken = (updated.purchaseOrderChannelAccessToken && !updated.purchaseOrderChannelAccessToken.includes('...'))
+        ? updated.purchaseOrderChannelAccessToken
+        : (updated.purchaseOrderChannelAccessToken === '' ? '' : current.purchaseOrderChannelAccessToken);
+
       const newConfig = updateServerLineConfig({
         ...updated,
         channelAccessToken: token,
+        purchaseOrderChannelAccessToken: poToken,
       });
 
       if (firestoreDb) {
@@ -542,12 +557,12 @@ async function startServer() {
   // API: Test LINE Notification
   app.post("/api/line/test", async (req, res) => {
     try {
-      const { channelAccessToken, destinationId } = req.body;
+      const { channelAccessToken, destinationId, isOrderTest } = req.body;
       const currentConfig = getServerLineConfig();
       const token = (channelAccessToken && !channelAccessToken.includes('...')) 
         ? channelAccessToken 
-        : currentConfig.channelAccessToken;
-      const dest = destinationId || currentConfig.destinationId;
+        : (isOrderTest && currentConfig.purchaseOrderChannelAccessToken ? currentConfig.purchaseOrderChannelAccessToken : currentConfig.channelAccessToken);
+      const dest = destinationId || (isOrderTest && currentConfig.purchaseOrderDestinationId ? currentConfig.purchaseOrderDestinationId : currentConfig.destinationId);
 
       if (!token) {
         return res.status(400).json({ success: false, error: 'กรุณากรอก LINE Channel Access Token' });
@@ -556,14 +571,44 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'กรุณากรอก LINE Destination ID (User ID หรือ Group ID)' });
       }
 
-      const testMessage = createTestFlexMessage();
+      let testMessage: any;
+      if (isOrderTest) {
+        const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+        testMessage = createPurchaseOrderFlexMessage({
+          order: {
+            id: 'PO-TEST-' + Math.floor(1000 + Math.random() * 9000),
+            itemId: 'TEST-001',
+            itemName: 'กล่องทดสอบระบบสั่งซื้อ (LINE Test PO)',
+            category: 'วัสดุสิ้นเปลือง',
+            qty: 10,
+            unit: 'กล่อง',
+            currentQty: 2,
+            minStock: 5,
+            location: 'ชั้น A1',
+            requestedBy: 'ระบบทดสอบ (Admin)',
+            brand: 'ENG SMART STORE',
+            model: 'v2.5',
+            status: 'pending',
+            createdAt: new Date().toLocaleString('th-TH'),
+          },
+          baseUrl: origin,
+        });
+      } else {
+        testMessage = createTestFlexMessage();
+      }
+
       const result = await pushLineMessage([testMessage], token, dest);
 
       if (!result.success) {
         return res.status(400).json({ success: false, error: result.error });
       }
 
-      res.json({ success: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จเรียบร้อยแล้ว!' });
+      res.json({ 
+        success: true, 
+        message: isOrderTest 
+          ? 'ส่งการ์ดทดสอบสั่งซื้อสินค้าไปยัง LINE ปลายทางสั่งของสำเร็จแล้ว!' 
+          : 'ส่งข้อความทดสอบไปยัง LINE สำเร็จเรียบร้อยแล้ว!' 
+      });
     } catch (error: any) {
       console.error("Test LINE notification error:", error);
       res.status(500).json({ success: false, error: error.message });
@@ -609,13 +654,47 @@ async function startServer() {
           return res.json({ success: false, skipped: true, reason: 'Logout notification disabled' });
         }
         flexMessage = createAuthFlexMessage(data);
+      } else if (type === 'purchase_order') {
+        if (config.notifyPurchaseOrder === false) {
+          return res.json({ success: false, skipped: true, reason: 'Purchase order notification disabled' });
+        }
+        const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+        if (data.order && (data.order.status === 'confirmed' || data.order.status === 'received' || data.order.confirmedAt)) {
+          flexMessage = createOrderConfirmedFlexMessage({
+            order: data.order,
+            baseUrl: data.baseUrl || origin,
+          });
+        } else {
+          flexMessage = createPurchaseOrderFlexMessage({
+            order: data.order,
+            baseUrl: data.baseUrl || origin,
+          });
+        }
+      } else if (type === 'order_confirmed') {
+        const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+        flexMessage = createOrderConfirmedFlexMessage({
+          ...data,
+          baseUrl: data.baseUrl || origin,
+        });
       }
 
       if (!flexMessage) {
         return res.status(400).json({ success: false, error: 'Invalid notification type' });
       }
 
-      const result = await pushLineMessage([flexMessage]);
+      // Check if this is a purchase order event and has separate destination configured
+      const isOrderEvent = type === 'purchase_order' || type === 'order_confirmed';
+      const useDedicatedOrder = isOrderEvent && Boolean(config.useSeparateOrderDestination && config.purchaseOrderDestinationId);
+
+      const targetDestination = useDedicatedOrder 
+        ? config.purchaseOrderDestinationId! 
+        : config.destinationId;
+
+      const targetToken = (useDedicatedOrder && config.purchaseOrderChannelAccessToken)
+        ? config.purchaseOrderChannelAccessToken
+        : config.channelAccessToken;
+
+      const result = await pushLineMessage([flexMessage], targetToken, targetDestination);
       if (!result.success) {
         return res.json({ success: false, skipped: result.skipped ?? false, error: result.error });
       }
@@ -626,6 +705,889 @@ async function startServer() {
       res.json({ success: false, error: error?.message || 'Failed to process notification' });
     }
   });
+
+  // API: LINE Messaging API Webhook Status / Verification Check
+  app.get("/api/line/webhook", (req, res) => {
+    res.json({
+      status: "ready",
+      service: "ENG SMART STORE - LINE Webhook Engine",
+      features: [
+        "One-Click Postback Order Confirmation directly inside LINE chat",
+        "Instant Firestore real-time status update without external redirection",
+        "Automatic LINE reply confirmation card",
+        "Web Push notification integration"
+      ],
+      time: new Date().toISOString()
+    });
+  });
+
+  // API: LINE Messaging API Webhook Handler
+  // Processes postback clicks directly in LINE (zero redirect, immediate Firestore save)
+  app.post("/api/line/webhook", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const events: any[] = body.events || [];
+
+      // Verification ping from LINE Developers Console (events is empty or test event)
+      if (!events || events.length === 0) {
+        return res.status(200).send("OK");
+      }
+
+      for (const event of events) {
+        // 1. Handle Postback Event (from Flex Message button click)
+        if (event.type === 'postback' && event.postback?.data) {
+          const params = new URLSearchParams(event.postback.data);
+          const action = params.get('action');
+          const orderId = (params.get('orderId') || '').trim();
+          const token = (params.get('token') || '').trim();
+
+          if (action === 'confirm_order' && orderId) {
+            if (!firestoreDb) {
+              if (event.replyToken) {
+                await replyLineMessage(event.replyToken, [{
+                  type: 'text',
+                  text: '⚠️ เกิดข้อผิดพลาด: ระบบฐานข้อมูล Firestore ยังไม่พร้อมเชื่อมต่อ กรุณาลองใหม่อีกครั้ง'
+                }]);
+              }
+              continue;
+            }
+
+            const orderRef = doc(firestoreDb, 'orders', orderId);
+            const orderSnap = await getDoc(orderRef);
+
+            if (!orderSnap.exists()) {
+              if (event.replyToken) {
+                await replyLineMessage(event.replyToken, [{
+                  type: 'text',
+                  text: `❌ ไม่พบใบสั่งซื้อรหัส "${orderId}" ในระบบ`
+                }]);
+              }
+              continue;
+            }
+
+            const orderData: any = orderSnap.data();
+
+            // Strict Single-Use Lock: Already confirmed, received, or cancelled
+            const isAlreadyProcessed = orderData.status !== 'pending' || Boolean(orderData.confirmedAt) || Boolean(orderData.confirmationTokenUsed);
+            if (isAlreadyProcessed) {
+              if (event.replyToken) {
+                const poToken = (getServerLineConfig().useSeparateOrderDestination && getServerLineConfig().purchaseOrderChannelAccessToken) 
+                  ? getServerLineConfig().purchaseOrderChannelAccessToken 
+                  : undefined;
+                await replyLineMessage(event.replyToken, [{
+                  type: 'text',
+                  text: `🔒 ใบสั่งซื้อ ${orderId} (${orderData.itemName}) ได้รับการยืนยันไปแล้วเมื่อ ${orderData.confirmedAt || 'ก่อนหน้านี้'} โดย ${orderData.confirmedBy || 'ผู้ดูแลระบบ'}\n\n⚠️ ระบบล็อกถาวร: คำสั่งซื้อสามารถยืนยันได้เพียง 1 ครั้งเท่านั้น ไม่สามารถกดยืนยันซ้ำได้อีกครับ`
+                }], poToken);
+              }
+              continue;
+            }
+
+            // Token security check if order has token
+            if (orderData.confirmationToken && token && orderData.confirmationToken !== token) {
+              if (event.replyToken) {
+                const poToken = (getServerLineConfig().useSeparateOrderDestination && getServerLineConfig().purchaseOrderChannelAccessToken) 
+                  ? getServerLineConfig().purchaseOrderChannelAccessToken 
+                  : undefined;
+                await replyLineMessage(event.replyToken, [{
+                  type: 'text',
+                  text: `⚠️ สิทธิ์การยืนยันไม่ถูกต้อง (Token Mismatch) หรือลิงก์นี้หมดอายุแล้ว สำหรับใบสั่งซื้อ ${orderId}`
+                }], poToken);
+              }
+              continue;
+            }
+
+            // Look up who confirmed it from LINE Profile
+            const lineUserId = event.source?.userId;
+            const lineGroupId = event.source?.groupId || event.source?.roomId;
+            let confirmedByName = 'Admin (ยืนยันผ่านแชท LINE)';
+
+            if (lineUserId) {
+              try {
+                const profile = await getLineUserProfile(lineUserId, lineGroupId);
+                if (profile?.displayName) {
+                  confirmedByName = `${profile.displayName} (ยืนยันใน LINE)`;
+                }
+              } catch (_) {}
+            }
+
+            const nowTimeStr = new Date().toLocaleString('th-TH', {
+              timeZone: 'Asia/Bangkok',
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            // Update Firestore Order status to 'confirmed' and permanently lock
+            const updatedOrder = {
+              ...orderData,
+              status: 'confirmed',
+              confirmedAt: nowTimeStr,
+              confirmedBy: confirmedByName,
+              confirmedVia: 'line_postback',
+              confirmationTokenUsed: true,
+              confirmationToken: null,
+              isLocked: true,
+              updatedAt: new Date().toISOString(),
+            };
+
+            await setDoc(orderRef, updatedOrder, { merge: true });
+
+            // Also update inventory item's ordered status in Firestore
+            if (orderData.itemId) {
+              try {
+                const itemRef = doc(firestoreDb, 'inventory', orderData.itemId);
+                const itemSnap = await getDoc(itemRef);
+                if (itemSnap.exists()) {
+                  await setDoc(itemRef, {
+                    ordered: `สั่งซื้อแล้ว ${orderData.qty} ${orderData.unit} (${nowTimeStr})`,
+                    orderedDate: new Date().toISOString(),
+                  }, { merge: true });
+                }
+              } catch (itemErr) {
+                console.warn("Could not update item ordered date:", itemErr);
+              }
+            }
+
+            // Web Push notification to web users
+            try {
+              await sendWebPushToAll({
+                title: `✅ ยืนยันการสั่งซื้อ: ${orderData.itemName}`,
+                body: `ใบสั่งซื้อ ${orderData.id} (${orderData.qty} ${orderData.unit}) ได้รับการยืนยันผ่าน LINE ทันที โดย ${confirmedByName}`,
+                tag: `order-confirm-${orderData.id}`,
+                type: 'system',
+              });
+            } catch (_) {}
+
+            // Send instant reply confirmation bubble back into the LINE chat
+            if (event.replyToken) {
+              const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+              const confirmFlex = createOrderConfirmedFlexMessage({
+                order: {
+                  id: orderData.id,
+                  itemId: orderData.itemId,
+                  itemName: orderData.itemName,
+                  qty: orderData.qty,
+                  unit: orderData.unit,
+                  confirmedBy: confirmedByName,
+                  confirmedAt: nowTimeStr,
+                },
+                baseUrl: origin,
+              });
+
+              const poToken = (getServerLineConfig().useSeparateOrderDestination && getServerLineConfig().purchaseOrderChannelAccessToken) 
+                ? getServerLineConfig().purchaseOrderChannelAccessToken 
+                : undefined;
+              const replyRes = await replyLineMessage(event.replyToken, [confirmFlex], poToken);
+              if (!replyRes.success) {
+                // If replyToken expired or failed, push directly to purchase order destination
+                await pushPurchaseOrderLineMessage([confirmFlex]);
+              }
+            } else {
+              const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+              const confirmFlex = createOrderConfirmedFlexMessage({
+                order: {
+                  id: orderData.id,
+                  itemId: orderData.itemId,
+                  itemName: orderData.itemName,
+                  qty: orderData.qty,
+                  unit: orderData.unit,
+                  confirmedBy: confirmedByName,
+                  confirmedAt: nowTimeStr,
+                },
+                baseUrl: origin,
+              });
+              await pushPurchaseOrderLineMessage([confirmFlex]);
+            }
+          }
+        } else if (event.type === 'message' && event.message?.type === 'text') {
+          // 2. Optional text message commands e.g. "ยืนยัน PO-..." or "อนุมัติ PO-..."
+          const text = (event.message.text || '').trim();
+          const match = text.match(/(?:ยืนยัน|อนุมัติ|confirm)\s*(PO-[\w-]+)/i);
+          if (match && match[1]) {
+            const orderId = match[1];
+            if (firestoreDb) {
+              const orderRef = doc(firestoreDb, 'orders', orderId);
+              const orderSnap = await getDoc(orderRef);
+              if (orderSnap.exists()) {
+                const orderData: any = orderSnap.data();
+                const isAlreadyProcessed = orderData.status !== 'pending' || Boolean(orderData.confirmedAt) || Boolean(orderData.confirmationTokenUsed);
+                if (isAlreadyProcessed) {
+                  if (event.replyToken) {
+                    const poToken = (getServerLineConfig().useSeparateOrderDestination && getServerLineConfig().purchaseOrderChannelAccessToken) 
+                      ? getServerLineConfig().purchaseOrderChannelAccessToken 
+                      : undefined;
+                    await replyLineMessage(event.replyToken, [{
+                      type: 'text',
+                      text: `🔒 ใบสั่งซื้อ ${orderId} (${orderData.itemName}) ได้รับการยืนยันไปแล้วเมื่อ ${orderData.confirmedAt || 'ก่อนหน้านี้'}\n\n⚠️ ไม่สามารถกดยืนยันซ้ำได้อีกครับ`
+                    }], poToken);
+                  }
+                } else {
+                  const nowTimeStr = new Date().toLocaleString('th-TH', {
+                    timeZone: 'Asia/Bangkok',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  const lineUserId = event.source?.userId;
+                  let confirmedByName = 'Admin (ยืนยันผ่านแชท LINE)';
+                  if (lineUserId) {
+                    const profile = await getLineUserProfile(lineUserId, event.source?.groupId);
+                    if (profile?.displayName) confirmedByName = `${profile.displayName} (ยืนยันใน LINE)`;
+                  }
+
+                  await setDoc(orderRef, {
+                    ...orderData,
+                    status: 'confirmed',
+                    confirmedAt: nowTimeStr,
+                    confirmedBy: confirmedByName,
+                    confirmedVia: 'line_text_command',
+                    confirmationTokenUsed: true,
+                    confirmationToken: null,
+                    isLocked: true,
+                    updatedAt: new Date().toISOString(),
+                  }, { merge: true });
+
+                  if (orderData.itemId) {
+                    try {
+                      const itemRef = doc(firestoreDb, 'inventory', orderData.itemId);
+                      await setDoc(itemRef, {
+                        ordered: `สั่งซื้อแล้ว ${orderData.qty} ${orderData.unit} (${nowTimeStr})`,
+                        orderedDate: new Date().toISOString(),
+                      }, { merge: true });
+                    } catch (_) {}
+                  }
+
+                  const confirmFlex = createOrderConfirmedFlexMessage({
+                    order: {
+                      id: orderData.id,
+                      itemId: orderData.itemId,
+                      itemName: orderData.itemName,
+                      qty: orderData.qty,
+                      unit: orderData.unit,
+                      confirmedBy: confirmedByName,
+                      confirmedAt: nowTimeStr,
+                    }
+                  });
+
+                  if (event.replyToken) {
+                    const poToken = (getServerLineConfig().useSeparateOrderDestination && getServerLineConfig().purchaseOrderChannelAccessToken) 
+                      ? getServerLineConfig().purchaseOrderChannelAccessToken 
+                      : undefined;
+                    const replyRes = await replyLineMessage(event.replyToken, [confirmFlex], poToken);
+                    if (!replyRes.success) {
+                      await pushPurchaseOrderLineMessage([confirmFlex]);
+                    }
+                  } else {
+                    await pushPurchaseOrderLineMessage([confirmFlex]);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Always return 200 OK within 2 seconds as required by LINE Messaging API
+      return res.status(200).send("OK");
+    } catch (err: any) {
+      console.error("LINE Webhook error:", err);
+      return res.status(200).send("OK");
+    }
+  });
+
+  // Helper HTML renderer for LINE 1-Click order confirmation page
+  function renderConfirmHtml(opts: {
+    success: boolean;
+    title: string;
+    message: string;
+    order?: any;
+    alreadyConfirmed?: boolean;
+  }) {
+    const { success, title, message, order, alreadyConfirmed } = opts;
+    return `<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - ENG SMART STORE</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Sarabun', 'Plus Jakarta Sans', sans-serif; }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.08); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulse-ring { animation: pulse-ring 2s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+  <div class="max-w-md w-full bg-slate-800/90 backdrop-blur-xl border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl text-center relative overflow-hidden">
+    <div class="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="flex justify-center mb-5">
+      <img src="/logo.png" alt="ENG SMART STORE" class="h-16 w-auto object-contain drop-shadow-lg" onerror="this.style.display='none'">
+    </div>
+
+    <div class="flex justify-center mb-4">
+      <div class="w-20 h-20 rounded-full ${alreadyConfirmed ? 'bg-rose-500/20 border-2 border-rose-400 text-rose-400' : success ? 'bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400' : 'bg-red-500/20 border-2 border-red-400 text-red-400'} flex items-center justify-center relative shadow-lg">
+        ${success && !alreadyConfirmed ? '<div class="absolute inset-0 rounded-full border-2 border-emerald-400/40 pulse-ring"></div>' : ''}
+        ${alreadyConfirmed 
+          ? '<svg class="w-10 h-10 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>'
+          : success
+            ? '<svg class="w-10 h-10 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>'
+            : '<svg class="w-10 h-10 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>'
+        }
+      </div>
+    </div>
+
+    <h1 class="text-xl sm:text-2xl font-black ${alreadyConfirmed ? 'text-rose-400' : success ? 'text-emerald-400' : 'text-red-400'} mb-2 tracking-tight">
+      ${title}
+    </h1>
+    <p class="text-sm text-slate-300 leading-relaxed mb-4">
+      ${message}
+    </p>
+
+    ${alreadyConfirmed ? `
+    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/15 border border-rose-400/50 text-rose-300 text-xs font-bold mb-4 shadow-sm">
+      <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+      <span>🔒 หมดอายุ: ลิงก์ยืนยันถูกใช้งานไปแล้ว ไม่อนุญาตให้กดซ้ำ</span>
+    </div>
+    ` : ''}
+
+    ${order ? `
+    <div class="bg-slate-900/80 rounded-2xl p-4 border ${alreadyConfirmed ? 'border-rose-500/30' : 'border-slate-700/80'} text-left mb-4 text-xs space-y-2">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <span class="text-slate-400">เลขที่ใบสั่งซื้อ:</span>
+        <span class="font-mono font-bold text-white text-sm">${order.id || '-'}</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-slate-400">ชื่อสินค้า:</span>
+        <span class="font-bold text-white text-sm text-right line-clamp-1">${order.itemName || '-'}</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-slate-400">รหัสอะไหล่:</span>
+        <span class="font-mono text-slate-300">${order.itemId || '-'}</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-slate-400">จำนวนที่สั่งซื้อ:</span>
+        <span class="font-black text-amber-400 text-base">${order.qty || '-'} ${order.unit || ''}</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-slate-400">สถานะปัจจุบัน:</span>
+        <span class="font-bold ${order.status === 'received' ? 'text-blue-400' : 'text-emerald-400'}">
+          ${order.status === 'received' ? '📦 รับเข้าคลังแล้ว' : '✅ ยืนยันการสั่งซื้อแล้ว'}
+        </span>
+      </div>
+      ${order.confirmedAt ? `
+      <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+        <span class="text-slate-400">เวลายืนยันเดิม:</span>
+        <span class="text-emerald-300 font-medium">${order.confirmedAt}</span>
+      </div>
+      ` : ''}
+      ${order.confirmedBy ? `
+      <div class="flex justify-between items-center">
+        <span class="text-slate-400">ผู้ยืนยัน:</span>
+        <span class="text-slate-200 font-medium">${order.confirmedBy}</span>
+      </div>
+      ` : ''}
+    </div>
+    ` : ''}
+
+    ${alreadyConfirmed ? `
+    <div class="p-3 bg-slate-900/90 border border-rose-500/30 rounded-2xl text-xs text-rose-200/90 mb-4 text-center">
+      🛡️ <strong>คำสั่งซื้อนี้ถูกล็อกถาวรแล้ว:</strong> ไม่ว่าจะกดปุ่มใน LINE กี่ครั้ง จะไม่มีการสั่งซื้อซ้ำหรือเปลี่ยนแปลงข้อมูลในระบบครับ
+    </div>
+    ` : ''}
+
+    ${(!alreadyConfirmed && success) ? `
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-4">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+      <span>ฐานข้อมูล Firestore อัปเดต Real-time อัตโนมัติ</span>
+    </div>
+    ` : ''}
+
+    <div class="space-y-3">
+      <button id="btn-return" onclick="handleCloseOrReturn()" class="block w-full py-3.5 px-4 rounded-xl ${alreadyConfirmed ? 'bg-slate-700 hover:bg-slate-600' : 'bg-emerald-600 hover:bg-emerald-500'} active:scale-95 text-white font-bold text-sm shadow-lg transition-all cursor-pointer">
+        ⬅️ ปิดหน้านี้และกลับสู่แชท LINE
+      </button>
+
+      <div id="line-inapp-guide" class="p-3 bg-slate-900/90 border border-emerald-500/30 rounded-2xl text-center">
+        <p class="text-xs text-emerald-300 font-semibold mb-0.5">
+          💡 สำหรับ LINE บน iOS และ Android
+        </p>
+        <p class="text-[11px] text-slate-300 leading-tight">
+          สามารถแตะปุ่ม <b>✖</b> (ปิด) ที่มุมบนของหน้าจอ LINE เพื่อกลับสู่ห้องแชทได้ทันที
+        </p>
+      </div>
+
+      <a href="/" class="block w-full py-2.5 px-4 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-600 transition-all">
+        เปิดเข้าสู่หน้าหลักแอปพลิเคชัน ENG SMART STORE
+      </a>
+    </div>
+  </div>
+
+  <script>
+    function handleCloseOrReturn() {
+      var isLineApp = /Line/i.test(navigator.userAgent);
+
+      // 1. Try standard window.close
+      try {
+        window.close();
+      } catch (_) {}
+
+      // 2. Try window.history.back if navigation stack exists
+      try {
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+      } catch (_) {}
+
+      if (isLineApp) {
+        // User is inside LINE in-app browser on iOS or Android.
+        // DO NOT redirect to https://line.me/R/ inside in-app browser to avoid LINE's error alert popup.
+        var guide = document.getElementById('line-inapp-guide');
+        if (guide) {
+          guide.className = 'p-3 bg-emerald-950/90 border-2 border-emerald-400 rounded-2xl text-center shadow-lg transition-all animate-bounce';
+          guide.innerHTML = '<p class="text-xs text-emerald-300 font-bold mb-1">👆 แตะปุ่ม ✖ (ปิด) ที่มุมบนหน้าจอ</p><p class="text-[11px] text-white">เพื่อกลับสู่ห้องแชท LINE ได้ทันทีครับ</p>';
+          setTimeout(function() {
+            guide.classList.remove('animate-bounce');
+          }, 2000);
+        }
+      } else {
+        // User opened from external browser (Chrome / Safari outside LINE)
+        try {
+          window.location.href = 'line://';
+        } catch (_) {
+          window.location.href = 'https://line.me/R/';
+        }
+      }
+    }
+  </script>
+</body>
+</html>`;
+  }
+
+  // API: One-Click Purchase Order Confirmation from LINE (Web Action)
+  app.get("/api/orders/confirm", async (req, res) => {
+    try {
+      const orderId = (req.query.orderId as string || '').trim();
+      const token = (req.query.token as string || '').trim();
+
+      if (!orderId) {
+        return res.status(400).send(renderConfirmHtml({
+          success: false,
+          title: "ข้อมูลคำสั่งซื้อไม่ถูกต้อง",
+          message: "ไม่พบรหัสคำสั่งซื้อ (Missing Order ID)",
+        }));
+      }
+
+      if (!firestoreDb) {
+        return res.status(500).send(renderConfirmHtml({
+          success: false,
+          title: "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล",
+          message: "ไม่สามารถเข้าถึง Firestore Database ได้ในขณะนี้",
+        }));
+      }
+
+      const orderRef = doc(firestoreDb, 'orders', orderId);
+      const orderSnap = await getDoc(orderRef);
+
+      if (!orderSnap.exists()) {
+        return res.status(404).send(renderConfirmHtml({
+          success: false,
+          title: "ไม่พบรายการสั่งซื้อ",
+          message: `ไม่พบใบสั่งซื้อรหัส "${orderId}" ในระบบ`,
+        }));
+      }
+
+      const orderData: any = orderSnap.data();
+
+      // STRICT SINGLE-USE LOCK:
+      // If status is not 'pending', or if confirmedAt exists, or if confirmationTokenUsed is true
+      const isAlreadyProcessed = orderData.status !== 'pending' || Boolean(orderData.confirmedAt) || Boolean(orderData.confirmationTokenUsed);
+      if (isAlreadyProcessed) {
+        return res.status(409).send(renderConfirmHtml({
+          success: false,
+          title: "🔒 คำสั่งซื้อนี้ถูกยืนยันไปแล้ว",
+          message: `ใบสั่งซื้อ "${orderId}" (${orderData.itemName}) ได้รับการยืนยันเสร็จสิ้นไปแล้วเมื่อ ${orderData.confirmedAt || 'ก่อนหน้านี้'} โดย ${orderData.confirmedBy || 'ผู้ดูแลระบบ'}<br><br>⚠️ <strong>ระบบป้องกันการยืนยันซ้ำ:</strong> คำสั่งซื้อสามารถกดยืนยันได้เพียง 1 ครั้งเท่านั้น และลิงก์นี้หมดอายุการใช้งานถาวรแล้ว`,
+          order: orderData,
+          alreadyConfirmed: true,
+        }));
+      }
+
+      // Check token if provided in order (or if token was already cleared)
+      if (orderData.confirmationToken && token && orderData.confirmationToken !== token) {
+        return res.status(403).send(renderConfirmHtml({
+          success: false,
+          title: "สิทธิ์การยืนยันไม่ถูกต้อง",
+          message: "Token การยืนยันไม่ตรงกับข้อมูลในระบบ หรือลิงก์นี้หมดอายุการใช้งานแล้ว",
+        }));
+      }
+
+      const nowTimeStr = new Date().toLocaleString('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Update Firestore Order status to 'confirmed' and permanently consume confirmation token
+      const updatedOrder = {
+        ...orderData,
+        status: 'confirmed',
+        confirmedAt: nowTimeStr,
+        confirmedBy: 'Admin (ยืนยันผ่าน LINE)',
+        confirmedVia: 'line_url',
+        confirmationTokenUsed: true,
+        confirmationToken: null, // Permanently nullify token so it cannot be reused
+        isLocked: true,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await setDoc(orderRef, updatedOrder, { merge: true });
+
+      // Also update inventory item's ordered status in Firestore
+      if (orderData.itemId) {
+        try {
+          const itemRef = doc(firestoreDb, 'inventory', orderData.itemId);
+          const itemSnap = await getDoc(itemRef);
+          if (itemSnap.exists()) {
+            await setDoc(itemRef, {
+              ordered: `สั่งซื้อแล้ว ${orderData.qty} ${orderData.unit} (${nowTimeStr})`,
+              orderedDate: new Date().toISOString(),
+            }, { merge: true });
+          }
+        } catch (itemErr) {
+          console.warn("Could not update item ordered date:", itemErr);
+        }
+      }
+
+      // Send follow-up LINE message informing the group that order is confirmed
+      try {
+        const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+        const confirmFlex = createOrderConfirmedFlexMessage({
+          order: {
+            id: orderData.id,
+            itemId: orderData.itemId,
+            itemName: orderData.itemName,
+            qty: orderData.qty,
+            unit: orderData.unit,
+            confirmedBy: 'Admin (ยืนยันผ่าน LINE)',
+            confirmedAt: nowTimeStr,
+          },
+          baseUrl: origin,
+        });
+        await pushPurchaseOrderLineMessage([confirmFlex]);
+      } catch (notifyErr) {
+        console.warn("Could not send LINE confirmation notice:", notifyErr);
+      }
+
+      // Send Web Push notification to web users
+      try {
+        await sendWebPushToAll({
+          title: `✅ ยืนยันการสั่งซื้อ: ${orderData.itemName}`,
+          body: `ใบสั่งซื้อ ${orderData.id} (${orderData.qty} ${orderData.unit}) ได้รับการยืนยันผ่าน LINE แล้ว`,
+          tag: `order-confirm-${orderData.id}`,
+          type: 'system',
+        });
+      } catch (_) {}
+
+      // Render confirmation web page
+      return res.send(renderConfirmHtml({
+        success: true,
+        title: "ยืนยันการสั่งซื้อสำเร็จเรียบร้อย!",
+        message: "ระบบได้ทำการอัปเดตสถานะลงในฐานข้อมูล Firestore แล้ว และหน้าจอเว็บแอปพลิเคชันจะอัปเดตแบบ Real-time ทันที",
+        order: updatedOrder,
+      }));
+    } catch (error: any) {
+      console.error("Order confirm error:", error);
+      res.status(500).send(renderConfirmHtml({
+        success: false,
+        title: "เกิดข้อผิดพลาดในการประมวลผล",
+        message: error.message || "ระบบไม่สามารถบันทึกการยืนยันได้",
+      }));
+    }
+  });
+
+  // API: Confirm Purchase Order from Web Admin
+  app.post("/api/orders/confirm", async (req, res) => {
+    try {
+      const { orderId, confirmedBy, userRole } = req.body;
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: "Missing orderId" });
+      }
+
+      // Enforce Admin RBAC for order confirmation
+      if (userRole && userRole !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: "เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถกดยืนยันคำสั่งซื้อได้",
+        });
+      }
+
+      if (!firestoreDb) {
+        return res.status(500).json({ success: false, error: "Firestore not initialized" });
+      }
+
+      const orderRef = doc(firestoreDb, 'orders', orderId);
+      const orderSnap = await getDoc(orderRef);
+      if (!orderSnap.exists()) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      const orderData: any = orderSnap.data();
+
+      // Check if order is already confirmed or processed
+      const isAlreadyProcessed = orderData.status !== 'pending' || Boolean(orderData.confirmedAt) || Boolean(orderData.confirmationTokenUsed);
+      if (isAlreadyProcessed) {
+        return res.status(409).json({
+          success: false,
+          error: `คำสั่งซื้อ ${orderId} (${orderData.itemName}) ได้รับการยืนยันไปแล้วเมื่อ ${orderData.confirmedAt || 'ก่อนหน้านี้'} โดย ${orderData.confirmedBy || 'ผู้ดูแลระบบ'} (ไม่สามารถกดยืนยันซ้ำได้)`,
+          order: orderData,
+          alreadyConfirmed: true,
+        });
+      }
+
+      const nowTimeStr = new Date().toLocaleString('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const updatedOrder = {
+        ...orderData,
+        status: 'confirmed',
+        confirmedAt: nowTimeStr,
+        confirmedBy: confirmedBy || 'ผู้ดูแลระบบ (Admin Web)',
+        confirmedVia: 'admin_web',
+        confirmationTokenUsed: true,
+        confirmationToken: null,
+        isLocked: true,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await setDoc(orderRef, updatedOrder, { merge: true });
+
+      // Update inventory item
+      if (orderData.itemId) {
+        try {
+          const itemRef = doc(firestoreDb, 'inventory', orderData.itemId);
+          await setDoc(itemRef, {
+            ordered: `สั่งซื้อแล้ว ${orderData.qty} ${orderData.unit} (${nowTimeStr})`,
+            orderedDate: new Date().toISOString(),
+          }, { merge: true });
+        } catch (_) {}
+      }
+
+      // Notify LINE
+      try {
+        const confirmFlex = createOrderConfirmedFlexMessage({
+          order: {
+            id: orderData.id,
+            itemId: orderData.itemId,
+            itemName: orderData.itemName,
+            qty: orderData.qty,
+            unit: orderData.unit,
+            confirmedBy: confirmedBy || 'ผู้ดูแลระบบ (Admin Web)',
+            confirmedAt: nowTimeStr,
+          }
+        });
+        await pushPurchaseOrderLineMessage([confirmFlex]);
+      } catch (_) {}
+
+      res.json({ success: true, order: updatedOrder });
+    } catch (err: any) {
+      console.error("Web order confirm error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API: Mark Order Received & Auto Stock In
+  app.post("/api/orders/receive", async (req, res) => {
+    try {
+      const { orderId, receivedQty, receivedBy, note } = req.body;
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: "Missing orderId" });
+      }
+      if (!firestoreDb) {
+        return res.status(500).json({ success: false, error: "Firestore not initialized" });
+      }
+
+      const orderRef = doc(firestoreDb, 'orders', orderId);
+      const orderSnap = await getDoc(orderRef);
+      if (!orderSnap.exists()) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      const orderData: any = orderSnap.data();
+      const qtyToAdd = Number(receivedQty) || Number(orderData.qty) || 0;
+      const nowTimeStr = new Date().toLocaleString('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // 1. Update Order status to 'received'
+      const updatedOrder = {
+        ...orderData,
+        status: 'received',
+        receivedAt: nowTimeStr,
+        receivedBy: receivedBy || 'ผู้ดูแลระบบ',
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(orderRef, updatedOrder, { merge: true });
+
+      // 2. Auto Stock In to Inventory item in Firestore (Update existing or auto-register new item)
+      let updatedItem: any = null;
+      const targetItemId = orderData.itemId || `ITEM-${Date.now().toString().slice(-6)}`;
+      try {
+        const itemRef = doc(firestoreDb, 'inventory', targetItemId);
+        const itemSnap = await getDoc(itemRef);
+        if (itemSnap.exists()) {
+          const currentItem = itemSnap.data() as any;
+          const newQty = (Number(currentItem.qty) || 0) + qtyToAdd;
+          const minStock = Number(currentItem.minStock) || 1;
+          const newStatus = newQty <= 0 ? 'out' : newQty <= minStock ? 'low' : 'normal';
+
+          updatedItem = {
+            ...currentItem,
+            qty: newQty,
+            status: newStatus,
+            ordered: '', // Clear active ordered flag
+            outOfStockDate: newStatus === 'normal' ? '' : currentItem.outOfStockDate,
+          };
+          await setDoc(itemRef, updatedItem, { merge: true });
+        } else {
+          // Item was not in store: Auto-register into warehouse inventory upon receipt!
+          const minStock = 5;
+          const newStatus = qtyToAdd <= 0 ? 'out' : qtyToAdd <= minStock ? 'low' : 'normal';
+          updatedItem = {
+            id: targetItemId,
+            name: orderData.itemName,
+            category: orderData.category || 'อื่นๆ',
+            qty: qtyToAdd,
+            minStock: minStock,
+            unit: orderData.unit || 'ชิ้น',
+            location: orderData.location || 'Store FL.6',
+            brand: orderData.brand || '',
+            model: orderData.model || '',
+            status: newStatus,
+            ordered: '',
+            orderedDate: '',
+            note: `บันทึกเข้าคลังอัตโนมัติจากการสั่งซื้อ ${orderData.id}`,
+          };
+          await setDoc(itemRef, updatedItem);
+        }
+      } catch (itemErr) {
+        console.warn("Could not update item stock on receive:", itemErr);
+      }
+
+      // 3. Create auto requisition record (Stock In)
+      try {
+        const reqId = `REQ-IN-${Date.now().toString().slice(-6)}`;
+        const requisitionRecord = {
+          id: reqId,
+          type: 'in',
+          itemId: orderData.itemId,
+          itemName: orderData.itemName,
+          category: orderData.category || '',
+          qty: qtyToAdd,
+          unit: orderData.unit,
+          requestedBy: receivedBy || 'ผู้ดูแลระบบ (รับของจากใบสั่งซื้อ)',
+          purpose: `รับสินค้าตามใบสั่งซื้อ ${orderData.id}${note ? ` (${note})` : ''}`,
+          timestamp: nowTimeStr,
+          isoDate: new Date().toISOString(),
+          note: `รับเข้าจากใบสั่งซื้อ PO: ${orderData.id}`,
+        };
+        await setDoc(doc(firestoreDb, 'requisitions', reqId), requisitionRecord);
+      } catch (reqErr) {
+        console.warn("Could not log stock-in requisition:", reqErr);
+      }
+
+      // 4. Notify LINE about Stock In
+      try {
+        const stockFlex = createStockFlexMessage({
+          type: 'in',
+          itemId: orderData.itemId,
+          itemName: orderData.itemName,
+          category: orderData.category,
+          qty: qtyToAdd,
+          unit: orderData.unit,
+          requestedBy: receivedBy || 'ผู้ดูแลระบบ',
+          purpose: `รับสินค้าเข้าคลังตามใบสั่งซื้อ ${orderData.id}`,
+          timestamp: nowTimeStr,
+          newQty: updatedItem ? updatedItem.qty : undefined,
+          status: updatedItem ? updatedItem.status : 'normal',
+        });
+        await pushLineMessage([stockFlex]);
+      } catch (_) {}
+
+      res.json({ success: true, order: updatedOrder, item: updatedItem });
+    } catch (err: any) {
+      console.error("Receive order error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API: Cancel Purchase Order
+  app.post("/api/orders/cancel", async (req, res) => {
+    try {
+      const { orderId, reason, cancelledBy } = req.body;
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: "Missing orderId" });
+      }
+      if (!firestoreDb) {
+        return res.status(500).json({ success: false, error: "Firestore not initialized" });
+      }
+
+      const orderRef = doc(firestoreDb, 'orders', orderId);
+      const orderSnap = await getDoc(orderRef);
+      if (!orderSnap.exists()) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      const orderData: any = orderSnap.data();
+      const updatedOrder = {
+        ...orderData,
+        status: 'cancelled',
+        cancelReason: reason || 'ยกเลิกโดยผู้ดูแลระบบ',
+        cancelledBy: cancelledBy || 'ผู้ดูแลระบบ',
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(orderRef, updatedOrder, { merge: true });
+
+      // Clear ordered flag on item
+      if (orderData.itemId) {
+        try {
+          const itemRef = doc(firestoreDb, 'inventory', orderData.itemId);
+          await setDoc(itemRef, { ordered: '' }, { merge: true });
+        } catch (_) {}
+      }
+
+      res.json({ success: true, order: updatedOrder });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
 
   // ==========================================
   // API: Web Push Notifications Endpoints

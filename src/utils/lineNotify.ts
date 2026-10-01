@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { LineNotificationConfig, LineStockNotifyData, LineBulkStockNotifyData, LineAuthNotifyData } from '../types';
+import { LineNotificationConfig, LineStockNotifyData, LineBulkStockNotifyData, LineAuthNotifyData, PurchaseOrder } from '../types';
 
 export const DEFAULT_LINE_CONFIG: LineNotificationConfig = {
   enabled: true,
@@ -11,6 +11,10 @@ export const DEFAULT_LINE_CONFIG: LineNotificationConfig = {
   notifyLogin: true,
   notifyLogout: true,
   notifyLowStock: true,
+  notifyPurchaseOrder: true,
+  useSeparateOrderDestination: false,
+  purchaseOrderDestinationId: '',
+  purchaseOrderChannelAccessToken: '',
 };
 
 // Cache config in memory for fast synchronous checks
@@ -172,7 +176,11 @@ export const notifyAuthEvent = async (data: LineAuthNotifyData): Promise<{ succe
 /**
  * Test LINE notification
  */
-export const testLineNotification = async (testConfig?: { channelAccessToken?: string; destinationId?: string }): Promise<{ success: boolean; error?: string; message?: string }> => {
+export const testLineNotification = async (testConfig?: { 
+  channelAccessToken?: string; 
+  destinationId?: string;
+  isOrderTest?: boolean;
+}): Promise<{ success: boolean; error?: string; message?: string }> => {
   try {
     const res = await fetch('/api/line/test', {
       method: 'POST',
@@ -188,5 +196,37 @@ export const testLineNotification = async (testConfig?: { channelAccessToken?: s
     return { success: true, message: data.message || 'ส่งข้อความทดสอบไปยัง LINE สำเร็จเรียบร้อยแล้ว' };
   } catch (err: any) {
     return { success: false, error: err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์' };
+  }
+};
+
+/**
+ * Send LINE notification for Purchase Order (การสั่งซื้อสินค้าใกล้หมด/หมด)
+ */
+export const notifyPurchaseOrder = async (order: PurchaseOrder, baseUrl?: string): Promise<{ success: boolean; message?: string }> => {
+  try {
+    const payload = {
+      type: 'purchase_order',
+      data: {
+        order,
+        baseUrl: baseUrl || window.location.origin,
+      },
+    };
+
+    const res = await fetch('/api/line/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { success: false, message: err.error || 'Failed to send LINE order notification' };
+    }
+
+    const resData = await res.json();
+    return { success: resData.success, message: resData.message };
+  } catch (err: any) {
+    console.warn('LINE purchase order notify error:', err);
+    return { success: false, message: err.message };
   }
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, ClipboardList, Bot, BarChart3, Layers, ShieldCheck } from 'lucide-react';
+import { Package, ClipboardList, Bot, BarChart3, Layers, ShieldCheck, ShoppingCart } from 'lucide-react';
 import { AppTab } from './MobileNavbar';
 
 interface TopNavTabsProps {
@@ -7,6 +7,7 @@ interface TopNavTabsProps {
   setActiveTab: (tab: AppTab) => void;
   requisitionCount?: number;
   lowStockCount?: number;
+  pendingOrdersCount?: number;
   isAdmin?: boolean;
   isLiveActive?: boolean;
   className?: string;
@@ -17,6 +18,7 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
   setActiveTab,
   requisitionCount = 0,
   lowStockCount = 0,
+  pendingOrdersCount = 0,
   isAdmin = false,
   isLiveActive = false,
   className = '',
@@ -29,6 +31,7 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
       icon: ClipboardList, 
       badge: requisitionCount > 0 ? requisitionCount : undefined 
     },
+    ...(isAdmin ? [{ id: 'categories' as AppTab, label: 'หมวด', icon: Layers }] : []),
     { 
       id: 'voice' as AppTab, 
       label: isLiveActive ? 'คุยสด AI' : 'ถาม AI', 
@@ -36,12 +39,17 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
       isLive: isLiveActive 
     },
     { 
+      id: 'orders' as AppTab, 
+      label: 'สั่งของ', 
+      icon: ShoppingCart, 
+      badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined 
+    },
+    { 
       id: 'dashboard' as AppTab, 
       label: 'ภาพรวม', 
       icon: BarChart3, 
       dot: lowStockCount > 0 
     },
-    { id: 'categories' as AppTab, label: 'หมวด', icon: Layers },
     ...(isAdmin ? [{ id: 'admin' as AppTab, label: 'Admin', icon: ShieldCheck }] : []),
   ];
 

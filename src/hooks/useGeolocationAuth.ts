@@ -3,7 +3,7 @@ import { STORE_LOCATION, MAX_DISTANCE_METERS, getDistance } from '../utils/geo';
 import { User } from '../types';
 import { GeoModalState } from '../components/GeoRestrictionModal';
 
-export function useGeolocationAuth(currentUser: User | null) {
+export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boolean = true) {
   const [isCheckingGeo, setIsCheckingGeo] = useState(false);
   const [geoModalState, setGeoModalState] = useState<GeoModalState>({
     isOpen: false,
@@ -15,6 +15,8 @@ export function useGeolocationAuth(currentUser: User | null) {
   }, []);
 
   const checkInitialLocation = useCallback(() => {
+    // If Geo Location is turned off globally by admin, bypass check completely
+    if (!isGeoEnabled) return;
     if (!currentUser || currentUser.role === 'admin') return;
 
     if (!navigator.geolocation) {
@@ -58,9 +60,14 @@ export function useGeolocationAuth(currentUser: User | null) {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, [currentUser]);
+  }, [currentUser, isGeoEnabled]);
 
   const verifyLocation = useCallback(async (): Promise<boolean> => {
+    // If Geo Location is disabled globally by Admin, bypass checks immediately
+    if (!isGeoEnabled) {
+      return true;
+    }
+
     // Admins bypass this check entirely
     if (currentUser?.role === 'admin') {
       return true;
@@ -123,11 +130,13 @@ export function useGeolocationAuth(currentUser: User | null) {
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
-  }, [currentUser]);
+  }, [currentUser, isGeoEnabled]);
 
   const recheckLocation = useCallback(() => {
-    verifyLocation();
-  }, [verifyLocation]);
+    if (isGeoEnabled) {
+      verifyLocation();
+    }
+  }, [verifyLocation, isGeoEnabled]);
 
   return {
     verifyLocation,
