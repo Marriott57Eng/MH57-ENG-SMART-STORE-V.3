@@ -40,10 +40,23 @@ export interface RequisitionRecord {
 
 export interface ReportAction {
   format?: "pdf" | "excel";
-  type: 'inventory_all' | 'requisition_history' | 'low_stock' | 'category';
+  type: 
+    | 'inventory_all' 
+    | 'requisition_history' 
+    | 'individual_requisitions' 
+    | 'low_stock' 
+    | 'category' 
+    | 'purchase_orders' 
+    | 'executive_summary';
   title: string;
+  subtitle?: string;
   categoryFilter?: string;
   userFilter?: string;
+  orderStatusFilter?: string;
+  startDate?: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface DbActionPayload {
@@ -183,8 +196,10 @@ export interface WebPushNotificationConfig {
   notifyLowStock: boolean;
   notifyRequisition?: boolean;
   notifyImportantRequisition?: boolean;
+  notifyPurchaseOrder?: boolean;
   importantRequisitionThreshold?: number; // e.g., qty >= 5
   updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface WebPushPayload {
@@ -194,7 +209,7 @@ export interface WebPushPayload {
   badge?: string;
   url?: string;
   tag?: string;
-  type?: 'low_stock' | 'requisition' | 'system';
+  type?: 'low_stock' | 'requisition' | 'order' | 'system';
   data?: Record<string, any>;
 }
 

@@ -8,5 +8,5 @@
 ## 2. Voice Assistant & Input Positioning
 - The AI Voice & Chat input area in `src/components/VoiceAssistantView.tsx` must maintain a minimum bottom padding of `max(108px, calc(env(safe-area-inset-bottom, 24px) + 90px))` to prevent any collision or occlusion with the fixed bottom navigation bar (`MobileNavbar`).
 
-## 3. RBAC Permissions in AI Assistant
-- Staff (User role) can perform requisitions, stock-in, inquiry, and report exports. Direct manual stock adjustments or editing item names from AI are restricted to Admin only.
+## 3. RBAC Permissions in AI Assistant & Reports
+- PDF report exports (both in the UI and via AI Voice/Live Speech) are strictly restricted to Admin only. Staff (User role) can perform requisitions, stock-in, and inventory inquiries. Direct manual stock adjustments or editing item names from AI are restricted to Admin only.

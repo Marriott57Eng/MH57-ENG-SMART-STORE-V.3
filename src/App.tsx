@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { generateAndDownloadPdf } from './utils/pdfGenerator';
 import { useGeolocationAuth } from './hooks/useGeolocationAuth';
-import { getSavedGeoLocationEnabled, saveGeoLocationSetting, subscribeGeoLocationSetting } from './utils/geo';
+import { GeoConfig, getSavedGeoConfig, saveGeoConfig, subscribeGeoConfig, getSavedGeoLocationEnabled, saveGeoLocationSetting, subscribeGeoLocationSetting } from './utils/geo';
 import { GeoRestrictionModal } from './components/GeoRestrictionModal';
 import { TransactionSuccessModal, TransactionSuccessData } from './components/TransactionSuccessModal';
 import { playSuccessSoundAndSpeak } from './utils/audioUtils';
@@ -183,12 +183,13 @@ export default function App() {
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const pendingOrdersCount = useMemo(() => orders.filter(o => o.status === 'pending').length, [orders]);
-  const [isGeoLocationEnabled, setIsGeoLocationEnabled] = useState<boolean>(getSavedGeoLocationEnabled);
+  const [geoConfig, setGeoConfig] = useState<GeoConfig>(getSavedGeoConfig);
+  const isGeoLocationEnabled = geoConfig.isGeoLocationEnabled;
 
-  // Subscribe to real-time Geo Location settings from Firestore
+  // Subscribe to real-time Geo Location settings from Firestore (Admin master setting)
   useEffect(() => {
-    const unsub = subscribeGeoLocationSetting((enabled) => {
-      setIsGeoLocationEnabled(enabled);
+    const unsub = subscribeGeoConfig((config) => {
+      setGeoConfig(config);
     });
     return () => unsub();
   }, []);
@@ -200,14 +201,14 @@ export default function App() {
     geoModalState,
     closeGeoModal,
     recheckLocation,
-  } = useGeolocationAuth(currentUser, isGeoLocationEnabled);
+  } = useGeolocationAuth(currentUser, geoConfig);
   
   // Check location on initial login/load
   useEffect(() => {
-    if (currentUser && isGeoLocationEnabled) {
+    if (currentUser && geoConfig.isGeoLocationEnabled) {
       checkInitialLocation();
     }
-  }, [currentUser, checkInitialLocation, isGeoLocationEnabled]);
+  }, [currentUser, checkInitialLocation, geoConfig.isGeoLocationEnabled]);
 
   const [items, setItems] = useState<InventoryItem[]>(getInitialInventory);
   const [summary, setSummary] = useState<InventorySummary | null>(getInitialSummary);
@@ -1542,17 +1543,21 @@ export default function App() {
     }
   };
 
-  // Handle toggle Geo Location Geofencing system
-  const handleToggleGeoLocation = async (enabled: boolean) => {
-    setIsGeoLocationEnabled(enabled);
-    await saveGeoLocationSetting(enabled, currentUser?.name || currentUser?.username || 'Admin');
+  // Handle update Geo Location Geofencing system (Admin master setting for all users)
+  const handleUpdateGeoConfig = async (newConfig: Partial<GeoConfig>) => {
+    const updated = await saveGeoConfig(newConfig, currentUser?.name || currentUser?.username || 'Admin');
+    setGeoConfig(updated);
     addToast({
-      title: enabled ? 'เปิดระบบ Geo Location แล้ว' : 'ปิดระบบ Geo Location แล้ว',
-      message: enabled
-        ? 'จำกัดให้เจ้าหน้าที่ต้องอยู่ในรัศมี 100 เมตรจึงจะทำรายการเบิก-รับได้'
-        : 'อนุญาตให้เจ้าหน้าที่เบิก-รับสินค้าได้จากทุกสถานที่ (ข้ามการตรวจสอบพิกัด)',
-      type: enabled ? 'success' : 'info'
+      title: 'บันทึกการตั้งค่าพิกัดกลางแล้ว',
+      message: updated.isGeoLocationEnabled
+        ? `จำกัดพื้นที่ ${updated.locationName} (รัศมี ${updated.maxDistanceMeters} ม.) สำหรับผู้ใช้งานทุกคน`
+        : 'ปิดระบบตรวจสอบพิกัด (ผู้ใช้งานทุกคนสามารถเบิก-รับได้ทุกสถานที่)',
+      type: 'success'
     });
+  };
+
+  const handleToggleGeoLocation = async (enabled: boolean) => {
+    await handleUpdateGeoConfig({ isGeoLocationEnabled: enabled });
   };
 
   // Ask AI about specific item or query
@@ -2094,8 +2099,6 @@ export default function App() {
                 onAskAI={(prompt) => handleAskAIQuery(prompt)}
                 onRefresh={() => fetchInventory(true)}
                 loading={refreshing}
-                onExportPdf={handleExportInventoryPdf}
-                isExportingPdf={isExportingInventoryPdf}
               />
             </motion.div>
           )}
@@ -2117,8 +2120,6 @@ export default function App() {
                   setSelectedCategory(cat);
                   setActiveTab('inventory');
                 }}
-                onExportPdf={handleExportInventoryPdf}
-                isExporting={isExportingInventoryPdf}
               />
             </motion.div>
           )}
@@ -2166,6 +2167,8 @@ export default function App() {
                 }}
                 isGeoLocationEnabled={isGeoLocationEnabled}
                 onToggleGeoLocation={handleToggleGeoLocation}
+                geoConfig={geoConfig}
+                onUpdateGeoConfig={handleUpdateGeoConfig}
               />
             </motion.div>
           )}
@@ -2187,6 +2190,7 @@ export default function App() {
           <VoiceAssistantView
             items={items}
             requisitions={requisitions}
+            orders={orders}
             chatHistory={chatHistory}
             setChatHistory={setChatHistory}
             onSelectItem={(item) => setSelectedItem(item)}

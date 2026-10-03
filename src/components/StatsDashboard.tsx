@@ -39,8 +39,6 @@ interface StatsDashboardProps {
   onAskAI: (prompt: string) => void;
   onRefresh: () => void;
   loading: boolean;
-  onExportPdf?: () => void;
-  isExportingPdf?: boolean;
   initialSubTab?: 'overview' | 'categories';
 }
 
@@ -54,8 +52,6 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
   onAskAI,
   onRefresh,
   loading,
-  onExportPdf,
-  isExportingPdf = false,
   initialSubTab = 'overview',
 }) => {
   const [viewMode, setViewMode] = useState<'overview' | 'categories'>(initialSubTab || 'overview');
@@ -354,8 +350,6 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
             summary={summary}
             items={items}
             onSelectCategory={onSelectCategory}
-            onExportPdf={onExportPdf}
-            isExporting={isExportingPdf}
           />
         </div>
       ) : (
@@ -448,7 +442,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  แตะเพื่อเปิดดูสินค้าแยกตามหมวดหมู่งาน รูปภาพประกอบ และดาวน์โหลดรายงาน PDF
+                  แตะเพื่อเปิดดูสินค้าแยกตามหมวดหมู่งานและรูปภาพประกอบ
                 </p>
               </div>
             </div>

@@ -1,4 +1,15 @@
-import { WebPushPayload } from '../types';
+import { WebPushPayload, WebPushNotificationConfig } from '../types';
+import { db } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+export const DEFAULT_WEBPUSH_CONFIG: WebPushNotificationConfig = {
+  enabled: true,
+  notifyLowStock: true,
+  notifyImportantRequisition: true,
+  notifyPurchaseOrder: true,
+};
+
+let cachedWebPushConfig: WebPushNotificationConfig | null = null;
 
 /**
  * Utility to convert VAPID public key from URL-safe Base64 to Uint8Array
@@ -42,22 +53,93 @@ export function getNotificationPermission(): NotificationPermission {
 
 export const getWebPushPermission = getNotificationPermission;
 
-export function getWebPushConfig() {
+/**
+ * Get cached Web Push config synchronously (fallback to localStorage or defaults)
+ */
+export function getWebPushConfig(): WebPushNotificationConfig {
+  if (cachedWebPushConfig) return cachedWebPushConfig;
   try {
     const raw = localStorage.getItem('webpush_config');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      cachedWebPushConfig = { ...DEFAULT_WEBPUSH_CONFIG, ...JSON.parse(raw) };
+      return cachedWebPushConfig;
+    }
   } catch (_) {}
-  return {
-    enabled: true,
-    notifyLowStock: true,
-    notifyImportantRequisition: true,
-  };
+  return DEFAULT_WEBPUSH_CONFIG;
 }
 
-export function saveWebPushConfig(cfg: { enabled?: boolean; notifyLowStock?: boolean; notifyImportantRequisition?: boolean }) {
+/**
+ * Fetch master Web Push config from Firestore (configured by Admin)
+ * All regular users inherit this master config
+ */
+export async function fetchWebPushConfigFromFirestore(): Promise<WebPushNotificationConfig> {
   try {
-    localStorage.setItem('webpush_config', JSON.stringify(cfg));
+    const docRef = doc(db, 'settings', 'webpush_config');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const remoteData = { ...DEFAULT_WEBPUSH_CONFIG, ...(snap.data() as WebPushNotificationConfig) };
+      cachedWebPushConfig = remoteData;
+      try {
+        localStorage.setItem('webpush_config', JSON.stringify(remoteData));
+      } catch (_) {}
+      return remoteData;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch Web Push config from Firestore, trying backend:', err);
+  }
+
+  // Fallback to backend API
+  try {
+    const res = await fetch('/api/push/config');
+    if (res.ok) {
+      const serverCfg = await res.json();
+      if (serverCfg && serverCfg.success && serverCfg.config) {
+        cachedWebPushConfig = { ...DEFAULT_WEBPUSH_CONFIG, ...serverCfg.config };
+        return cachedWebPushConfig;
+      }
+    }
   } catch (_) {}
+
+  return getWebPushConfig();
+}
+
+/**
+ * Save master Web Push config to Firestore (Admin only)
+ * Synchronizes to both Firestore and backend server memory
+ */
+export async function saveWebPushConfig(
+  cfg: Partial<WebPushNotificationConfig>,
+  updatedBy?: string
+): Promise<WebPushNotificationConfig> {
+  const current = getWebPushConfig();
+  const updated: WebPushNotificationConfig = {
+    ...current,
+    ...cfg,
+    updatedAt: new Date().toISOString(),
+    ...(updatedBy ? { updatedBy } : {}),
+  };
+  cachedWebPushConfig = updated;
+  try {
+    localStorage.setItem('webpush_config', JSON.stringify(updated));
+  } catch (_) {}
+
+  try {
+    const docRef = doc(db, 'settings', 'webpush_config');
+    await setDoc(docRef, updated, { merge: true });
+  } catch (err) {
+    console.error('Failed to save Web Push config to Firestore:', err);
+  }
+
+  // Also sync to backend server
+  try {
+    await fetch('/api/push/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+  } catch (_) {}
+
+  return updated;
 }
 
 /**
@@ -216,7 +298,7 @@ export async function sendWebPushNotification(payload: WebPushPayload): Promise<
 }
 
 /**
- * Trigger Low Stock Web Push alert
+ * Trigger Low Stock Web Push alert (respects Admin master config)
  */
 export async function triggerLowStockPush(item: {
   id: string;
@@ -225,6 +307,11 @@ export async function triggerLowStockPush(item: {
   location?: string;
   minStock?: number;
 }, newQty: number) {
+  const cfg = await fetchWebPushConfigFromFirestore();
+  if (!cfg.enabled || !cfg.notifyLowStock) {
+    return { success: false, skipped: true, reason: 'Disabled by Admin config' };
+  }
+
   const isOutOfStock = newQty <= 0;
   const title = isOutOfStock 
     ? `🚨 อะไหล่หมดสต็อก: ${item.name}` 
@@ -247,7 +334,7 @@ export async function triggerLowStockPush(item: {
 }
 
 /**
- * Trigger Important Requisition Web Push alert
+ * Trigger Important Requisition Web Push alert (respects Admin master config)
  */
 export async function triggerImportantRequisitionPush(data: {
   itemId?: string;
@@ -259,6 +346,11 @@ export async function triggerImportantRequisitionPush(data: {
   newQty?: number;
   isImportant?: boolean;
 }) {
+  const cfg = await fetchWebPushConfigFromFirestore();
+  if (!cfg.enabled || !cfg.notifyImportantRequisition) {
+    return { success: false, skipped: true, reason: 'Disabled by Admin config' };
+  }
+
   const title = `📋 มีการเบิกจ่ายอะไหล่: ${data.itemName}`;
   const remainText = data.newQty !== undefined ? ` (คงเหลือ: ${data.newQty} ${data.unit})` : '';
   const body = `ผู้เบิก: ${data.requestedBy} | จำนวน ${data.qty} ${data.unit} | เพื่องาน: "${data.purpose}"${remainText}`;
@@ -272,6 +364,38 @@ export async function triggerImportantRequisitionPush(data: {
     url: '/?tab=history',
     type: 'requisition',
     data,
+  });
+}
+
+/**
+ * Trigger Purchase Order Web Push alert (respects Admin master config)
+ */
+export async function triggerPurchaseOrderPush(order: {
+  id: string;
+  itemName: string;
+  qty: number;
+  unit: string;
+  requestedBy: string;
+  urgency?: string;
+}) {
+  const cfg = await fetchWebPushConfigFromFirestore();
+  if (!cfg.enabled || cfg.notifyPurchaseOrder === false) {
+    return { success: false, skipped: true, reason: 'Disabled by Admin config' };
+  }
+
+  const urgencyText = order.urgency === 'urgent' ? ' [ด่วนมาก]' : '';
+  const title = `🛒 มีคำขอสั่งของใหม่${urgencyText}: ${order.itemName}`;
+  const body = `ผู้ขอ: ${order.requestedBy} | จำนวน ${order.qty} ${order.unit} | รอแอดมินยืนยันคำสั่งซื้อ`;
+
+  return await sendWebPushNotification({
+    title,
+    body,
+    icon: '/logo.png',
+    badge: '/icon-192.png',
+    tag: `order-${order.id}`,
+    url: '/?tab=orders',
+    type: 'order',
+    data: order,
   });
 }
 

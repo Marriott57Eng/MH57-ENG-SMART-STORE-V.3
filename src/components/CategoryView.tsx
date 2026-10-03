@@ -12,16 +12,12 @@ interface CategoryViewProps {
   summary: InventorySummary | null;
   items: InventoryItem[];
   onSelectCategory: (category: string) => void;
-  onExportPdf?: () => void;
-  isExporting?: boolean;
 }
 
 export const CategoryView: React.FC<CategoryViewProps> = ({
   summary,
   items,
   onSelectCategory,
-  onExportPdf,
-  isExporting,
 }) => {
   const getCategoryIcon = (name: string) => {
     const iconClass = "w-4.5 h-4.5 text-blue-600 dark:text-blue-400";
@@ -69,22 +65,6 @@ export const CategoryView: React.FC<CategoryViewProps> = ({
             </p>
           </div>
         </div>
-        
-        {onExportPdf && (
-          <button
-            onClick={onExportPdf}
-            disabled={isExporting || items.length === 0}
-            className="px-3 py-2 rounded-2xl text-slate-700 dark:text-slate-300 liquid-glass-pill hover:bg-white/80 dark:hover:bg-slate-800 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-1.5 border border-white/60 dark:border-white/10 shadow-xs cursor-pointer"
-            title="ส่งออกรายงาน PDF คลังสินค้า"
-          >
-            {isExporting ? (
-              <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-            ) : (
-              <FileDown className="w-4 h-4 text-red-500" />
-            )}
-            <span className="text-xs sm:text-sm font-bold hidden sm:inline-block">PDF</span>
-          </button>
-        )}
       </div>
 
       {/* Category Grid with Real Photos */}

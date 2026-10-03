@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Users, 
@@ -20,11 +20,17 @@ import {
   Sliders,
   Sparkles,
   BarChart3,
-  ShoppingCart
+  ShoppingCart,
+  Crosshair,
+  Save,
+  Loader2,
+  Check
 } from 'lucide-react';
 import { User, InventoryItem, RequisitionRecord, InventorySummary, PurchaseOrder } from '../types';
 import { UserManagementView } from './UserManagementView';
 import { OrdersManagementView } from './OrdersManagementView';
+import { AdminReportModal } from './AdminReportModal';
+import { GeoConfig, getSavedGeoConfig, saveGeoConfig } from '../utils/geo';
 
 export interface AdminHubViewProps {
   currentUser: User;
@@ -41,6 +47,8 @@ export interface AdminHubViewProps {
   onEditItem?: (item: InventoryItem) => void;
   isGeoLocationEnabled?: boolean;
   onToggleGeoLocation?: (enabled: boolean) => void;
+  geoConfig?: GeoConfig;
+  onUpdateGeoConfig?: (config: Partial<GeoConfig>) => Promise<void> | void;
   orders?: PurchaseOrder[];
   onConfirmOrder?: (orderId: string) => Promise<void>;
   onReceiveOrder?: (orderId: string, receivedQty: number, note?: string) => Promise<void>;
@@ -65,6 +73,8 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
   onEditItem,
   isGeoLocationEnabled = true,
   onToggleGeoLocation,
+  geoConfig,
+  onUpdateGeoConfig,
   orders = [],
   onConfirmOrder = async () => {},
   onReceiveOrder = async () => {},
@@ -75,6 +85,78 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
 }) => {
   const [adminSubTab, setAdminSubTab] = useState<'users' | 'orders' | 'inventory' | 'system'>(initialSubTab);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // PDF Report Center Modal state
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportModalType, setReportModalType] = useState<
+    'individual_requisitions' | 'requisition_history' | 'inventory_all' | 'low_stock' | 'purchase_orders' | 'executive_summary'
+  >('individual_requisitions');
+  const [reportModalUser, setReportModalUser] = useState<string>('');
+
+  const handleOpenReportModal = (
+    type: 'individual_requisitions' | 'requisition_history' | 'inventory_all' | 'low_stock' | 'purchase_orders' | 'executive_summary' = 'individual_requisitions',
+    user: string = ''
+  ) => {
+    setReportModalType(type);
+    setReportModalUser(user);
+    setIsReportModalOpen(true);
+  };
+
+  // Geo Location settings state managed by Admin
+  const [geoSettings, setGeoSettings] = useState<GeoConfig>(() => geoConfig || getSavedGeoConfig());
+  const [isSavingGeo, setIsSavingGeo] = useState(false);
+  const [geoSavedSuccess, setGeoSavedSuccess] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locateError, setLocateError] = useState('');
+
+  useEffect(() => {
+    if (geoConfig) {
+      setGeoSettings(geoConfig);
+    }
+  }, [geoConfig]);
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocateError('เบราว์เซอร์ไม่รองรับการดึงพิกัด GPS');
+      return;
+    }
+    setIsLocating(true);
+    setLocateError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        setGeoSettings(prev => ({
+          ...prev,
+          lat: Number(pos.coords.latitude.toFixed(7)),
+          lng: Number(pos.coords.longitude.toFixed(7)),
+        }));
+      },
+      (err) => {
+        setIsLocating(false);
+        setLocateError(err.code === err.PERMISSION_DENIED ? 'กรุณาอนุญาตการเข้าถึงพิกัด GPS' : 'ดึงพิกัดไม่สำเร็จ: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleSaveGeo = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingGeo(true);
+    setGeoSavedSuccess(false);
+    try {
+      if (onUpdateGeoConfig) {
+        await onUpdateGeoConfig(geoSettings);
+      } else {
+        await saveGeoConfig(geoSettings, currentUser.name || currentUser.username);
+      }
+      setGeoSavedSuccess(true);
+      setTimeout(() => setGeoSavedSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error saving geo config:', err);
+    } finally {
+      setIsSavingGeo(false);
+    }
+  };
 
   const pendingOrders = orders.filter((o) => o.status === 'pending');
   const lowStockItems = items.filter(
@@ -152,6 +234,17 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                 <span className="font-black">{isGeoLocationEnabled ? 'เปิดใช้งาน' : 'ปิดระบบ'}</span>
               </button>
             )}
+
+            {/* Comprehensive PDF Report Center Button */}
+            <button
+              type="button"
+              onClick={() => handleOpenReportModal('individual_requisitions')}
+              className="liquid-glass-pill px-3 py-1.5 rounded-xl border border-indigo-400/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 shrink-0 text-xs shadow-2xs cursor-pointer transition-all hover:scale-[1.02] active:scale-95"
+              title="เปิดศูนย์ออกรายงาน PDF (เลือกช่วงวัน-เวลา และรายบุคคล)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="font-extrabold">ออกรายงาน PDF</span>
+            </button>
           </div>
         </div>
       </div>
@@ -217,23 +310,28 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
             {/* 3. Geo Location Toggle Button */}
             <button
               type="button"
-              onClick={() => onToggleGeoLocation && onToggleGeoLocation(!isGeoLocationEnabled)}
+              onClick={() => {
+                const nextVal = !geoSettings.isGeoLocationEnabled;
+                setGeoSettings(prev => ({ ...prev, isGeoLocationEnabled: nextVal }));
+                if (onToggleGeoLocation) onToggleGeoLocation(nextVal);
+                saveGeoConfig({ isGeoLocationEnabled: nextVal }, currentUser.name || currentUser.username);
+              }}
               className={`p-3.5 sm:p-4 rounded-2xl border hover:scale-[1.02] active:scale-95 transition-all text-left flex flex-col justify-between group cursor-pointer shadow-sm relative overflow-hidden ${
-                isGeoLocationEnabled
+                geoSettings.isGeoLocationEnabled
                   ? 'bg-gradient-to-br from-teal-700 via-emerald-700 to-emerald-800 text-white border-emerald-400/50 shadow-emerald-500/20'
                   : 'bg-gradient-to-br from-slate-700 via-slate-800 to-zinc-900 text-white border-amber-400/40 shadow-slate-500/20'
               }`}
             >
               <div className="flex items-center justify-between w-full mb-2">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
-                  isGeoLocationEnabled
+                  geoSettings.isGeoLocationEnabled
                     ? 'bg-white/20 text-white border-white/30'
                     : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
                 }`}>
                   <MapPin className="w-5 h-5" />
                 </div>
                 <div className={`w-10 h-5.5 rounded-full p-0.5 transition-colors duration-300 ease-in-out flex items-center ${
-                  isGeoLocationEnabled ? 'bg-emerald-400 justify-end' : 'bg-slate-600 justify-start'
+                  geoSettings.isGeoLocationEnabled ? 'bg-emerald-400 justify-end' : 'bg-slate-600 justify-start'
                 }`}>
                   <div className="w-4.5 h-4.5 rounded-full bg-white shadow-md transform transition-transform" />
                 </div>
@@ -242,13 +340,13 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                 <div className="font-extrabold text-xs sm:text-sm text-white flex items-center justify-between gap-1">
                   <span>Geo Location</span>
                   <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                    isGeoLocationEnabled ? 'bg-emerald-400 text-emerald-950' : 'bg-amber-400 text-amber-950'
+                    geoSettings.isGeoLocationEnabled ? 'bg-emerald-400 text-emerald-950' : 'bg-amber-400 text-amber-950'
                   }`}>
-                    {isGeoLocationEnabled ? 'ON' : 'OFF'}
+                    {geoSettings.isGeoLocationEnabled ? 'ON' : 'OFF'}
                   </span>
                 </div>
                 <p className="text-[11px] opacity-85 mt-0.5 line-clamp-1">
-                  {isGeoLocationEnabled ? 'จำกัดพื้นที่ 100 ม.' : 'ปิดระบบ (เบิกได้ทุกที่)'}
+                  {geoSettings.isGeoLocationEnabled ? `จำกัดพื้นที่ ${geoSettings.maxDistanceMeters} ม.` : 'ปิดระบบ (เบิกได้ทุกที่)'}
                 </p>
               </div>
             </button>
@@ -276,20 +374,19 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
             {/* 5. Export PDF Report */}
             <button
               type="button"
-              onClick={onExportInventoryPdf}
-              disabled={isExportingInventoryPdf}
-              className="p-3.5 sm:p-4 rounded-2xl liquid-glass-card border border-white/70 dark:border-white/15 hover:border-blue-400/40 hover:scale-[1.02] active:scale-95 transition-all text-left flex flex-col justify-between group cursor-pointer shadow-sm relative overflow-hidden"
+              onClick={() => handleOpenReportModal('individual_requisitions')}
+              className="p-3.5 sm:p-4 rounded-2xl liquid-glass-card border border-white/70 dark:border-white/15 hover:border-indigo-400/40 hover:scale-[1.02] active:scale-95 transition-all text-left flex flex-col justify-between group cursor-pointer shadow-sm relative overflow-hidden"
             >
-              <div className="w-9 h-9 rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-2 border border-violet-400/30">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2 border border-indigo-400/30">
                 <FileDown className="w-5 h-5" />
               </div>
               <div>
                 <div className="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-white flex items-center gap-1">
-                  <span>{isExportingInventoryPdf ? 'กำลังส่งออก...' : 'ส่งออกรายงาน PDF'}</span>
+                  <span>ออกรายงาน PDF</span>
                   <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform text-slate-500" />
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
-                  พิมพ์รายงานสต็อกอะไหล่
+                  เลือกช่วงวัน-เวลา & รายบุคคล
                 </p>
               </div>
             </button>
@@ -413,6 +510,7 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
             <UserManagementView 
               currentUser={currentUser} 
               onUpdateCurrentUser={onUpdateCurrentUser}
+              onOpenReportModal={handleOpenReportModal}
             />
           </div>
         )}
@@ -431,6 +529,7 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
             onResendLineNotification={onResendLineNotification}
             onOpenLineSettings={() => onOpenNotificationSettings?.('line')}
             onOpenCreateOrder={onOpenCreateOrder}
+            onOpenReportModal={handleOpenReportModal}
           />
         )}
 
@@ -574,7 +673,7 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ${
-                      isGeoLocationEnabled
+                      geoSettings.isGeoLocationEnabled
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-400/30'
                         : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-400/30'
                     }`}>
@@ -584,11 +683,11 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                       <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
                         <span>ระบบพิกัด Geo Location</span>
                         <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black ${
-                          isGeoLocationEnabled
+                          geoSettings.isGeoLocationEnabled
                             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/30'
                             : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/30'
                         }`}>
-                          {isGeoLocationEnabled ? 'เปิดใช้งาน (Active)' : 'ปิดระบบ (Bypassed)'}
+                          {geoSettings.isGeoLocationEnabled ? 'เปิดใช้งาน (Active)' : 'ปิดระบบ (Bypassed)'}
                         </span>
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -596,6 +695,17 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                       </p>
                     </div>
                   </div>
+                </div>
+
+                {/* Master Policy Banner */}
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1">
+                  <div className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>👑 สิทธิ์แอดมินกำหนดค่าพิกัดกลาง (Admin Master Geofence)</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300 text-[11.5px] leading-relaxed">
+                    การตั้งค่าพิกัดและระยะรัศมีที่บันทึกตรงนี้ จะมีผลกับ<strong>ผู้ใช้งาน (User) ทุกคนในระบบทันที</strong> โดยทุกยูสเซอร์จะถูกตรวจสอบอิงตามพิกัดเดียวกันนี้ทั้งหมดแบบ Real-time
+                  </p>
                 </div>
 
                 {/* Interactive Toggle Switch Bar */}
@@ -606,8 +716,8 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                         สถานะระบบตรวจจับพิกัด (Geofencing)
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {isGeoLocationEnabled 
-                          ? 'จำกัดให้ทำรายการเฉพาะเมื่ออยู่ในรัศมี 100 เมตร' 
+                        {geoSettings.isGeoLocationEnabled 
+                          ? `จำกัดให้ทำรายการเฉพาะเมื่ออยู่ในรัศมี ${geoSettings.maxDistanceMeters} เมตร` 
                           : 'ข้ามการตรวจสอบพิกัด (อนุญาตให้เบิก/รับได้ทุกสถานที่)'}
                       </div>
                     </div>
@@ -615,35 +725,134 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                     {/* Toggle Button */}
                     <button
                       type="button"
-                      onClick={() => onToggleGeoLocation && onToggleGeoLocation(!isGeoLocationEnabled)}
+                      onClick={() => {
+                        const newEnabled = !geoSettings.isGeoLocationEnabled;
+                        setGeoSettings(prev => ({ ...prev, isGeoLocationEnabled: newEnabled }));
+                        if (onToggleGeoLocation) onToggleGeoLocation(newEnabled);
+                        saveGeoConfig({ isGeoLocationEnabled: newEnabled }, currentUser.name || currentUser.username);
+                      }}
                       className={`relative inline-flex h-7 w-13 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        isGeoLocationEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                        geoSettings.isGeoLocationEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
                       role="switch"
-                      aria-checked={isGeoLocationEnabled}
+                      aria-checked={geoSettings.isGeoLocationEnabled}
                     >
                       <span
                         className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          isGeoLocationEnabled ? 'translate-x-6' : 'translate-x-0'
+                          geoSettings.isGeoLocationEnabled ? 'translate-x-6' : 'translate-x-0'
                         }`}
                       />
                     </button>
                   </div>
 
-                  <div className="pt-2 border-t border-white/40 dark:border-white/10 text-[11.5px] text-slate-600 dark:text-slate-300 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">พิกัดคลัง Store FL.6:</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">13.7233708, 100.5805155</span>
+                  {/* Form inputs for Location Name, Lat, Lng, Radius */}
+                  <div className="pt-3 border-t border-white/40 dark:border-white/10 space-y-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        ชื่อสถานที่ / คลังสินค้า:
+                      </label>
+                      <input 
+                        type="text"
+                        value={geoSettings.locationName}
+                        onChange={(e) => setGeoSettings({ ...geoSettings, locationName: e.target.value })}
+                        placeholder="เช่น Bangkok Marriott Sukhumvit (Store FL.6)"
+                        className="w-full bg-white/80 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500/30 outline-none"
+                      />
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">รัศมีที่อนุญาต:</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">100 เมตร</span>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                          ละติจูด (Latitude):
+                        </label>
+                        <input 
+                          type="number"
+                          step="any"
+                          value={geoSettings.lat}
+                          onChange={(e) => setGeoSettings({ ...geoSettings, lat: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-white/80 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500/30 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                          ลองจิจูด (Longitude):
+                        </label>
+                        <input 
+                          type="number"
+                          step="any"
+                          value={geoSettings.lng}
+                          onChange={(e) => setGeoSettings({ ...geoSettings, lng: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-white/80 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500/30 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* GPS Button */}
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={handleGetCurrentLocation}
+                        disabled={isLocating}
+                        className="text-xs py-1.5 px-3 rounded-lg bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 border border-blue-400/30 font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+                        <span>{isLocating ? 'กำลังดึงพิกัด...' : '📍 ดึงพิกัด GPS ปัจจุบันของฉัน'}</span>
+                      </button>
+                      {locateError && <span className="text-[10px] text-red-500">{locateError}</span>}
+                    </div>
+
+                    {/* Radius selection */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          รัศมีที่อนุญาตให้เบิกได้ (เมตร):
+                        </label>
+                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                          {geoSettings.maxDistanceMeters} ม.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {[50, 100, 200, 500, 1000].map((dist) => (
+                          <button
+                            key={dist}
+                            type="button"
+                            onClick={() => setGeoSettings({ ...geoSettings, maxDistanceMeters: dist })}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              geoSettings.maxDistanceMeters === dist
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {dist} ม.
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="pt-2 flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSaveGeo}
+                        disabled={isSavingGeo}
+                        className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-98 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingGeo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        <span>บันทึกการตั้งค่าพิกัดกลาง</span>
+                      </button>
+
+                      {geoSavedSuccess && (
+                        <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 animate-in fade-in">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>บันทึกแล้ว!</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30 text-[11px] text-blue-800 dark:text-blue-300 leading-relaxed">
-                  💡 <strong>คำแนะนำ:</strong> เมื่อเปิดระบบ พนักงานทั่วไปต้องเปิด GPS และอยู่ในระยะ 100 ม. จึงจะเบิกสินค้าได้ / หากปิดระบบ พนักงานจะสามารถเบิก-รับสินค้าจากนอกสถานที่หรือใช้งานผ่านคอมพิวเตอร์ที่ไม่มี GPS ได้ทันที
+                  💡 <strong>คำแนะนำ:</strong> เมื่อเปิดระบบ พนักงาน (User) ทุกคนต้องอยู่ในระยะที่แอดมินกำหนดนี้จึงจะเบิกสินค้าได้ หากปิดระบบ พนักงานทุกคนจะสามารถเบิก-รับสินค้าจากนอกสถานที่หรือใช้งานผ่านคอมพิวเตอร์ที่ไม่มี GPS ได้ทันที
                 </div>
               </div>
 
@@ -761,12 +970,11 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                 <div className="pt-2">
                   <button
                     type="button"
-                    onClick={onExportInventoryPdf}
-                    disabled={isExportingInventoryPdf}
-                    className="w-full bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                    onClick={() => handleOpenReportModal('executive_summary')}
+                    className="w-full bg-gradient-to-r from-slate-900 to-indigo-950 dark:from-slate-800 dark:to-indigo-900 hover:from-slate-800 hover:to-indigo-900 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-500/15 transition-all cursor-pointer"
                   >
-                    <FileDown className="w-4 h-4" />
-                    <span>{isExportingInventoryPdf ? 'กำลังเตรียมไฟล์...' : 'ดาวน์โหลดรายงานระบบฉบับเต็ม (PDF)'}</span>
+                    <FileDown className="w-4 h-4 text-indigo-400" />
+                    <span>เปิดศูนย์ออกรายงาน PDF (เลือกช่วงวัน-เวลา & กรองรายบุคคล)</span>
                   </button>
                 </div>
               </div>
@@ -774,6 +982,18 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Admin PDF Report Center Modal */}
+      <AdminReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        currentUser={currentUser}
+        items={items}
+        requisitions={requisitions}
+        orders={orders}
+        initialType={reportModalType}
+        initialUser={reportModalUser}
+      />
     </div>
   );
 };

@@ -1,28 +1,45 @@
 import { useState, useCallback } from 'react';
-import { STORE_LOCATION, MAX_DISTANCE_METERS, getDistance } from '../utils/geo';
+import { GeoConfig, getSavedGeoConfig, getDistance } from '../utils/geo';
 import { User } from '../types';
 import { GeoModalState } from '../components/GeoRestrictionModal';
 
-export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boolean = true) {
+export function useGeolocationAuth(
+  currentUser: User | null, 
+  geoConfigOrEnabled: GeoConfig | boolean = true
+) {
   const [isCheckingGeo, setIsCheckingGeo] = useState(false);
   const [geoModalState, setGeoModalState] = useState<GeoModalState>({
     isOpen: false,
     type: 'login_notice'
   });
 
+  const getActiveConfig = useCallback((): GeoConfig => {
+    if (typeof geoConfigOrEnabled === 'object' && geoConfigOrEnabled !== null) {
+      return geoConfigOrEnabled;
+    }
+    const saved = getSavedGeoConfig();
+    if (typeof geoConfigOrEnabled === 'boolean') {
+      return { ...saved, isGeoLocationEnabled: geoConfigOrEnabled };
+    }
+    return saved;
+  }, [geoConfigOrEnabled]);
+
   const closeGeoModal = useCallback(() => {
     setGeoModalState(prev => ({ ...prev, isOpen: false }));
   }, []);
 
   const checkInitialLocation = useCallback(() => {
+    const config = getActiveConfig();
     // If Geo Location is turned off globally by admin, bypass check completely
-    if (!isGeoEnabled) return;
+    if (!config.isGeoLocationEnabled) return;
     if (!currentUser || currentUser.role === 'admin') return;
 
     if (!navigator.geolocation) {
       setGeoModalState({
         isOpen: true,
         type: 'unsupported',
+        locationName: config.locationName,
+        allowedRadius: config.maxDistanceMeters,
         message: 'เบราว์เซอร์หรืออุปกรณ์ของคุณไม่รองรับการระบุตำแหน่ง (Geolocation) จะไม่สามารถทำรายการเบิกหรือรับเข้าได้'
       });
       return;
@@ -35,16 +52,18 @@ export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boole
         const distance = getDistance(
           position.coords.latitude,
           position.coords.longitude,
-          STORE_LOCATION.lat,
-          STORE_LOCATION.lng
+          config.lat,
+          config.lng
         );
 
-        if (distance > MAX_DISTANCE_METERS) {
+        if (distance > config.maxDistanceMeters) {
           setGeoModalState({
             isOpen: true,
             type: 'login_notice',
             distance,
-            message: `แจ้งเตือน: คุณอยู่นอกพื้นที่ทำงาน (ห่างออกไปประมาณ ${Math.round(distance).toLocaleString()} เมตร)\nระบบอนุญาตให้เข้าดูข้อมูลได้เท่านั้น และจะไม่สามารถทำรายการเบิกหรือรับเข้าสินค้าได้จนกว่าจะอยู่ในพื้นที่ทำงาน (รัศมีไม่เกิน ${MAX_DISTANCE_METERS} เมตร)`
+            locationName: config.locationName,
+            allowedRadius: config.maxDistanceMeters,
+            message: `แจ้งเตือน: คุณอยู่นอกพื้นที่ทำงาน (ห่างออกไปประมาณ ${Math.round(distance).toLocaleString()} เมตร)\nระบบอนุญาตให้เข้าดูข้อมูลได้เท่านั้น และจะไม่สามารถทำรายการเบิกหรือรับเข้าสินค้าได้จนกว่าจะอยู่ในพื้นที่ทำงาน (รัศมีไม่เกิน ${config.maxDistanceMeters} เมตร ตามที่แอดมินกำหนด)`
           });
         }
       },
@@ -54,17 +73,20 @@ export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boole
           setGeoModalState({
             isOpen: true,
             type: 'permission_denied',
+            locationName: config.locationName,
+            allowedRadius: config.maxDistanceMeters,
             message: 'ยังไม่ได้รับอนุญาตการเข้าถึงตำแหน่ง (Location)\nจะไม่สามารถทำรายการเบิกหรือรับเข้าสินค้าได้ กรุณาเปิดการอนุญาตตำแหน่งบนเบราว์เซอร์หรืออุปกรณ์ของคุณ'
           });
         }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, [currentUser, isGeoEnabled]);
+  }, [currentUser, getActiveConfig]);
 
   const verifyLocation = useCallback(async (): Promise<boolean> => {
+    const config = getActiveConfig();
     // If Geo Location is disabled globally by Admin, bypass checks immediately
-    if (!isGeoEnabled) {
+    if (!config.isGeoLocationEnabled) {
       return true;
     }
 
@@ -78,6 +100,8 @@ export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boole
         setGeoModalState({
           isOpen: true,
           type: 'unsupported',
+          locationName: config.locationName,
+          allowedRadius: config.maxDistanceMeters,
           message: 'เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่งพิกัด'
         });
         resolve(false);
@@ -92,18 +116,20 @@ export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boole
           const distance = getDistance(
             position.coords.latitude,
             position.coords.longitude,
-            STORE_LOCATION.lat,
-            STORE_LOCATION.lng
+            config.lat,
+            config.lng
           );
 
-          if (distance <= MAX_DISTANCE_METERS) {
+          if (distance <= config.maxDistanceMeters) {
             resolve(true);
           } else {
             setGeoModalState({
               isOpen: true,
               type: 'action_blocked',
               distance,
-              message: `ไม่สามารถทำรายการได้เนื่องจากคุณอยู่นอกพื้นที่ทำงาน (ห่างออกไปประมาณ ${Math.round(distance).toLocaleString()} เมตร)\nระบบอนุญาตให้ทำรายการเบิกหรือรับเข้าสินค้าได้เฉพาะเมื่ออยู่ในพื้นที่ทำงาน (ระยะไม่เกิน ${MAX_DISTANCE_METERS} เมตร) เท่านั้น`
+              locationName: config.locationName,
+              allowedRadius: config.maxDistanceMeters,
+              message: `ไม่สามารถทำรายการได้เนื่องจากคุณอยู่นอกพื้นที่ทำงาน (ห่างออกไปประมาณ ${Math.round(distance).toLocaleString()} เมตร)\nระบบอนุญาตให้ทำรายการเบิกหรือรับเข้าสินค้าได้เฉพาะเมื่ออยู่ในพื้นที่ทำงาน (${config.locationName || 'พื้นที่คลัง'} ระยะไม่เกิน ${config.maxDistanceMeters} เมตร) ตามที่แอดมินกำหนดเท่านั้น`
             });
             resolve(false);
           }
@@ -116,12 +142,16 @@ export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boole
             setGeoModalState({
               isOpen: true,
               type: 'permission_denied',
+              locationName: config.locationName,
+              allowedRadius: config.maxDistanceMeters,
               message: errorMsg
             });
           } else {
             setGeoModalState({
               isOpen: true,
               type: 'action_blocked',
+              locationName: config.locationName,
+              allowedRadius: config.maxDistanceMeters,
               message: errorMsg
             });
           }
@@ -130,13 +160,14 @@ export function useGeolocationAuth(currentUser: User | null, isGeoEnabled: boole
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
-  }, [currentUser, isGeoEnabled]);
+  }, [currentUser, getActiveConfig]);
 
   const recheckLocation = useCallback(() => {
-    if (isGeoEnabled) {
+    const config = getActiveConfig();
+    if (config.isGeoLocationEnabled) {
       verifyLocation();
     }
-  }, [verifyLocation, isGeoEnabled]);
+  }, [verifyLocation, getActiveConfig]);
 
   return {
     verifyLocation,

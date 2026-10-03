@@ -26,7 +26,8 @@ import {
   History,
   Sparkles,
   Inbox,
-  Plus
+  Plus,
+  FileDown
 } from 'lucide-react';
 import { PurchaseOrder, User, InventoryItem } from '../types';
 
@@ -41,6 +42,7 @@ interface OrdersManagementViewProps {
   onOpenAddItemForOrder?: (order: PurchaseOrder) => void;
   onOpenLineSettings?: () => void;
   onOpenCreateOrder?: (item?: InventoryItem | null) => void;
+  onOpenReportModal?: (type?: any, user?: string) => void;
 }
 
 export const OrdersManagementView: React.FC<OrdersManagementViewProps> = ({
@@ -53,6 +55,7 @@ export const OrdersManagementView: React.FC<OrdersManagementViewProps> = ({
   onResendLineNotification,
   onOpenLineSettings,
   onOpenCreateOrder,
+  onOpenReportModal,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all_sections' | 'pending' | 'confirmed' | 'received' | 'cancelled'>('all_sections');
@@ -457,6 +460,18 @@ export const OrdersManagementView: React.FC<OrdersManagementViewProps> = ({
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
               <span>ขอสั่งซื้อสินค้า (สั่งของ)</span>
+            </button>
+          )}
+
+          {onOpenReportModal && currentUser?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => onOpenReportModal('purchase_orders')}
+              className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-500/20 transition-all active:scale-95 cursor-pointer shrink-0 border border-rose-400/40"
+              title="ออกรายงานสรุปและประวัติการสั่งซื้อสินค้า (PDF)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>ออกรายงาน PDF</span>
             </button>
           )}
 

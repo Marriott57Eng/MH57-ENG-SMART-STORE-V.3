@@ -16,7 +16,8 @@ import {
   Search,
   CheckCircle2,
   Unlock,
-  Bell
+  Bell,
+  FileDown
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
@@ -27,6 +28,7 @@ import { LineSettingsModal } from './LineSettingsModal';
 interface UserManagementViewProps {
   currentUser: UserType;
   onUpdateCurrentUser?: (user: UserType) => void;
+  onOpenReportModal?: (type?: any, user?: string) => void;
 }
 
 // Build instant offline/initial users list for 0ms load time
@@ -71,7 +73,8 @@ const getInitialDbUsers = (): UserType[] => {
 
 export const UserManagementView: React.FC<UserManagementViewProps> = ({ 
   currentUser,
-  onUpdateCurrentUser 
+  onUpdateCurrentUser,
+  onOpenReportModal
 }) => {
   const [users, setUsers] = useState<UserType[]>(getInitialDbUsers);
   const [loading, setLoading] = useState(false);
@@ -467,7 +470,20 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             แก้ไข ID, Username, ชื่อจริง, ชื่อเล่น และสิทธิ์ของทุกคน
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Report PDF Button */}
+          {onOpenReportModal && (
+            <button
+              type="button"
+              onClick={() => onOpenReportModal('individual_requisitions')}
+              className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-500/20 active:scale-95 cursor-pointer border border-indigo-400/40"
+              title="ออกรายงาน PDF ประวัติการเบิกรายบุคคล"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>ออกรายงาน PDF</span>
+            </button>
+          )}
+
           {/* LINE Settings Button */}
           <button
             onClick={() => setShowLineSettings(true)}
@@ -726,6 +742,19 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       <Edit3 className="w-3.5 h-3.5" />
                       แก้ไข
                     </button>
+
+                    {/* PDF Report button for individual user */}
+                    {onOpenReportModal && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenReportModal('individual_requisitions', user.name)}
+                        className="px-3 py-1.5 liquid-glass-pill hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-emerald-400/30 transition-all active:scale-95 cursor-pointer shadow-2xs"
+                        title={`ออกรายงานประวัติการเบิกของ ${user.name}`}
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                        <span>รายงาน PDF</span>
+                      </button>
+                    )}
 
                     {/* Fast Role Selector for other users */}
                     {!isSelf && (

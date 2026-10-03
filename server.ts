@@ -40,6 +40,41 @@ interface WebPushSubscriptionRecord {
 let vapidKeys: { publicKey: string; privateKey: string } | null = null;
 const memorySubscriptions: Map<string, WebPushSubscriptionRecord> = new Map();
 
+interface ServerWebPushConfig {
+  enabled: boolean;
+  notifyLowStock: boolean;
+  notifyImportantRequisition: boolean;
+  notifyPurchaseOrder: boolean;
+  importantRequisitionThreshold?: number;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+let serverWebPushConfig: ServerWebPushConfig = {
+  enabled: true,
+  notifyLowStock: true,
+  notifyImportantRequisition: true,
+  notifyPurchaseOrder: true,
+};
+
+interface ServerGeoConfig {
+  isGeoLocationEnabled: boolean;
+  lat: number;
+  lng: number;
+  maxDistanceMeters: number;
+  locationName: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+let serverGeoConfig: ServerGeoConfig = {
+  isGeoLocationEnabled: true,
+  lat: 13.7233708,
+  lng: 100.5805155,
+  maxDistanceMeters: 100,
+  locationName: 'Bangkok Marriott Hotel Sukhumvit (Store FL.6)',
+};
+
 async function getOrInitVapidKeys() {
   if (vapidKeys) return vapidKeys;
   try {
@@ -372,7 +407,8 @@ async function fetchInventoryFromSheet(force = false): Promise<Item[]> {
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  // Dev server must run on port 3000 as Nginx proxies 8080 -> 3000
+  const PORT = Number(process.env.DEFAULT_APP_PORT) || (process.env.PORT && process.env.PORT !== '8080' ? Number(process.env.PORT) : 3000);
 
   app.use(express.json({ limit: "50mb" }));
 
@@ -497,7 +533,62 @@ async function startServer() {
     }).catch((err) => {
       console.warn("Could not load LINE config from Firestore on startup:", err?.message || err);
     });
+
+    getDoc(doc(firestoreDb, 'settings', 'webpush_config')).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        serverWebPushConfig = { ...serverWebPushConfig, ...(data as any) };
+        console.log("Web Push notification config loaded from Firestore");
+      }
+    }).catch((err) => {
+      console.warn("Could not load Web Push config from Firestore on startup:", err?.message || err);
+    });
+
+    getDoc(doc(firestoreDb, 'settings', 'geo_config')).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        serverGeoConfig = { ...serverGeoConfig, ...(data as any) };
+        console.log("Geo Location config loaded from Firestore");
+      }
+    }).catch((err) => {
+      console.warn("Could not load Geo config from Firestore on startup:", err?.message || err);
+    });
   }
+
+  // API: Get Geo Location Central Config (Master config set by Admin)
+  app.get("/api/geo/config", async (req, res) => {
+    try {
+      if (firestoreDb) {
+        const snap = await getDoc(doc(firestoreDb, 'settings', 'geo_config'));
+        if (snap.exists()) {
+          const data = snap.data();
+          serverGeoConfig = { ...serverGeoConfig, ...(data as any) };
+        }
+      }
+      res.json(serverGeoConfig);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API: Update Geo Location Central Config (Admin only)
+  app.post("/api/geo/config", async (req, res) => {
+    try {
+      const updated = req.body;
+      serverGeoConfig = {
+        ...serverGeoConfig,
+        ...updated,
+        updatedAt: new Date().toISOString(),
+      };
+      if (firestoreDb) {
+        await setDoc(doc(firestoreDb, 'settings', 'geo_config'), serverGeoConfig, { merge: true });
+      }
+      res.json({ success: true, config: serverGeoConfig });
+    } catch (error: any) {
+      console.error("Save Geo config error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // API: Get LINE Notification Config
   app.get("/api/line/config", async (req, res) => {
@@ -1671,12 +1762,63 @@ async function startServer() {
     }
   });
 
-  // Broadcast push notification (Triggered on low stock or important requisitions)
+  // API: Get Web Push Config (All users fetch master config set by Admin)
+  app.get("/api/push/config", async (req, res) => {
+    try {
+      if (firestoreDb) {
+        const snap = await getDoc(doc(firestoreDb, 'settings', 'webpush_config'));
+        if (snap.exists()) {
+          serverWebPushConfig = { ...serverWebPushConfig, ...(snap.data() as any) };
+        }
+      }
+      res.json({ success: true, config: serverWebPushConfig });
+    } catch (err: any) {
+      res.json({ success: true, config: serverWebPushConfig });
+    }
+  });
+
+  // API: Save Web Push Config (Admin only - sets master policy for whole system)
+  app.post("/api/push/config", async (req, res) => {
+    try {
+      const updated = req.body || {};
+      serverWebPushConfig = {
+        ...serverWebPushConfig,
+        ...updated,
+        updatedAt: new Date().toISOString(),
+      };
+      if (firestoreDb) {
+        await setDoc(doc(firestoreDb, 'settings', 'webpush_config'), serverWebPushConfig, { merge: true });
+      }
+      res.json({ success: true, config: serverWebPushConfig });
+    } catch (err: any) {
+      console.error("Save Web Push config error:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Broadcast push notification (Triggered on low stock or important requisitions - strictly respects Admin master policy)
   app.post("/api/push/notify", async (req, res) => {
     try {
       const { title, body, icon, url, tag, type, data } = req.body;
       if (!title || !body) {
         return res.status(400).json({ success: false, error: "กรุณาระบุ title และ body" });
+      }
+
+      // Check Master Web Push Policy set by Admin
+      if (!serverWebPushConfig.enabled) {
+        return res.json({ success: false, skipped: true, reason: 'Web push notifications disabled by Admin master policy' });
+      }
+
+      if (type === 'low_stock' && !serverWebPushConfig.notifyLowStock) {
+        return res.json({ success: false, skipped: true, reason: 'Low stock push disabled by Admin master policy' });
+      }
+
+      if (type === 'requisition' && !serverWebPushConfig.notifyImportantRequisition) {
+        return res.json({ success: false, skipped: true, reason: 'Important requisition push disabled by Admin master policy' });
+      }
+
+      if (type === 'order' && serverWebPushConfig.notifyPurchaseOrder === false) {
+        return res.json({ success: false, skipped: true, reason: 'Purchase order push disabled by Admin master policy' });
       }
 
       const result = await sendWebPushToAll({
@@ -2033,16 +2175,15 @@ async function startServer() {
 ${!isAdminUser ? `
 - ⛔ **ข้อห้ามสำหรับ Staff/User**: 
   - ห้ามแก้ไขตัวเลขสต็อกโดยตรง หรือเปลี่ยนชื่ออะไหล่ (\`update_stock\` หรือ \`edit_item\`)
-  - หากผู้ใช้สั่งให้แก้สต็อกโดยตรง ให้ตอบปฏิเสธอย่างสุภาพและเป็นมิตร เช่น:
-    "ขออภัยด้วยนะคะคุณ${callingName} 🥺 ผู้ใช้งานระดับ **Staff** จะยังไม่สามารถแก้ไขจำนวนสต็อกโดยตรงหรือเปลี่ยนชื่ออะไหล่ได้ค่ะ (สิทธิ์สำหรับ **Admin** เท่านั้นนะคะ ✨)
-    
-    👉 แต่คุณ${callingName}สามารถสั่ง **เบิกสินค้า** หรือ **รับเข้า/เติมสต็อก** ได้ตามปกติเลยค่ะ ยินดีช่วยเหลือเสมอนะคะ! 📦🚀"
+  - 🔒 **ห้ามสั่งออกรายงาน PDF / Excel (\`export_reports\`) เด็ดขาด**: การออกรายงาน PDF ในระบบ สงวนสิทธิ์สำหรับผู้ดูแลระบบ (Admin) เท่านั้น
+  - หากผู้ใช้สั่งให้ออกรายงาน PDF ให้ตอบปฏิเสธอย่างสุภาพและเป็นมิตรทันทีว่า:
+    "ขออภัยด้วยนะคะคุณ${callingName} 🔒 การออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นค่ะ หากต้องการตรวจเช็คสต็อกหรือสั่งเบิกของ สามารถบอกหนูได้ตลอดเลยนะคะ ✨"
 - ✅ **สิ่งที่ Staff/User ทำได้ 100%**:
   - สั่งเบิกสินค้า (\`requisition\`)
   - สั่งรับเข้า/เติมสต็อก (\`stock_in\`)
-  - ขอออกรายงาน PDF / Excel (\`export_reports\`)
+  - สอบถามจำนวนคงเหลือ ข้อมูลอะไหล่ และตำแหน่งจัดเก็บ
 ` : `
-- 👑 **สิทธิ์ Admin**: สามารถดำเนินการได้ทุกคำสั่ง ทั้งเบิกสินค้า, รับเข้าสินค้า, แก้ไขยอดสต็อกโดยตรง, เปลี่ยนชื่อสินค้า, และออกรายงาน
+- 👑 **สิทธิ์ Admin**: สามารถดำเนินการได้ทุกคำสั่ง ทั้งเบิกสินค้า, รับเข้าสินค้า, แก้ไขยอดสต็อกโดยตรง, เปลี่ยนชื่อสินค้า, และ**สั่งออกรายงาน PDF ได้ทุกรูปแบบ** (ทั้งประวัติเบิกรายบุคคล, สต็อกทั้งหมด, สั่งซื้อสินค้า PO, ของใกล้หมด, สรุปภาพรวมผู้บริหาร พร้อมกำหนดช่วงวันและเวลาได้)
 `}
 
 📋 กฎการสกัดข้อมูลการเบิก/รับเข้าสินค้า:
@@ -2074,9 +2215,9 @@ ${!isAdminUser ? `
 }
 \`\`\`
 
-📄 หากผู้ใช้ต้องการรายงาน (PDF/Excel):
+📄 หากผู้ใช้เป็น Admin และต้องการออกรายงาน (PDF/Excel):
 \`\`\`json:action
-{"action": "export_reports", "reports": [{"type": "inventory_all"|"requisition_history"|"low_stock"|"category", "format": "pdf"|"excel", "title": "ชื่อรายงาน", "categoryFilter": "หมวดหมู่ถ้ามี", "userFilter": "ชื่อบุคคล (ถ้ามีคนเจาะจงขอประวัติของคนนั้น)"}]}
+{"action": "export_reports", "reports": [{"type": "individual_requisitions"|"requisition_history"|"inventory_all"|"low_stock"|"purchase_orders"|"executive_summary"|"category", "format": "pdf"|"excel", "title": "ชื่อรายงาน", "userFilter": "ชื่อพนักงานถ้าขอเจาะจงบุคคล", "categoryFilter": "หมวดหมู่ถ้ามี", "orderStatusFilter": "สถานะคำสั่งซื้อถ้ามี", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "startTime": "HH:mm", "endTime": "HH:mm"}]}
 \`\`\`
 
 ตัวอย่างรูปแบบการตอบที่ดีเมื่อมีการถามหาสินค้า (สั้น กระชับ):
@@ -2386,30 +2527,36 @@ ${!isAdminUser ? `
       
       let fileReports = undefined;
       
-      // If AI generated export_reports JSON
-      if (actionMatch && actionMatch[1]) {
-        try {
-          const parsedAction = JSON.parse(actionMatch[1]);
-          if (parsedAction.action === 'export_reports' && Array.isArray(parsedAction.reports)) {
-             fileReports = parsedAction.reports;
-          }
-        } catch (e) { }
-      }
+      // If AI generated export_reports JSON (ADMIN ONLY)
+      if (isAdminUser) {
+        if (actionMatch && actionMatch[1]) {
+          try {
+            const parsedAction = JSON.parse(actionMatch[1]);
+            if (parsedAction.action === 'export_reports' && Array.isArray(parsedAction.reports)) {
+               fileReports = parsedAction.reports;
+            }
+          } catch (e) { }
+        }
 
-      // Fallback manual detection if AI didn't catch it
-      if (!fileReports) {
-        const isReportRequestStr = prompt.toLowerCase();
-        const isPdfRequest = isReportRequestStr.includes('pdf');
-        const isExcelRequest = isReportRequestStr.includes('excel') || isReportRequestStr.includes('เอ็กเซล');
-        const isReportRequest = isPdfRequest || isExcelRequest || isReportRequestStr.includes('รายงาน') || isReportRequestStr.includes('เอกสาร') || isReportRequestStr.includes('export');
-        if (isReportRequest) {
-          const format = isExcelRequest ? 'excel' : 'pdf';
-          if (isReportRequestStr.includes('เบิก') || isReportRequestStr.includes('requisition') || isReportRequestStr.includes('รับเข้า')) {
-            fileReports = [{ format, type: 'requisition_history', title: 'รายงานประวัติการเบิก / รับเข้าสินค้า (Store FL.6)' }];
-          } else if (isReportRequestStr.includes('ใกล้หมด') || isReportRequestStr.includes('หมดสต็อก') || isReportRequestStr.includes('หมดสต็อค') || isReportRequestStr.includes('สั่งซื้อ') || isReportRequestStr.includes('low') || isReportRequestStr.includes('out')) {
-            fileReports = [{ format, type: 'low_stock', title: 'รายงานสินค้าใกล้หมด / หมดสต็อก' }];
-          } else {
-            fileReports = [{ format, type: 'inventory_all', title: 'รายงานสต็อกสินค้าคงคลังทั้งหมด (Store FL.6)' }];
+        // Fallback manual detection if AI didn't catch it
+        if (!fileReports) {
+          const isReportRequestStr = prompt.toLowerCase();
+          const isPdfRequest = isReportRequestStr.includes('pdf');
+          const isExcelRequest = isReportRequestStr.includes('excel') || isReportRequestStr.includes('เอ็กเซล');
+          const isReportRequest = isPdfRequest || isExcelRequest || isReportRequestStr.includes('รายงาน') || isReportRequestStr.includes('เอกสาร') || isReportRequestStr.includes('export');
+          if (isReportRequest) {
+            const format = isExcelRequest ? 'excel' : 'pdf';
+            if (isReportRequestStr.includes('สั่งซื้อ') || isReportRequestStr.includes('po') || isReportRequestStr.includes('ใบสั่งซื้อ')) {
+              fileReports = [{ format, type: 'purchase_orders', title: 'รายงานประวัติและสถานะคำสั่งซื้อสินค้า (PO)' }];
+            } else if (isReportRequestStr.includes('ผู้บริหาร') || isReportRequestStr.includes('ภาพรวมระบบ')) {
+              fileReports = [{ format, type: 'executive_summary', title: 'รายงานสรุปภาพรวมผู้บริหาร' }];
+            } else if (isReportRequestStr.includes('เบิก') || isReportRequestStr.includes('requisition') || isReportRequestStr.includes('รับเข้า')) {
+              fileReports = [{ format, type: 'requisition_history', title: 'รายงานประวัติการเบิก / รับเข้าสินค้า (Store FL.6)' }];
+            } else if (isReportRequestStr.includes('ใกล้หมด') || isReportRequestStr.includes('หมดสต็อก') || isReportRequestStr.includes('หมดสต็อค') || isReportRequestStr.includes('low') || isReportRequestStr.includes('out')) {
+              fileReports = [{ format, type: 'low_stock', title: 'รายงานสินค้าใกล้หมด / หมดสต็อก' }];
+            } else {
+              fileReports = [{ format, type: 'inventory_all', title: 'รายงานสต็อกสินค้าคงคลังทั้งหมด (Store FL.6)' }];
+            }
           }
         }
       }
@@ -2538,7 +2685,7 @@ ${!isAdminUser ? `
     // Dynamic import to avoid loading Vite into production bundle memory
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -2598,9 +2745,24 @@ ${!isAdminUser ? `
         );
         const totalUnits = sessionActiveItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
 
-        const adminInstruction = userRole === 'admin' 
-          ? "อนุญาตให้ใช้เครื่องมือปรับสต็อกได้" 
-          : "ผู้ใช้ท่านนี้ไม่มีสิทธิ์แก้ไขสต็อก(update_stock) หรือแก้ไขชื่อสินค้า หากผู้ใช้สั่งแก้ไขให้ตอบปฏิเสธอย่างสุภาพ อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) เท่านั้น";
+        const isAdmin = userRole === 'admin';
+        const adminInstruction = isAdmin 
+          ? `👑 ผู้ใช้ท่านนี้เป็นผู้ดูแลระบบ (Admin):
+- อนุญาตให้ใช้เครื่องมือปรับสต็อกได้
+- 📄 **อนุญาตให้สั่งออกรายงาน PDF ได้ทุกรูปแบบอย่างสมบูรณ์ (เรียก tool export_report ทันที)**:
+  1. ประวัติการเบิกรายบุคคล (reportType: 'individual_requisitions', ระบุ userFilter เช่น 'สมชาย' และช่วงวันเวลาได้)
+  2. ประวัติการเบิก-รับเข้าทั้งหมด (reportType: 'requisition_history', ระบุช่วงวันเวลาได้)
+  3. สินค้าคงคลังทั้งหมด (reportType: 'inventory_all', ระบุ categoryFilter ได้)
+  4. สินค้าใกล้หมดและหมดสต็อก (reportType: 'low_stock')
+  5. ประวัติและสถานะการสั่งซื้อสินค้า PO (reportType: 'purchase_orders', ระบุ orderStatusFilter ได้)
+  6. สรุปภาพรวมผู้บริหาร (reportType: 'executive_summary')
+เมื่อ Admin สั่งให้ออกรายงาน ให้เรียก tool export_report ทันทีพร้อมพารามิเตอร์ที่ครบถ้วน แล้วตอบเสียงสั้นๆ ว่า "ออกรายงาน...ให้เรียบร้อยแล้วค่ะคุณ${callingName}"`
+          : `⛔ ผู้ใช้ท่านนี้เป็น Staff (ไม่ใช่ Admin):
+- ไม่มีสิทธิ์แก้ไขสต็อกโดยตรง (ห้าม update_stock)
+- 🔒 **ไม่มีสิทธิ์สั่งออกรายงาน PDF เด็ดขาด (ห้ามเรียก export_report)**
+- หากผู้ใช้สั่งให้ออกรายงาน PDF หรือพิมพ์รายงาน ให้ตอบปฏิเสธด้วยเสียงอย่างสุภาพทันทีว่า:
+  "ขออภัยด้วยนะคะคุณ${callingName} การออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ Admin เท่านั้นค่ะ หากต้องการตรวจเช็คสต็อกหรือสั่งเบิกของ สามารถบอกหนูได้เลยนะคะ"
+- อนุญาตเฉพาะการ รับเข้า (stock_in) และ เบิก (stock_out) และตรวจสอบสต็อกเท่านั้น`;
 
         const now = new Date();
 
@@ -2704,7 +2866,7 @@ ${JSON.stringify(recentReqs)}
 4. **เมื่อถามสินค้าใกล้หมด**: เรียก \`get_low_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าใกล้หมด...รายการ ส่งขึ้นจอแล้วค่ะ"
 5. **เมื่อถามสินค้าหมดสต็อก**: เรียก \`get_out_of_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าหมดสต็อก...รายการ ส่งขึ้นจอแล้วค่ะ"
 6. **เมื่อถามภาพรวมคลัง**: เรียก \`get_stock_summary\` ทันที แล้วตอบสรุปสั้นๆ 1 ประโยค
-7. **เมื่อสั่งออกรายงาน** (PDF/Excel): เรียก \`export_report\` ทันที แล้วตอบสั้นๆ "ออกรายงานเรียบร้อยแล้วค่ะ"
+7. **เมื่อสั่งออกรายงาน** (PDF/Excel): หากผู้ใช้เป็น Admin ให้เรียก \`export_report\` ทันที แล้วตอบสั้นๆ "ออกรายงาน...ให้เรียบร้อยแล้วค่ะคุณ${callingName}" แต่หากผู้ใช้เป็น Staff ให้ตอบปฏิเสธทันทีว่าการออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น และห้ามเรียก export_report เด็ดขาด
 8. **เมื่อยืนยันทำรายการ**: ตอบสั้นๆ "บันทึกการเบิก/รับเข้า...เรียบร้อยแล้วค่ะ คุณ${callingName}"`,
           tools: [{
             functionDeclarations: [
@@ -2768,16 +2930,25 @@ ${JSON.stringify(recentReqs)}
               },
               {
                 name: "export_report",
-                description: "เรียกใช้นี้เมื่อผู้ใช้ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF หรือ Excel เช่น สต็อกทั้งหมด, สินค้าใกล้หมด, ประวัติการเบิกรับเข้า, หรือรายงานแยกตามหมวดหมู่",
+                description: "เรียกใช้นี้เมื่อ Admin ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF (เฉพาะ Admin เท่านั้น): สต็อกทั้งหมด, สินค้าใกล้หมด, ประวัติการเบิกรายบุคคล, ประวัติการสั่งซื้อ (PO), สรุปภาพรวมผู้บริหาร พร้อมกำหนดช่วงวันและเวลาได้",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {
-                    format: { type: Type.STRING, description: "รูปแบบไฟล์ 'pdf' หรือ 'excel'" },
-                    reportType: { type: Type.STRING, description: "ประเภทรายงาน: 'inventory_all' (สต็อกทั้งหมด), 'low_stock' (สินค้าใกล้หมด/หมดสต็อก), 'requisition_history' (ประวัติการเบิก/รับเข้า), 'category' (แยกตามหมวดหมู่)" },
+                    format: { type: Type.STRING, description: "รูปแบบไฟล์ 'pdf' หรือ 'excel' (ค่าเริ่มต้น 'pdf')" },
+                    reportType: { 
+                      type: Type.STRING, 
+                      description: "ประเภทรายงาน: 'individual_requisitions' (ประวัติเบิกรายบุคคล), 'requisition_history' (ประวัติเบิกรับเข้าทั้งหมด), 'inventory_all' (สต็อกทั้งหมด), 'low_stock' (สินค้าใกล้หมด/หมดสต็อก), 'purchase_orders' (ประวัติการสั่งซื้อสินค้า PO), 'executive_summary' (สรุปภาพรวมผู้บริหาร), 'category' (แยกตามหมวดหมู่)" 
+                    },
                     title: { type: Type.STRING, description: "ชื่อหัวข้อรายงานภาษาไทย" },
-                    categoryFilter: { type: Type.STRING, description: "ชื่อหมวดหมู่ที่ต้องการกรอง (ถ้ามี เช่น 'ไฟฟ้า', 'ประปา')" }
+                    userFilter: { type: Type.STRING, description: "ชื่อพนักงานหรือผู้เบิกที่ต้องการออกรายงานเฉพาะบุคคล (ถ้ามี เช่น 'สมชาย')" },
+                    categoryFilter: { type: Type.STRING, description: "ชื่อหมวดหมู่ที่ต้องการกรอง (ถ้ามี เช่น 'ไฟฟ้า', 'ประปา')" },
+                    orderStatusFilter: { type: Type.STRING, description: "สถานะใบสั่งซื้อ: 'pending', 'confirmed', 'received', 'cancelled' หรือ 'all'" },
+                    startDate: { type: Type.STRING, description: "วันที่เริ่มต้น รูปแบบ YYYY-MM-DD (เช่น 2026-10-01)" },
+                    endDate: { type: Type.STRING, description: "วันที่สิ้นสุด รูปแบบ YYYY-MM-DD (เช่น 2026-10-31)" },
+                    startTime: { type: Type.STRING, description: "เวลาเริ่มต้น เช่น 00:00 หรือ 08:30" },
+                    endTime: { type: Type.STRING, description: "เวลาสิ้นสุด เช่น 23:59 หรือ 17:00" }
                   },
-                  required: ["format", "reportType"]
+                  required: ["reportType"]
                 }
               },
               {
@@ -2909,8 +3080,14 @@ ${JSON.stringify(recentReqs)}
 
                     toolResult = "ส่งการ์ดยืนยันรายการไปยังหน้าจอของผู้ใช้เรียบร้อยแล้ว แจ้งให้ผู้ใช้ตรวจสอบและกดยืนยัน";
                   } else if (fc.name === "export_report") {
-                    const format = (fc.args?.format as string || "pdf").toLowerCase();
-                    toolResult = `สร้างการ์ดดาวน์โหลดรายงาน ${format.toUpperCase()} ส่งไปยังหน้าจอเรียบร้อยแล้วค่ะ`;
+                    if (userRole !== 'admin') {
+                      toolResult = "ขออภัยด้วยนะคะ การออกรายงาน PDF ในระบบ สงวนสิทธิ์สำหรับผู้ดูแลระบบ (Admin) เท่านั้นค่ะ";
+                    } else {
+                      const format = (fc.args?.format as string || "pdf").toUpperCase();
+                      const reportType = fc.args?.reportType as string || 'inventory_all';
+                      const userFilter = fc.args?.userFilter as string || '';
+                      toolResult = `สร้างและส่งการ์ดดาวน์โหลดรายงาน ${format} ${userFilter ? `ของ ${userFilter}` : reportType} ส่งไปยังหน้าจอเรียบร้อยแล้วค่ะ`;
+                    }
                   } else if (fc.name === "inquire_item_info" || fc.name === "check_stock") {
                     const searchTerm = (fc.args?.searchTerm as string || "").toLowerCase().trim();
                     let matchingItems = sessionActiveItems;

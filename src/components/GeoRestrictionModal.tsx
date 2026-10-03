@@ -10,6 +10,8 @@ export interface GeoModalState {
   type: 'login_notice' | 'action_blocked' | 'permission_denied' | 'unsupported';
   distance?: number;
   message?: string;
+  locationName?: string;
+  allowedRadius?: number;
 }
 
 interface GeoRestrictionModalProps {
@@ -96,15 +98,15 @@ export const GeoRestrictionModal: React.FC<GeoRestrictionModalProps> = ({
             <div className="flex items-start gap-2 text-slate-700 dark:text-slate-200">
               <Navigation className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold">สถานที่ทำงาน:</span>
-                <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Bangkok Marriott Hotel Sukhumvit (สุขุมวิท 57)</p>
+                <span className="font-semibold">สถานที่ทำงาน (กำหนดโดยแอดมิน):</span>
+                <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{state.locationName || 'Bangkok Marriott Hotel Sukhumvit (Store FL.6)'}</p>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
               <span className="text-slate-500 dark:text-slate-400">รัศมีที่อนุญาต:</span>
               <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
-                ไม่เกิน {MAX_DISTANCE_METERS} เมตร
+                ไม่เกิน {state.allowedRadius || MAX_DISTANCE_METERS} เมตร
               </span>
             </div>
 
@@ -112,7 +114,7 @@ export const GeoRestrictionModal: React.FC<GeoRestrictionModalProps> = ({
               <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
                 <span className="text-slate-500 dark:text-slate-400">ระยะห่างปัจจุบัน:</span>
                 <span className={`font-bold px-2 py-0.5 rounded-md ${
-                  state.distance <= MAX_DISTANCE_METERS
+                  state.distance <= (state.allowedRadius || MAX_DISTANCE_METERS)
                     ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50'
                     : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/60'
                 }`}>

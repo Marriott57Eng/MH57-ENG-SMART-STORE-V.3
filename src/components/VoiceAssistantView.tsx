@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { InventoryItem, ChatMessage, RequisitionRecord, ReportAction, DbActionPayload } from '../types';
+import { InventoryItem, ChatMessage, RequisitionRecord, ReportAction, DbActionPayload, PurchaseOrder } from '../types';
 import {  
   Mic, MicOff, Send, Sparkles, 
   RotateCcw, Bot, User, ArrowRight, Loader2, FileDown, FileText, 
@@ -19,6 +19,7 @@ import { playSuccessSoundAndSpeak } from '../utils/audioUtils';
 interface VoiceAssistantViewProps {
   items: InventoryItem[];
   requisitions: RequisitionRecord[];
+  orders?: PurchaseOrder[];
   chatHistory: ChatMessage[];
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   currentUser: { name: string; username?: string; role?: string; nickname?: string; id?: string };
@@ -34,6 +35,7 @@ interface VoiceAssistantViewProps {
 export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   items,
   requisitions,
+  orders = [],
   chatHistory,
   setChatHistory,
   currentUser,
@@ -86,12 +88,20 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         });
       } else {
         await generateAndDownloadPdf({
-          type: report.type,
+          type: report.type || 'inventory_all',
           title: report.title,
+          subtitle: report.subtitle,
           categoryFilter: report.categoryFilter,
           userFilter: report.userFilter,
+          orderStatusFilter: report.orderStatusFilter,
+          startDate: report.startDate,
+          endDate: report.endDate,
+          startTime: report.startTime,
+          endTime: report.endTime,
           items,
           requisitions,
+          orders,
+          generatedBy: currentUser?.name || currentUser?.username || 'Admin',
         });
       }
     } catch (err) {
@@ -100,7 +110,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     } finally {
       setGeneratingPdfId(null);
     }
-  }, [items, requisitions]);
+  }, [items, requisitions, orders, currentUser]);
 
   const handleLiveToolCall = useCallback((toolCall: any) => {
     if (!toolCall) return;
@@ -176,24 +186,69 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       }]);
     }
 
-    // 2. Export Report (PDF / Excel)
+    // 2. Export Report (PDF / Excel) - STRICTLY RESTRICTED TO ADMIN ONLY
     else if (toolCall.name === 'export_report') {
-      const { format, reportType, title, categoryFilter } = toolCall.args || {};
+      const callingName = currentUser?.nickname || currentUser?.name || 'ผู้ใช้งาน';
+
+      // Strict RBAC: Only Admin can command PDF reports via Live Speech / AI Assistant!
+      if (currentUser?.role !== 'admin') {
+        const msgId = Date.now().toString();
+        setChatHistory(prev => [...prev, {
+          id: msgId,
+          role: 'assistant',
+          source: 'live',
+          text: `🔒 ขออภัยด้วยนะคะคุณ ${callingName} การสั่งออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นค่ะ หากต้องการตรวจสอบสต็อกหรือสั่งเบิกของ สามารถบอกหนูได้ตามปกติเลยนะคะ ✨`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }]);
+        return;
+      }
+
+      const { 
+        format, 
+        reportType = 'inventory_all', 
+        title, 
+        userFilter, 
+        categoryFilter, 
+        orderStatusFilter, 
+        startDate, 
+        endDate, 
+        startTime, 
+        endTime 
+      } = toolCall.args || {};
+
       const isExcel = (format || '').toLowerCase() === 'excel';
-      const defaultTitle = isExcel 
-        ? (reportType === 'low_stock' ? 'รายงานสินค้าใกล้หมดและหมดสต็อก (Excel)' : reportType === 'requisition_history' ? 'รายงานประวัติการเบิกและรับเข้า (Excel)' : 'รายงานสต็อกสินค้าคงคลังทั้งหมด (Excel)')
-        : (reportType === 'low_stock' ? 'รายงานสินค้าใกล้หมดและหมดสต็อก (PDF)' : reportType === 'requisition_history' ? 'รายงานประวัติการเบิกและรับเข้า (PDF)' : 'รายงานสต็อกสินค้าคงคลังทั้งหมด (PDF)');
       
+      let defaultTitle = 'รายงานคลังสินค้า';
+      if (reportType === 'individual_requisitions' || (reportType === 'requisition_history' && userFilter)) {
+        defaultTitle = `รายงานประวัติการเบิก-รับสินค้ารายบุคคล: ${userFilter || 'พนักงาน'}`;
+      } else if (reportType === 'requisition_history') {
+        defaultTitle = 'รายงานประวัติการเบิก-รับเข้าสินค้าทั้งหมด';
+      } else if (reportType === 'purchase_orders') {
+        defaultTitle = 'รายงานประวัติและสถานะการสั่งซื้อสินค้า (PO)';
+      } else if (reportType === 'low_stock') {
+        defaultTitle = 'รายงานสินค้าใกล้หมดและหมดสต็อก';
+      } else if (reportType === 'executive_summary') {
+        defaultTitle = 'รายงานสรุปภาพรวมผู้บริหาร';
+      } else {
+        defaultTitle = 'รายงานสต็อกสินค้าคงคลังทั้งหมด';
+      }
+
       const reportAction: ReportAction = {
         format: isExcel ? 'excel' : 'pdf',
-        type: reportType || 'inventory_all',
+        type: (reportType === 'category' ? 'inventory_all' : reportType) || 'inventory_all',
         title: title || defaultTitle,
-        categoryFilter: categoryFilter
+        userFilter,
+        categoryFilter,
+        orderStatusFilter,
+        startDate,
+        endDate,
+        startTime,
+        endTime
       };
 
       const msgId = Date.now().toString();
 
-      // Trigger instant download
+      // Trigger instant download for Admin
       handleDownloadReport(reportAction, msgId, isExcel);
 
       // Display in Chat
@@ -474,17 +529,17 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   const recognitionRef = useRef<any>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Suggested quick prompts including DB operations & PDF generation
+  // Suggested quick prompts including DB operations & PDF generation (Admin only for PDF)
   const suggestedPrompts = isAdmin ? [
     '📦 เบิกแอลกอฮอล์ 2 แกลลอน เอาไปซ่อมแอร์ชั้น 4',
     '📥 รับเข้าน้ำยาประสานท่อ 3 กระป๋อง จากโฮมโปร',
-    '🔄 ปรับสต็อก เทปพันสายไฟ ให้เหลือ 15 ม้วน',
-    '📄 สร้าง PDF ประวัติการเบิก/รับเข้า',
+    '📄 ออกรายงาน PDF ประวัติเบิกรายบุคคล',
+    '📄 สรุปภาพรวมผู้บริหาร PDF',
   ] : [
     '📦 เบิกแอลกอฮอล์ 2 แกลลอน เอาไปซ่อมแอร์ชั้น 4',
     '📥 รับเข้าน้ำยาประสานท่อ 3 กระป๋อง จากโฮมโปร',
     '🔍 สอบถามจำนวนคงเหลือของ ท่อ PVC',
-    '📄 สร้าง PDF ประวัติการเบิก/รับเข้า',
+    '⚠️ เช็คสินค้าที่ใกล้หมดสต็อก',
   ];
 
   const lastProcessedQueryRef = useRef<string | null>(null);

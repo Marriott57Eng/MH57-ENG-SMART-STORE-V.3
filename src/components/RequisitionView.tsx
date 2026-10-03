@@ -5,7 +5,6 @@ import {
   Plus, Package, FileText, Trash2, FileDown, Loader2,
   ArrowDownRight, ArrowUpRight, CheckCircle2, AlertTriangle, XCircle, Boxes, Edit3, CheckSquare
 } from 'lucide-react';
-import { generateAndDownloadPdf } from '../utils/pdfGenerator';
 import { formatRecordTimestamp } from '../utils/dateUtils';
 
 interface RequisitionViewProps {
@@ -29,27 +28,9 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'out' | 'in'>('all');
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const getCategoryColor = (_cat?: string) => {
     return 'bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border-slate-200/90 dark:border-slate-700/80';
-  };
-
-  const handleExportPdf = async () => {
-    try {
-      setIsExportingPdf(true);
-      await generateAndDownloadPdf({
-        type: 'requisition_history',
-        title: 'รายงานประวัติการเบิก/รับเข้าสินค้า (Store FL.6)',
-        items,
-        requisitions: filteredRecords.length > 0 ? filteredRecords : records,
-      });
-    } catch (err) {
-      console.error('Error generating PDF:', err);
-      alert('เกิดข้อผิดพลาดในการสร้างไฟล์ PDF');
-    } finally {
-      setIsExportingPdf(false);
-    }
   };
 
   // Filtered records by search and type
@@ -97,20 +78,6 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportPdf}
-              disabled={isExportingPdf || records.length === 0}
-              className="liquid-glass-pill hover:bg-white/80 dark:hover:bg-slate-700 active:scale-95 disabled:opacity-50 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all border border-white/60 dark:border-white/10 cursor-pointer shadow-2xs"
-              title="ส่งออกรายงาน PDF"
-            >
-              {isExportingPdf ? (
-                <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-              ) : (
-                <FileDown className="w-4 h-4 text-red-500" />
-              )}
-              <span className="hidden sm:inline">ส่งออก</span> PDF
-            </button>
-
             {onStartMultiSelect && (
               <button
                 onClick={onStartMultiSelect}
