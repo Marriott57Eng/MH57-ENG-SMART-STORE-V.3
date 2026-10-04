@@ -24,6 +24,7 @@ export function useLiveAudio(
   onUserTranscript?: (text: string) => void
 ) {
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [activeLiveModel, setActiveLiveModel] = useState<string>('gemini-3.8-live');
   const [audioVolume, setAudioVolume] = useState(0); // 0.0 to 1.0
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
@@ -386,6 +387,9 @@ export function useLiveAudio(
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.model) {
+            setActiveLiveModel(msg.model);
+          }
           if (msg.audio && outputAudioCtxRef.current) {
             playAudioChunk(outputAudioCtxRef.current, msg.audio);
           }
@@ -448,6 +452,7 @@ export function useLiveAudio(
   return { 
     isLiveConnected, 
     isConnecting: isConnectingRef.current, 
+    activeLiveModel,
     audioVolume,
     isAiSpeaking,
     isUserSpeaking,

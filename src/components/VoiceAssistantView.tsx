@@ -5,7 +5,8 @@ import {
   Mic, MicOff, Send, Sparkles, 
   RotateCcw, Bot, User, ArrowRight, Loader2, FileDown, FileText, 
   ArrowDownRight, ArrowUpRight, Sliders, Trash2, ExternalLink, AlertCircle, Headset, Radio,
-  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2, Globe, Square
+  CheckCircle2, XCircle, Check, X, Clock, Package, MapPin, Layers, Volume2, Globe, Square,
+  Users, Calendar, Shield
 } from 'lucide-react';
 import { generateAndDownloadPdf } from '../utils/pdfGenerator';
 import { generateAndDownloadExcel } from '../utils/excelGenerator';
@@ -243,22 +244,22 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         startDate,
         endDate,
         startTime,
-        endTime
+        endTime,
+        requestedBy: callingName,
+        isConfirmed: false,
       };
 
       const msgId = Date.now().toString();
 
-      // Trigger instant download for Admin
-      handleDownloadReport(reportAction, msgId, isExcel);
-
-      // Display in Chat
+      // Display Confirmation Card on screen first - user must verify requester name & criteria before confirming export
       setChatHistory(prev => [...prev, {
         id: msgId,
         role: 'assistant',
         source: 'live',
-        text: `📄 AI ได้สร้างและดาวน์โหลดรายงาน "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) ให้เรียบร้อยแล้ว ท่านสามารถกดดาวน์โหลดซ้ำได้จากการ์ดด้านล่างนี้`,
+        text: `กรุณาตรวจสอบชื่อผู้สั่งการและข้อมูลรายงาน: "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) โดยคุณ${callingName} ก่อนกดยืนยันเพื่อออกรายงานค่ะ`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        fileReports: [reportAction]
+        fileReports: [reportAction],
+        isPendingConfirmation: true,
       }]);
     }
 
@@ -503,6 +504,7 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
   const { 
     isLiveConnected, 
     isConnecting, 
+    activeLiveModel,
     audioVolume,
     isAiSpeaking,
     isUserSpeaking,
@@ -725,19 +727,30 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                           const data = JSON.parse(trimmed.slice(6));
                           if (data.type === 'chunk') {
                               textBuffer += data.text;
-                          } else if (data.type === 'complete' || data.type === 'done') {
                               let isPending = false;
                               if (data.dbAction && (data.dbAction.action === 'requisition' || data.dbAction.action === 'stock_in' || data.dbAction.action === 'update_stock')) {
                                   isPending = true;
+                              } else if (data.fileReport || (data.fileReports && data.fileReports.length > 0)) {
+                                  isPending = true;
                               } else if (data.dbAction && data.dbAction.action !== 'error' && onExecuteDbAction) {
                                   onExecuteDbAction(data.dbAction);
+                              }
+
+                              const callingName = currentUser?.nickname || currentUser?.name || 'ผู้ใช้งาน';
+                              let rawReports: ReportAction[] | undefined = data.fileReports || (data.fileReport ? [data.fileReport] : undefined);
+                              if (rawReports && Array.isArray(rawReports)) {
+                                rawReports = rawReports.map((r: any) => ({
+                                  ...r,
+                                  requestedBy: r.requestedBy || callingName,
+                                  isConfirmed: false
+                                }));
                               }
 
                               const finalText = data.text || textBuffer || '';
 
                               // Fallback client-side matching if server didn't provide suggestedItems
                               let finalSuggestedItems = data.suggestedItems;
-                              if (!finalSuggestedItems && !data.dbAction && !data.fileReport && !data.fileReports) {
+                              if (!finalSuggestedItems && !data.dbAction && !rawReports) {
                                 const fullText = (queryText + ' ' + finalText).toLowerCase();
                                 const clientMatches = items.filter(item => {
                                   const idMatch = queryText.includes(item.id) || finalText.includes(item.id);
@@ -756,8 +769,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                   text: finalText,
                                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                                   suggestedItems: finalSuggestedItems,
-                                  fileReport: data.fileReport || data.pdfReport,
-                                  fileReports: data.fileReports,
+                                  fileReport: rawReports?.[0],
+                                  fileReports: rawReports,
                                   dbAction: data.dbAction,
                                   isPendingConfirmation: isPending
                               };
@@ -892,6 +905,64 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     } else {
       // For typed chat, play TTS sound
       playSuccessSoundAndSpeak('ยกเลิกรายการแล้วค่ะ');
+    }
+  }, [setChatHistory, isLiveConnected, sendMessage]);
+
+  // Handle user confirming a Report Generation (PDF / Excel)
+  const handleConfirmReport = useCallback(async (messageId: string, report: ReportAction, idx: number = 0) => {
+    if (!report) return;
+
+    if (currentUser?.role !== 'admin') {
+      alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถออกรายงาน PDF ได้');
+      return;
+    }
+
+    try {
+      const isExcel = report.format === 'excel';
+      await handleDownloadReport(report, messageId + idx, isExcel);
+
+      setChatHistory(prev => prev.map(msg => {
+        if (msg.id === messageId) {
+          return {
+            ...msg,
+            isPendingConfirmation: false,
+            isCancelled: false,
+            text: `✅ ยืนยันออกรายงาน "${report.title}" (${isExcel ? 'EXCEL' : 'PDF'}) สำเร็จและดาวน์โหลดเรียบร้อยแล้ว`
+          };
+        }
+        return msg;
+      }));
+
+      const msgSuccess = `ออกรายงาน ${report.title} เรียบร้อยแล้วค่ะ`;
+      if (isLiveConnected) {
+        sendMessage(`ผู้ใช้กดยืนยันออกรายงาน "${report.title}" แล้ว ระบบดาวน์โหลดเสร็จสิ้น กรุณาแจ้งผลตอบรับด้วยเสียงสั้นๆ`);
+      } else {
+        playSuccessSoundAndSpeak(msgSuccess);
+      }
+    } catch (err) {
+      console.error('Error generating confirmed report:', err);
+      alert('เกิดข้อผิดพลาดในการสร้างเอกสารรายงาน กรุณาลองใหม่อีกครั้ง');
+    }
+  }, [currentUser, handleDownloadReport, setChatHistory, isLiveConnected, sendMessage]);
+
+  // Handle user cancelling a Report Generation
+  const handleCancelReport = useCallback((messageId: string, reportTitle?: string) => {
+    setChatHistory(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          isPendingConfirmation: false,
+          isCancelled: true,
+          text: `❌ ยกเลิกการออกรายงาน "${reportTitle || 'รายงาน'}" แล้ว`
+        };
+      }
+      return msg;
+    }));
+
+    if (isLiveConnected) {
+      sendMessage('ผู้ใช้กดยกเลิกการออกรายงานแล้ว กรุณาแจ้งรับทราบการยกเลิกด้วยเสียงสั้นๆ');
+    } else {
+      playSuccessSoundAndSpeak('ยกเลิกการออกรายงานแล้วค่ะ');
     }
   }, [setChatHistory, isLiveConnected, sendMessage]);
 
@@ -1349,46 +1420,221 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                 </div>
               )}
 
-              {/* Interactive PDF / Excel Generation Download Card */}
-              {(msg.fileReports || (msg.fileReport ? [msg.fileReport] : [])).map((report, idx) => (
-                <div key={idx} className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <div className={`border rounded-xl p-3 shadow-xs ${report.format === 'excel' ? 'bg-gradient-to-r from-green-50/80 to-emerald-50/60 dark:from-green-950/40 dark:to-emerald-950/30 border-green-200/90 dark:border-green-800/80' : 'bg-gradient-to-r from-red-50/80 to-orange-50/60 dark:from-red-950/40 dark:to-orange-950/30 border-red-200/90 dark:border-red-800/80'}`}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg text-white flex items-center justify-center shadow-xs shrink-0 ${report.format === 'excel' ? 'bg-green-600' : 'bg-red-600'}`}>
-                          <FileText className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-slate-900 dark:text-slate-100 text-lg">{report.title}</span>
-                            <span className={`text-sm font-extrabold px-1.5 py-0.2 rounded ${report.format === 'excel' ? 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300'}`}>
-                              {report.format === 'excel' ? 'EXCEL' : 'PDF'}
-                            </span>
+              {/* Interactive PDF / Excel Generation Confirmation & Download Card */}
+              {(msg.fileReports || (msg.fileReport ? [msg.fileReport] : [])).map((report, idx) => {
+                const isExcel = report.format === 'excel';
+                const isPending = msg.isPendingConfirmation && !msg.isCancelled;
+                const isCancelled = msg.isCancelled;
+                const isGenerating = generatingPdfId === (msg.id + idx);
+                const requesterName = report.requestedBy || currentUser?.nickname || currentUser?.name || 'ผู้ใช้งาน';
+
+                return (
+                  <div key={idx} className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-sm transition-all ${
+                      isCancelled
+                        ? 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 opacity-80'
+                        : isPending
+                        ? 'border-amber-300 dark:border-amber-600 bg-gradient-to-b from-amber-50/80 via-white to-amber-50/30 dark:from-amber-950/25 dark:via-slate-900 dark:to-slate-900 ring-2 ring-amber-400/25'
+                        : isExcel
+                        ? 'bg-gradient-to-r from-green-50/90 to-emerald-50/70 dark:from-green-950/40 dark:to-emerald-950/30 border-green-300 dark:border-green-800'
+                        : 'bg-gradient-to-r from-red-50/90 to-orange-50/70 dark:from-red-950/40 dark:to-orange-950/30 border-red-300 dark:border-red-800'
+                    }`}>
+                      {/* Card Header */}
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5 ${
+                            isCancelled
+                              ? 'bg-slate-400 dark:bg-slate-600'
+                              : isPending
+                              ? 'bg-amber-500 animate-pulse'
+                              : isExcel
+                              ? 'bg-green-600'
+                              : 'bg-red-600'
+                          }`}>
+                            {isCancelled ? (
+                              <XCircle className="w-5 h-5" />
+                            ) : isPending ? (
+                              <Clock className="w-5 h-5" />
+                            ) : (
+                              <FileText className="w-5 h-5" />
+                            )}
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">เอกสารรายงานพร้อมดาวน์โหลด</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 text-base sm:text-lg leading-tight">
+                                {report.title}
+                              </span>
+                              <span className={`text-[11px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                isExcel
+                                  ? 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800'
+                                  : 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800'
+                              }`}>
+                                {isExcel ? 'EXCEL' : 'PDF'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {isCancelled
+                                ? 'ยกเลิกคำสั่งออกรายงานแล้ว (ไม่มีการสร้างไฟล์)'
+                                : isPending
+                                ? '⏳ กรุณาตรวจสอบชื่อผู้สั่งการและเงื่อนไขด้านล่างให้ตรงกัน ก่อนกดยืนยัน'
+                                : '✅ ออกเอกสารรายงานและพร้อมดาวน์โหลดเรียบร้อยแล้ว'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Top Right Status Badge */}
+                        <div className="shrink-0">
+                          {isCancelled ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                              <X className="w-3.5 h-3.5" /> ยกเลิกแล้ว
+                            </span>
+                          ) : isPending ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/40 animate-pulse">
+                              <Clock className="w-3.5 h-3.5" /> รอยืนยัน
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> สำเร็จ
+                            </span>
+                          )}
                         </div>
                       </div>
+
+                      {/* Requester & Report Details Inspection Box */}
+                      <div className="mb-3 p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 text-xs sm:text-sm space-y-2 shadow-2xs">
+                        {/* Commanded by User Name (User check request) */}
+                        <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
+                          <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-medium shrink-0">
+                            <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span>ผู้สั่งออกรายงาน:</span>
+                          </span>
+                          <div className="flex items-center gap-1.5 text-right font-bold text-slate-900 dark:text-white">
+                            <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-bold">
+                              คุณ{requesterName}
+                            </span>
+                            {currentUser?.name && requesterName !== currentUser.name && (
+                              <span className="text-[11px] text-slate-400 font-normal">
+                                ({currentUser.name})
+                              </span>
+                            )}
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                              ADMIN
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Target User in Report if filtered by individual */}
+                        {report.userFilter && (
+                          <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-400/30 text-amber-900 dark:text-amber-200">
+                            <span className="font-semibold flex items-center gap-1.5 shrink-0">
+                              <Users className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                              <span>พนักงานเป้าหมาย:</span>
+                            </span>
+                            <span className="font-black text-amber-700 dark:text-amber-300 text-sm">
+                              คุณ{report.userFilter}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Category filter if specified */}
+                        {report.categoryFilter && report.categoryFilter !== 'all' && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5 text-purple-500" />
+                              <span>หมวดหมู่ที่เลือก:</span>
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{report.categoryFilter}</span>
+                          </div>
+                        )}
+
+                        {/* Order status filter if specified */}
+                        {report.orderStatusFilter && report.orderStatusFilter !== 'all' && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-slate-500 dark:text-slate-400">สถานะคำสั่งซื้อ:</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{report.orderStatusFilter}</span>
+                          </div>
+                        )}
+
+                        {/* Date Range if specified */}
+                        {(report.startDate || report.endDate) && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                              <span>ช่วงวันที่และเวลา:</span>
+                            </span>
+                            <span className="font-medium text-slate-800 dark:text-slate-200 text-right">
+                              {report.startDate || 'ย้อนหลัง'} ถึง {report.endDate || 'ปัจจุบัน'}
+                              {report.startTime && ` (${report.startTime} - ${report.endTime || '23:59'} น.)`}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Scope summary */}
+                        <div className="flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400 text-xs pt-1 border-t border-slate-200/40 dark:border-slate-800/40">
+                          <span>รูปแบบเอกสาร:</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            ขนาดมาตรฐาน A4 พร้อมตรา ENG SMART STORE
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons: Pending Confirmation vs Confirmed vs Cancelled */}
+                      {isPending ? (
+                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmReport(msg.id, report, idx)}
+                            disabled={isGenerating}
+                            className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20 disabled:opacity-50"
+                          >
+                            {isGenerating ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>กำลังสร้างเอกสารรายงาน...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-5 h-5" />
+                                <span>ยืนยันออกรายงาน {isExcel ? 'Excel' : 'PDF'}</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelReport(msg.id, report.title)}
+                            disabled={isGenerating}
+                            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-3 px-4 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>ยกเลิก</span>
+                          </button>
+                        </div>
+                      ) : !isCancelled ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadReport(report, msg.id + idx, isExcel)}
+                          disabled={isGenerating}
+                          className={`w-full active:scale-[0.98] disabled:opacity-75 text-white py-2.5 px-3 rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer ${
+                            isExcel ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                          }`}
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>กำลังดาวน์โหลด...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileDown className="w-4 h-4" />
+                              <span>ดาวน์โหลดเอกสาร {isExcel ? 'Excel' : 'PDF'} ซ้ำอีกครั้ง</span>
+                            </>
+                          )}
+                        </button>
+                      ) : null}
                     </div>
-                    <button
-                      onClick={() => handleDownloadReport(report, msg.id + idx, report.format === 'excel')}
-                      disabled={generatingPdfId === (msg.id + idx)}
-                      className={`w-full active:scale-[0.98] disabled:opacity-75 text-white py-2 px-3 rounded-lg text-lg font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${report.format === 'excel' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                    >
-                      {generatingPdfId === (msg.id + idx) ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>กำลังสร้างไฟล์...</span>
-                        </>
-                      ) : (
-                        <>
-                          <FileDown className="w-4 h-4" />
-                          <span>ดาวน์โหลดไฟล์ {report.format === 'excel' ? 'Excel' : 'PDF'}</span>
-                        </>
-                      )}
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -1514,22 +1760,28 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
             </button>
           </div>
 
-          {/* Voice-reactive Equalizer Bars (shown when connected) */}
+          {/* Voice-reactive Equalizer Bars & Active Model Indicator (shown when connected) */}
           {isLiveConnected && (
-            <div className="flex items-center gap-1 h-3.5 mt-1.5">
-              {[0.5, 0.9, 1.2, 0.8, 0.6].map((multiplier, i) => (
-                <div 
-                  key={i}
-                  className={`w-1 rounded-full transition-all duration-75 ${
-                    isAiSpeaking 
-                      ? 'bg-blue-500' 
-                      : 'bg-emerald-500'
-                  }`}
-                  style={{
-                    height: `${Math.max(3, Math.min(16, (audioVolume * 18 * multiplier) + 3))}px`
-                  }}
-                />
-              ))}
+            <div className="flex flex-col items-center gap-1 mt-1">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-400/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                {activeLiveModel.includes('3.8') ? 'Gemini 3.8 Live' : 'Gemini 3.1 Live (Fallback)'}
+              </span>
+              <div className="flex items-center gap-1 h-3 mt-0.5">
+                {[0.5, 0.9, 1.2, 0.8, 0.6].map((multiplier, i) => (
+                  <div 
+                    key={i}
+                    className={`w-1 rounded-full transition-all duration-75 ${
+                      isAiSpeaking 
+                        ? 'bg-blue-500' 
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{
+                      height: `${Math.max(3, Math.min(16, (audioVolume * 18 * multiplier) + 3))}px`
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           )}
 

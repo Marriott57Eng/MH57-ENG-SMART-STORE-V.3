@@ -2559,6 +2559,15 @@ ${!isAdminUser ? `
             }
           }
         }
+
+        if (fileReports && Array.isArray(fileReports)) {
+          const reqUserName = (currentUser?.nickname || currentUser?.name || 'ผู้ดูแลระบบ Admin').trim();
+          fileReports = fileReports.map((r: any) => ({
+            ...r,
+            requestedBy: r.requestedBy || reqUserName,
+            isConfirmed: false
+          }));
+        }
       }
 
       // Detect specific matched items for card display (only when inquiring / checking items, not when exporting reports or doing direct dbAction)
@@ -2756,7 +2765,7 @@ ${!isAdminUser ? `
   4. สินค้าใกล้หมดและหมดสต็อก (reportType: 'low_stock')
   5. ประวัติและสถานะการสั่งซื้อสินค้า PO (reportType: 'purchase_orders', ระบุ orderStatusFilter ได้)
   6. สรุปภาพรวมผู้บริหาร (reportType: 'executive_summary')
-เมื่อ Admin สั่งให้ออกรายงาน ให้เรียก tool export_report ทันทีพร้อมพารามิเตอร์ที่ครบถ้วน แล้วตอบเสียงสั้นๆ ว่า "ออกรายงาน...ให้เรียบร้อยแล้วค่ะคุณ${callingName}"`
+เมื่อ Admin สั่งให้ออกรายงาน ให้เรียก tool export_report ทันทีพร้อมพารามิเตอร์ที่ครบถ้วน โดยระบบจะส่งการ์ดตรวจสอบรายงานขึ้นหน้าจอให้ตรวจชื่อผู้สั่งการและเงื่อนไขก่อนออกรายงานจริง แล้วให้ AI ตอบเสียงสั้นๆ ว่า "ส่งการ์ดตรวจสอบรายงาน...ขึ้นหน้าจอให้คุณ${callingName} แล้วค่ะ โปรดตรวจสอบชื่อผู้สั่งและกดยืนยันนะคะ"`
           : `⛔ ผู้ใช้ท่านนี้เป็น Staff (ไม่ใช่ Admin):
 - ไม่มีสิทธิ์แก้ไขสต็อกโดยตรง (ห้าม update_stock)
 - 🔒 **ไม่มีสิทธิ์สั่งออกรายงาน PDF เด็ดขาด (ห้ามเรียก export_report)**
@@ -2866,7 +2875,7 @@ ${JSON.stringify(recentReqs)}
 4. **เมื่อถามสินค้าใกล้หมด**: เรียก \`get_low_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าใกล้หมด...รายการ ส่งขึ้นจอแล้วค่ะ"
 5. **เมื่อถามสินค้าหมดสต็อก**: เรียก \`get_out_of_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าหมดสต็อก...รายการ ส่งขึ้นจอแล้วค่ะ"
 6. **เมื่อถามภาพรวมคลัง**: เรียก \`get_stock_summary\` ทันที แล้วตอบสรุปสั้นๆ 1 ประโยค
-7. **เมื่อสั่งออกรายงาน** (PDF/Excel): หากผู้ใช้เป็น Admin ให้เรียก \`export_report\` ทันที แล้วตอบสั้นๆ "ออกรายงาน...ให้เรียบร้อยแล้วค่ะคุณ${callingName}" แต่หากผู้ใช้เป็น Staff ให้ตอบปฏิเสธทันทีว่าการออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น และห้ามเรียก export_report เด็ดขาด
+7. **เมื่อสั่งออกรายงาน** (PDF/Excel): หากผู้ใช้เป็น Admin ให้เรียก \`export_report\` ทันที แล้วตอบสั้นๆ "ส่งการ์ดตรวจสอบรายงาน...ขึ้นหน้าจอให้คุณ${callingName} แล้วค่ะ โปรดตรวจชื่อผู้สั่งและกดยืนยันนะคะ" แต่หากผู้ใช้เป็น Staff ให้ตอบปฏิเสธทันทีว่าการออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น และห้ามเรียก export_report เด็ดขาด
 8. **เมื่อยืนยันทำรายการ**: ตอบสั้นๆ "บันทึกการเบิก/รับเข้า...เรียบร้อยแล้วค่ะ คุณ${callingName}"`,
           tools: [{
             functionDeclarations: [
@@ -2930,7 +2939,7 @@ ${JSON.stringify(recentReqs)}
               },
               {
                 name: "export_report",
-                description: "เรียกใช้นี้เมื่อ Admin ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF (เฉพาะ Admin เท่านั้น): สต็อกทั้งหมด, สินค้าใกล้หมด, ประวัติการเบิกรายบุคคล, ประวัติการสั่งซื้อ (PO), สรุปภาพรวมผู้บริหาร พร้อมกำหนดช่วงวันและเวลาได้",
+                description: "เรียกใช้นี้เมื่อ Admin ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF (เฉพาะ Admin เท่านั้น): ระบบจะส่งการ์ดตรวจสอบขึ้นหน้าจอให้ผู้ใช้ตรวจชื่อผู้สั่งการและเงื่อนไขก่อนกดยืนยันออกรายงานจริง",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {
@@ -3155,16 +3164,43 @@ ${JSON.stringify(recentReqs)}
           },
         };
 
-        sessionPromise = getAI().live.connect({
-          model: "gemini-3.1-flash-live-preview",
-          config,
-          callbacks,
-        });
+        // Model Priority: gemini-3.8-live (high intelligence, ultra-fast low latency) with gemini-3.1-flash-live-preview fallback
+        const liveModelsToTry = [
+          "gemini-3.8-live",
+          "gemini-3.1-flash-live-preview"
+        ];
 
-        const session = await sessionPromise;
+        let session: any = null;
+        let lastLiveError: any = null;
+        let connectedModel = "";
+
+        for (const candidateModel of liveModelsToTry) {
+          try {
+            console.log(`[Gemini Live] Connecting with model: ${candidateModel}...`);
+            const p = getAI().live.connect({
+              model: candidateModel,
+              config,
+              callbacks,
+            });
+            sessionPromise = p;
+            session = await p;
+            connectedModel = candidateModel;
+            console.log(`[Gemini Live] Successfully connected with: ${connectedModel}`);
+            break;
+          } catch (modelErr: any) {
+            console.warn(`[Gemini Live] Model ${candidateModel} failed, trying next candidate:`, modelErr?.message || modelErr);
+            lastLiveError = modelErr;
+            sessionPromise = null;
+          }
+        }
+
+        if (!session) {
+          throw lastLiveError || new Error("All Gemini Live models failed to connect.");
+        }
+
         activeLiveSession = session;
         if (clientWs.readyState === 1) {
-          clientWs.send(JSON.stringify({ ready: true }));
+          clientWs.send(JSON.stringify({ ready: true, model: connectedModel }));
         }
 
         // Flush any pending audio/text received during connect handshake

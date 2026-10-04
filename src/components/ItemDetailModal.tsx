@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { InventoryItem } from '../types';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { 
-  X, MapPin, Layers, FileText, ShoppingCart, MessageSquare, ClipboardList, AlertTriangle, CheckCircle2, XCircle, Edit3, Globe
+  X, MapPin, Layers, FileText, ShoppingCart, MessageSquare, ClipboardList, AlertTriangle, CheckCircle2, XCircle, Edit3, Globe, Star
 } from 'lucide-react';
 
 interface ItemDetailModalProps {
@@ -15,6 +15,8 @@ interface ItemDetailModalProps {
   onStartRequisition: (item: InventoryItem) => void;
   onEditItem?: (item: InventoryItem) => void;
   onOrderClick?: (item: InventoryItem) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (item: InventoryItem) => void;
 }
 
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
@@ -25,6 +27,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onStartRequisition,
   onEditItem,
   onOrderClick,
+  isFavorite = false,
+  onToggleFavorite,
 }) => {
   useScrollLock(Boolean(item));
 
@@ -89,12 +93,30 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0 border border-slate-300/60 dark:border-slate-700 shadow-2xs"
-          >
-            <X className="w-4.5 h-4.5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onToggleFavorite && (
+              <button
+                type="button"
+                aria-label={isFavorite ? `ยกเลิกปักหมุด ${item.name}` : `ปักหมุดรายการโปรด ${item.name}`}
+                title={isFavorite ? "เลิกปักหมุดรายการโปรด" : "ปักหมุดเป็นรายการโปรด (แสดงด้านบนสุด)"}
+                onClick={() => onToggleFavorite(item)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer border shadow-2xs ${
+                  isFavorite
+                    ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border-amber-400/50 hover:bg-amber-500/30 ring-1 ring-amber-400/30'
+                    : 'bg-slate-200/70 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-amber-500 border-slate-300/60 dark:border-slate-700'
+                }`}
+              >
+                <Star className={`w-4 h-4 transition-transform ${isFavorite ? 'fill-amber-400 text-amber-400 scale-105 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]' : ''}`} />
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0 border border-slate-300/60 dark:border-slate-700 shadow-2xs"
+            >
+              <X className="w-4.5 h-4.5" />
+            </button>
+          </div>
         </div>
 
         {/* Item Title */}

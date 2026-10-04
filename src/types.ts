@@ -57,6 +57,8 @@ export interface ReportAction {
   endDate?: string;
   startTime?: string;
   endTime?: string;
+  requestedBy?: string;
+  isConfirmed?: boolean;
 }
 
 export interface DbActionPayload {

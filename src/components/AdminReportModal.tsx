@@ -376,13 +376,13 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md overflow-y-auto overscroll-contain animate-in fade-in duration-200"
+      className="fixed inset-0 z-[150] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isGenerating) onClose();
       }}
     >
       <div 
-        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200/90 dark:border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[92vh] transition-all"
+        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[24px] sm:rounded-[28px] border border-slate-200/90 dark:border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col h-[92dvh] max-h-[92dvh] sm:h-[88vh] sm:max-h-[88vh] transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Top Header */}
@@ -418,7 +418,10 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 text-slate-800 dark:text-slate-100 no-scrollbar">
+        <div 
+          className="p-4 sm:p-6 overflow-y-auto overscroll-y-contain flex-1 min-h-0 space-y-5 text-slate-800 dark:text-slate-100 touch-pan-y"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           
           {/* 1. Report Type Selection Grid */}
           <div className="space-y-2.5">
@@ -781,7 +784,7 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
                     </div>
 
                     {/* Scrollable User Options */}
-                    <div className="overflow-y-auto space-y-1 flex-1 no-scrollbar pr-0.5">
+                    <div className="overflow-y-auto overscroll-contain space-y-1 flex-1 pr-0.5 touch-pan-y">
                       {/* Option for All Users (if not strict individual requisitions) */}
                       {reportType !== 'individual_requisitions' && !userSearchQuery && (
                         <button
@@ -958,7 +961,7 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
                     />
                   </div>
 
-                  <div className="overflow-y-auto space-y-1 flex-1 no-scrollbar">
+                  <div className="overflow-y-auto overscroll-contain space-y-1 flex-1 touch-pan-y">
                     {/* All Categories Option */}
                     <button
                       type="button"

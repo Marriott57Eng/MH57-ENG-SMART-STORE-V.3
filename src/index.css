@@ -18,8 +18,6 @@
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    overscroll-behavior-x: contain;
   }
 
   /* iOS 27 Liquid Glass Utilities - High opacity to prevent blurry ghosting on mobile scroll */
@@ -99,6 +97,46 @@
   }
 }
 
+:root {
+  --app-font: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+}
+
+html[data-font="prompt"], body[data-font="prompt"] {
+  --app-font: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-font="kanit"], body[data-font="kanit"] {
+  --app-font: 'Kanit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-font="ibm-plex"], body[data-font="ibm-plex"] {
+  --app-font: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-font="chakra-petch"], body[data-font="chakra-petch"] {
+  --app-font: 'Chakra Petch', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-font="mitr"], body[data-font="mitr"] {
+  --app-font: 'Mitr', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-font="sarabun"], body[data-font="sarabun"] {
+  --app-font: 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-font="system"], body[data-font="system"] {
+  --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+}
+
+.font-preview-prompt { font-family: 'Prompt', sans-serif !important; }
+.font-preview-kanit { font-family: 'Kanit', sans-serif !important; }
+.font-preview-ibm-plex { font-family: 'IBM Plex Sans Thai', sans-serif !important; }
+.font-preview-chakra-petch { font-family: 'Chakra Petch', sans-serif !important; }
+.font-preview-mitr { font-family: 'Mitr', sans-serif !important; }
+.font-preview-sarabun { font-family: 'Sarabun', sans-serif !important; }
+.font-preview-system { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif !important; }
+
 html {
   -webkit-text-size-adjust: 100%;
   scrollbar-gutter: stable;
@@ -107,7 +145,7 @@ html {
 html, body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+  font-family: var(--app-font);
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

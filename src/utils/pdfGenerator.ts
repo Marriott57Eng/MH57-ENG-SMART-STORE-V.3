@@ -127,7 +127,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
   container.style.width = '840px'; // A4 proportional width
   container.style.backgroundColor = '#ffffff';
   container.style.color = '#1e293b';
-  container.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Sarabun", "Prompt", sans-serif';
+  container.style.fontFamily = '"IBM Plex Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, "Sarabun", "Prompt", sans-serif';
   container.style.padding = '32px';
   container.style.boxSizing = 'border-box';
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { InventoryItem } from '../types';
-import { MapPin, AlertTriangle, CheckCircle2, XCircle, ChevronRight, Check, ShoppingCart } from 'lucide-react';
+import { MapPin, AlertTriangle, CheckCircle2, XCircle, ChevronRight, Check, ShoppingCart, Star } from 'lucide-react';
 
 interface ItemCardProps {
   item: InventoryItem;
@@ -12,6 +12,8 @@ interface ItemCardProps {
   onToggleSelect?: (item: InventoryItem) => void;
   isLowSpec?: boolean;
   onOrderClick?: (item: InventoryItem) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (item: InventoryItem) => void;
 }
 
 export const ItemCard: React.FC<ItemCardProps> = React.memo(({ 
@@ -23,6 +25,8 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
   onToggleSelect,
   isLowSpec = false,
   onOrderClick,
+  isFavorite = false,
+  onToggleFavorite,
 }) => {
   // Clean neutral category badge to reduce visual noise
   const getCategoryColor = () => {
@@ -81,7 +85,9 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
   const cardClasses = `item-card-container liquid-glass-card rounded-[24px] sm:rounded-[28px] p-4 sm:p-5 shadow-[0_4px_20px_rgba(15,23,42,0.04)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] ${statusConfig.cardBorder} transition-all cursor-pointer relative group flex flex-col justify-between overflow-hidden border ${
     isSelected 
       ? 'bg-blue-50/85 dark:bg-blue-950/50 border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/30' 
-      : 'border-white/70 dark:border-white/10'
+      : isFavorite
+        ? 'border-amber-400/50 dark:border-amber-500/40 bg-amber-500/[0.03] shadow-[0_4px_20px_rgba(245,158,11,0.08)] ring-1 ring-amber-400/30'
+        : 'border-white/70 dark:border-white/10'
   } ${isLowSpec ? '' : 'active:scale-[0.99]'}`;
 
   const cardInner = (
@@ -125,8 +131,36 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
               >
                 {item.category}
               </span>
+              {isFavorite && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/40 shadow-2xs">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
+                  <span>ปักหมุด</span>
+                </span>
+              )}
             </div>
-            <div>{statusConfig.badge}</div>
+
+            <div className="flex items-center gap-1.5 ml-auto">
+              {/* Star Favorite Button */}
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  aria-label={isFavorite ? `ยกเลิกปักหมุด ${item.name}` : `ปักหมุดรายการโปรด ${item.name}`}
+                  title={isFavorite ? "เลิกปักหมุดรายการโปรด" : "ปักหมุดเป็นรายการโปรด (แสดงด้านบนสุด)"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(item);
+                  }}
+                  className={`p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                    isFavorite 
+                      ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-400/40 shadow-xs hover:bg-amber-500/30 active:scale-90 ring-1 ring-amber-400/30'
+                      : 'text-slate-400 hover:text-amber-500 dark:text-slate-500 dark:hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-300/30 active:scale-90'
+                  }`}
+                >
+                  <Star className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform ${isFavorite ? 'fill-amber-400 text-amber-400 scale-105 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]' : ''}`} />
+                </button>
+              )}
+              <div>{statusConfig.badge}</div>
+            </div>
           </div>
 
           {/* Item Name */}

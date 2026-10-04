@@ -29,7 +29,7 @@ import { InventorySkeleton } from './components/InventorySkeleton';
 import { 
   Package, Search, RefreshCw, Filter, ClipboardList, Plus,
   AlertTriangle, CheckCircle2, XCircle, Bot, X, FileDown, Loader2, LogOut, User as UserIcon, Bell,
-  BarChart3, Layers, Users, CheckSquare, Zap, Check, ChevronDown, ShoppingCart
+  BarChart3, Layers, Users, CheckSquare, Zap, Check, ChevronDown, ShoppingCart, Star
 } from 'lucide-react';
 import { generateAndDownloadPdf } from './utils/pdfGenerator';
 import { useGeolocationAuth } from './hooks/useGeolocationAuth';
@@ -40,6 +40,7 @@ import { playSuccessSoundAndSpeak } from './utils/audioUtils';
 import { notifyStockTransaction, notifyBulkStockTransaction, notifyAuthEvent, notifyPurchaseOrder } from './utils/lineNotify';
 import { triggerLowStockPush, triggerImportantRequisitionPush } from './utils/webPush';
 import { LineSettingsModal } from './components/LineSettingsModal';
+import { FontSettingsModal } from './components/FontSettingsModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { User } from './types';
@@ -234,7 +235,24 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>('ทั้งหมด');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'low_or_out'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'low_or_out' | 'favorites'>('all');
+
+  // Favorite items state (persisted per user)
+  const [favoriteItemIds, setFavoriteItemIds] = useState<Set<string>>(() => {
+    try {
+      const savedUser = localStorage.getItem('warehouse_user');
+      const user = savedUser ? JSON.parse(savedUser) : null;
+      const userKey = user?.id || user?.username ? `warehouse_favorites_${user.id || user.username}` : 'warehouse_favorites_default';
+      const saved = localStorage.getItem(userKey) || localStorage.getItem('warehouse_favorites');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return new Set(parsed);
+      }
+    } catch (e) {
+      console.warn('Failed to parse favorites:', e);
+    }
+    return new Set<string>();
+  });
 
   // Multi-select state
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -255,6 +273,31 @@ export default function App() {
   const [isLineSettingsModalOpen, setIsLineSettingsModalOpen] = useState(false);
   const [lineSettingsInitialTab, setLineSettingsInitialTab] = useState<'webpush' | 'line'>('line');
   const [transactionSuccess, setTransactionSuccess] = useState<TransactionSuccessData | null>(null);
+
+  // App typography font selection state (IBM Plex Sans Thai / Prompt / Kanit / Chakra Petch / Mitr / Sarabun)
+  const [currentFont, setCurrentFont] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('app-font-family');
+      if (saved && saved !== 'prompt') {
+        return saved;
+      }
+      return 'ibm-plex';
+    } catch {
+      return 'ibm-plex';
+    }
+  });
+  const [isFontModalOpen, setIsFontModalOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font', currentFont);
+    try {
+      localStorage.setItem('app-font-family', currentFont);
+    } catch (e) {}
+  }, [currentFont]);
+
+  const handleSelectFont = (fontId: string) => {
+    setCurrentFont(fontId);
+  };
 
   const handleOpenAddItemModal = () => {
     setItemToEdit({
@@ -582,6 +625,38 @@ export default function App() {
 
     return () => unsubscribe();
   }, [currentUser?.id, currentUser?.sessionToken, currentUser?.role]);
+
+  // Sync favorites when currentUser changes
+  useEffect(() => {
+    try {
+      const userKey = currentUser?.id || currentUser?.username 
+        ? `warehouse_favorites_${currentUser.id || currentUser.username}` 
+        : 'warehouse_favorites_default';
+      const saved = localStorage.getItem(userKey) || localStorage.getItem('warehouse_favorites');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setFavoriteItemIds(new Set(parsed));
+        }
+      } else {
+        setFavoriteItemIds(new Set());
+      }
+
+      if (currentUser?.id) {
+        getDoc(doc(db, 'users', currentUser.id)).then(snap => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (Array.isArray(data.favorites)) {
+              setFavoriteItemIds(new Set(data.favorites));
+              localStorage.setItem(userKey, JSON.stringify(data.favorites));
+            }
+          }
+        }).catch(err => console.warn('Could not load user favorites from DB:', err));
+      }
+    } catch (e) {
+      console.warn('Failed to sync favorites with user:', e);
+    }
+  }, [currentUser?.id, currentUser?.username]);
 
   const handleUpdateCurrentUser = (updated: User) => {
     setCurrentUser(updated);
@@ -1279,10 +1354,10 @@ export default function App() {
     }
   };
 
-  // Filter Items with deferredSearchQuery for silky smooth typing
+  // Filter Items with deferredSearchQuery for silky smooth typing + Favorite Items pinned at top
   const filteredItems = useMemo(() => {
     const queryStr = deferredSearchQuery.trim().toLowerCase();
-    return items.filter((item) => {
+    const matched = items.filter((item) => {
       const matchesSearch =
         queryStr === '' ||
         item.name.toLowerCase().includes(queryStr) ||
@@ -1291,22 +1366,76 @@ export default function App() {
         item.location.toLowerCase().includes(queryStr);
 
       const matchesCategory =
-        selectedCategory === 'ทั้งหมด' || item.category === selectedCategory;
+        selectedCategory === 'ทั้งหมด' ||
+        (selectedCategory === '★ รายการโปรด' ? favoriteItemIds.has(item.id) : item.category === selectedCategory);
 
       const matchesStatus =
         statusFilter === 'all' ||
+        (statusFilter === 'favorites' && favoriteItemIds.has(item.id)) ||
         (statusFilter === 'low' && item.status === 'low') ||
         (statusFilter === 'out' && item.status === 'out') ||
         (statusFilter === 'low_or_out' && (item.status === 'low' || item.status === 'out' || Number(item.qty) <= Number(item.minStock)));
 
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [items, deferredSearchQuery, selectedCategory, statusFilter]);
+
+    // Pin favorite items to the top!
+    return matched.sort((a, b) => {
+      const aFav = favoriteItemIds.has(a.id) ? 1 : 0;
+      const bFav = favoriteItemIds.has(b.id) ? 1 : 0;
+      if (aFav !== bFav) {
+        return bFav - aFav; // Favorites come first
+      }
+      return 0; // Preserve default order
+    });
+  }, [items, deferredSearchQuery, selectedCategory, statusFilter, favoriteItemIds]);
 
   // Memoized handlers for ItemCard to avoid unnecessary re-renders
   const handleCardClick = useCallback((item: InventoryItem) => {
     setSelectedItem(item);
   }, []);
+
+  // Toggle Favorite Item (Pin / Unpin to top)
+  const handleToggleFavorite = useCallback((item: InventoryItem) => {
+    setFavoriteItemIds((prev) => {
+      const next = new Set(prev);
+      const isAdding = !next.has(item.id);
+      if (isAdding) {
+        next.add(item.id);
+        addToast({
+          type: 'success',
+          title: '⭐ ปักหมุดรายการโปรดแล้ว',
+          message: `ปักหมุด "${item.name}" ไว้ด้านบนสุดของรายการแล้ว`,
+        });
+      } else {
+        next.delete(item.id);
+        addToast({
+          type: 'info',
+          title: 'ยกเลิกการปักหมุด',
+          message: `นำ "${item.name}" ออกจากรายการโปรดแล้ว`,
+        });
+      }
+
+      const favArray = Array.from(next);
+      const userKey = currentUser?.id || currentUser?.username 
+        ? `warehouse_favorites_${currentUser.id || currentUser.username}` 
+        : 'warehouse_favorites_default';
+      try {
+        localStorage.setItem(userKey, JSON.stringify(favArray));
+        localStorage.setItem('warehouse_favorites', JSON.stringify(favArray));
+      } catch (e) {
+        console.warn('Failed to save favorites to localStorage:', e);
+      }
+
+      if (currentUser?.id) {
+        updateDoc(doc(db, 'users', currentUser.id), { favorites: favArray }).catch(err => {
+          console.warn('Failed to sync favorites to Firestore:', err);
+        });
+      }
+
+      return next;
+    });
+  }, [currentUser, addToast]);
 
   const handleToggleSelectItem = useCallback((item: InventoryItem) => {
     setSelectedItemIds((prev) => {
@@ -1850,6 +1979,19 @@ export default function App() {
                     >
                       ทั้งหมด ({items.length})
                     </button>
+                    {/* Favorite items filter button */}
+                    <button
+                      onClick={() => setStatusFilter(statusFilter === 'favorites' ? 'all' : 'favorites')}
+                      className={`px-3 sm:px-3.5 py-1.5 rounded-full font-bold shrink-0 flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                        statusFilter === 'favorites'
+                          ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25 border border-amber-300/40'
+                          : 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-400/30 hover:bg-amber-500/25 backdrop-blur-md'
+                      }`}
+                      title="แสดงเฉพาะรายการสินค้าที่ปักหมุดไว้"
+                    >
+                      <Star className={`w-3.5 h-3.5 ${statusFilter === 'favorites' ? 'fill-white text-white' : 'fill-amber-500 text-amber-500'}`} />
+                      <span>รายการโปรด ({favoriteItemIds.size})</span>
+                    </button>
                     <button
                       onClick={() => setStatusFilter('low')}
                       className={`px-3 sm:px-3.5 py-1.5 rounded-full font-bold shrink-0 flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
@@ -1998,20 +2140,41 @@ export default function App() {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 landscape:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3 inventory-grid">
-                    {filteredItems.map((item, index) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        index={index}
-                        onClick={handleCardClick}
-                        isMultiSelectMode={isMultiSelectMode}
-                        isSelected={selectedItemIds.has(item.id)}
-                        onToggleSelect={handleToggleSelectItem}
-                        isLowSpec={deviceInfo.isLowSpec}
-                        onOrderClick={handleOpenOrderModal}
-                      />
-                    ))}
+                  <div className="space-y-3">
+                    {/* Active favorites filter banner */}
+                    {statusFilter === 'favorites' && (
+                      <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-amber-500/10 border border-amber-400/30 text-amber-800 dark:text-amber-300 shadow-2xs">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm font-bold">
+                          <Star className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
+                          <span>แสดงเฉพาะรายการโปรดที่ปักหมุดไว้ ({filteredItems.length} รายการ)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setStatusFilter('all')}
+                          className="text-xs font-bold text-amber-700 dark:text-amber-300 underline hover:text-amber-900 dark:hover:text-amber-200 cursor-pointer"
+                        >
+                          ดูสินค้าทั้งหมด
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 landscape:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3 inventory-grid">
+                      {filteredItems.map((item, index) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          index={index}
+                          onClick={handleCardClick}
+                          isMultiSelectMode={isMultiSelectMode}
+                          isSelected={selectedItemIds.has(item.id)}
+                          onToggleSelect={handleToggleSelectItem}
+                          isLowSpec={deviceInfo.isLowSpec}
+                          onOrderClick={handleOpenOrderModal}
+                          isFavorite={favoriteItemIds.has(item.id)}
+                          onToggleFavorite={handleToggleFavorite}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </main>
@@ -2219,6 +2382,8 @@ export default function App() {
                 setIsEditItemModalOpen(true);
               }}
               onOrderClick={handleOpenOrderModal}
+              isFavorite={favoriteItemIds.has(selectedItem.id)}
+              onToggleFavorite={handleToggleFavorite}
             />
           )}
         </AnimatePresence>
@@ -2549,6 +2714,14 @@ export default function App() {
           onClose={() => setIsLineSettingsModalOpen(false)}
           currentUser={currentUser}
           initialTab={lineSettingsInitialTab}
+        />
+
+        {/* Font Settings & Live Preview Modal */}
+        <FontSettingsModal
+          isOpen={isFontModalOpen}
+          onClose={() => setIsFontModalOpen(false)}
+          currentFont={currentFont}
+          onSelectFont={handleSelectFont}
         />
       </div>
     </div>
