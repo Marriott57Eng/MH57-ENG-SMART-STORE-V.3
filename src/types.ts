@@ -11,6 +11,7 @@ export interface InventoryItem {
   orderedDate: string; // OrderedDate
   status: 'normal' | 'low' | 'out';
   outOfStockDate?: string;
+  lastUpdated?: string;
 }
 
 export interface InventorySummary {
@@ -59,6 +60,11 @@ export interface ReportAction {
   endTime?: string;
   requestedBy?: string;
   isConfirmed?: boolean;
+  employeeId?: string;
+  employeeName?: string;
+  employeeNickname?: string;
+  employeeThaiName?: string;
+  isEmployeeVerified?: boolean;
 }
 
 export interface DbActionPayload {

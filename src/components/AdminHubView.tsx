@@ -24,7 +24,8 @@ import {
   Crosshair,
   Save,
   Loader2,
-  Check
+  Check,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { User, InventoryItem, RequisitionRecord, InventorySummary, PurchaseOrder } from '../types';
 import { UserManagementView } from './UserManagementView';
@@ -45,6 +46,7 @@ export interface AdminHubViewProps {
   onNavigateToTab: (tab: 'inventory' | 'history' | 'dashboard' | 'categories') => void;
   onFilterLowStock: () => void;
   onEditItem?: (item: InventoryItem) => void;
+  onOpenBatchUpdate?: () => void;
   isGeoLocationEnabled?: boolean;
   onToggleGeoLocation?: (enabled: boolean) => void;
   geoConfig?: GeoConfig;
@@ -71,6 +73,7 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
   onNavigateToTab,
   onFilterLowStock,
   onEditItem,
+  onOpenBatchUpdate,
   isGeoLocationEnabled = true,
   onToggleGeoLocation,
   geoConfig,
@@ -435,6 +438,28 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
                 </p>
               </div>
             </button>
+
+            {/* 8. Batch Update Tool */}
+            {onOpenBatchUpdate && (
+              <button
+                type="button"
+                onClick={onOpenBatchUpdate}
+                className="p-3.5 sm:p-4 rounded-2xl liquid-glass-card border border-white/70 dark:border-white/15 hover:border-purple-400/40 hover:scale-[1.02] active:scale-95 transition-all text-left flex flex-col justify-between group cursor-pointer shadow-sm relative overflow-hidden"
+              >
+                <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-2 border border-purple-400/30">
+                  <SlidersHorizontal className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-white flex items-center gap-1">
+                    <span>แก้ไขสินค้าแบบกลุ่ม</span>
+                    <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform text-slate-500" />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                    แก้ Min Stock / Location
+                  </p>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 

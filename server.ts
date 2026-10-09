@@ -21,6 +21,11 @@ import {
   getServerLineConfig, 
   updateServerLineConfig 
 } from './server/lineService.ts';
+import { 
+  SYSTEM_EMPLOYEES, 
+  getSystemEmployeeCatalogForAi, 
+  findEmployeeInSystem 
+} from './src/utils/employeeDirectory.ts';
 
 // ==========================================
 // Web Push Notifications Engine (VAPID)
@@ -193,7 +198,9 @@ async function sendWebPushToAll(payload: {
 let ai: GoogleGenAI;
 function getAI(): GoogleGenAI {
   if (!ai) {
-    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+    ai = process.env.GEMINI_API_KEY
+      ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+      : new GoogleGenAI({});
   }
   return ai;
 }
@@ -1964,8 +1971,14 @@ async function startServer() {
         }
       } catch (agentError: any) {
         console.warn("Ai agent fallback to generative model:", agentError.message);
-        // Seamless fallback to high-intelligence reasoning model
-        const analysisModels = ["gemini-3.5-flash-lite", "gemma-4-26b-a4b-it", "gemini-flash-lite-latest"];
+        // Seamless fallback to ultra-fast & high-intelligence reasoning models
+        const analysisModels = [
+          "gemini-3.1-flash-lite",
+          "gemini-3.8-flash",
+          "gemini-flash-lite-latest",
+          "gemma-4-26b-a4b-it",
+          "gemini-3.5-flash-lite"
+        ];
         for (const am of analysisModels) {
           try {
             const config: any = {
@@ -2217,8 +2230,22 @@ ${!isAdminUser ? `
 
 📄 หากผู้ใช้เป็น Admin และต้องการออกรายงาน (PDF/Excel):
 \`\`\`json:action
-{"action": "export_reports", "reports": [{"type": "individual_requisitions"|"requisition_history"|"inventory_all"|"low_stock"|"purchase_orders"|"executive_summary"|"category", "format": "pdf"|"excel", "title": "ชื่อรายงาน", "userFilter": "ชื่อพนักงานถ้าขอเจาะจงบุคคล", "categoryFilter": "หมวดหมู่ถ้ามี", "orderStatusFilter": "สถานะคำสั่งซื้อถ้ามี", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "startTime": "HH:mm", "endTime": "HH:mm"}]}
+{"action": "export_reports", "reports": [{"type": "individual_requisitions"|"requisition_history"|"inventory_all"|"low_stock"|"purchase_orders"|"executive_summary"|"category", "format": "pdf"|"excel", "title": "ชื่อรายงาน", "userFilter": "ชื่อภาษาอังกฤษของพนักงานในระบบ", "categoryFilter": "หมวดหมู่ถ้ามี", "orderStatusFilter": "สถานะคำสั่งซื้อถ้ามี", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "startTime": "HH:mm", "endTime": "HH:mm"}]}
 \`\`\`
+
+👥 กฎเหล็กสำหรับการออกรายงานรายบุคคล (type: 'individual_requisitions'):
+1. **ต้องอ้างอิงจากพนักงานจริงในระบบ Store FL.6 เท่านั้น!** ห้ามสร้างชื่อพนักงานที่ไม่มีจริงขึ้นมาเด็ดขาด
+2. ผู้ใช้อาจสั่งด้วย:
+   - **รหัสพนักงาน** (เช่น "1847", "1906", "รหัส 1213", "1912", "เบอร์ 63", "25")
+   - **ชื่อภาษาไทย หรือชื่อเล่นภาษาไทย** (เช่น "ชานะยุทธ", "เจมส์", "บอย", "เอก", "อัมพร", "ไพบูลย์", "มายด์")
+   - **ชื่อภาษาอังกฤษ หรือชื่อเล่นภาษาอังกฤษ** (เช่น "Chanayood", "Kiattisak", "Mild", "Jame", "Boy")
+3. เมื่อจับคู่กับทำเนียบพนักงานได้แล้ว ให้ใส่ **ชื่อภาษาอังกฤษทางการของพนักงาน** ใน \`userFilter\` (เช่น "Chanayood Wongsunthon") และระบุรหัสพนักงานใน title
+4. หากผู้ใช้ระบุชื่อหรือรหัสที่ **ไม่มีอยู่ในทำเนียบพนักงานของ Store FL.6** (เช่น "สมศักดิ์", "9999"):
+   - ห้ามออกคำสั่ง \`export_reports\` เด็ดขาด
+   - ให้ตอบปฏิเสธอย่างสุภาพทันทีว่า "ไม่พบรหัสหรือรายชื่อพนักงานดังกล่าวในระบบ Store FL.6 ค่ะ การออกรายงานรายบุคคลสามารถออกได้เฉพาะพนักงานจริงในระบบเท่านั้นค่ะ"
+
+ทำเนียบพนักงานจริงในระบบ Store FL.6:
+${getSystemEmployeeCatalogForAi()}
 
 ตัวอย่างรูปแบบการตอบที่ดีเมื่อมีการถามหาสินค้า (สั้น กระชับ):
 "สวัสดีค่ะคุณ **${callingName}**! ✨
@@ -2287,8 +2314,8 @@ ${!isAdminUser ? `
         }
         clientAbortController.signal.addEventListener("abort", onClientAbort, { once: true });
 
-        // Responsive timeout: 5s for primary model to quickly switch if under high demand, 8s for others
-        const timeoutMs = modelName === 'gemini-3.5-flash-lite' ? 5000 : 8000;
+        // Responsive timeout: 4.5s per model to immediately switch if a model experiences high demand or temporary 503
+        const timeoutMs = 4500;
         const ttftTimeout = setTimeout(() => {
           isTimedOut = true;
           modelAbortController.abort(new Error(`Timeout waiting for response on ${modelName}`));
@@ -2377,11 +2404,14 @@ ${!isAdminUser ? `
       };
 
       try {
-        // Always try the fastest verified model gemini-3.5-flash-lite first, backed by ultra-fast gemma-4-26b-a4b-it and gemini-flash-lite-latest
+        // Multi-tier high availability fallback: gemini-3.1-flash-lite -> gemini-3.8-flash -> gemini-flash-lite-latest -> gemma-4-26b-a4b-it
         const fallbackModels = [
-           'gemini-3.5-flash-lite',
+           'gemini-3.1-flash-lite',
+           'gemini-3.8-flash',
+           'gemini-flash-lite-latest',
            'gemma-4-26b-a4b-it',
-           'gemini-flash-lite-latest'
+           'gemini-3.5-flash-lite',
+           'gemini-flash-latest'
         ];
         rawResponseText = await generateWithFallback(fallbackModels);
       } catch (err: any) {
@@ -2562,11 +2592,14 @@ ${!isAdminUser ? `
 
         if (fileReports && Array.isArray(fileReports)) {
           const reqUserName = (currentUser?.nickname || currentUser?.name || 'ผู้ดูแลระบบ Admin').trim();
-          fileReports = fileReports.map((r: any) => ({
-            ...r,
-            requestedBy: r.requestedBy || reqUserName,
-            isConfirmed: false
-          }));
+          fileReports = fileReports.map((r: any) => {
+            const isIndividualReport = r.type === 'individual_requisitions' || Boolean(r.userFilter);
+            return {
+              ...r,
+              requestedBy: r.requestedBy || reqUserName,
+              isConfirmed: !isIndividualReport
+            };
+          });
         }
       }
 
@@ -2626,25 +2659,31 @@ ${!isAdminUser ? `
         displayableText = displayableText.substring(0, blockStart).trim();
       }
 
-      // Send the complete answer all at once in one go
-      res.write(`data: ${JSON.stringify({ 
-        type: 'complete',
+      if (!displayableText) {
+        if (fileReports && fileReports.length > 0) {
+          displayableText = `ทางระบบได้เตรียมเอกสารรายงาน ${fileReports[0].title || 'สรุปภาพรวมผู้บริหาร'} (Store FL.6) ให้เรียบร้อยแล้วครับ กรุณากดปุ่มเพื่อเปิดหรือดาวน์โหลดเอกสารด้านล่างได้เลยครับ`;
+        } else if (dbAction) {
+          displayableText = 'ดำเนินการประมวลผลคำสั่งในระบบ Store FL.6 เรียบร้อยแล้วครับ';
+        }
+      }
+
+      const responsePayload = {
         text: displayableText || rawResponseText,
         fullText: rawResponseText,
         dbAction, 
         fileReport: fileReports?.[0], 
         fileReports: fileReports,
         suggestedItems: itemCards
-      })}\n\n`);
+      };
 
-      res.write(`data: ${JSON.stringify({ 
-        type: 'done', 
-        text: displayableText || rawResponseText,
-        dbAction, 
-        fileReport: fileReports?.[0], 
-        fileReports: fileReports,
-        suggestedItems: itemCards
-      })}\n\n`);
+      // Send chunk event for backward compatibility with streaming handlers
+      res.write(`data: ${JSON.stringify({ type: 'chunk', ...responsePayload })}\n\n`);
+
+      // Send complete event
+      res.write(`data: ${JSON.stringify({ type: 'complete', ...responsePayload })}\n\n`);
+
+      // Send done event
+      res.write(`data: ${JSON.stringify({ type: 'done', ...responsePayload })}\n\n`);
       res.end();
       
     } catch (error: any) {
@@ -2759,13 +2798,20 @@ ${!isAdminUser ? `
           ? `👑 ผู้ใช้ท่านนี้เป็นผู้ดูแลระบบ (Admin):
 - อนุญาตให้ใช้เครื่องมือปรับสต็อกได้
 - 📄 **อนุญาตให้สั่งออกรายงาน PDF ได้ทุกรูปแบบอย่างสมบูรณ์ (เรียก tool export_report ทันที)**:
-  1. ประวัติการเบิกรายบุคคล (reportType: 'individual_requisitions', ระบุ userFilter เช่น 'สมชาย' และช่วงวันเวลาได้)
+  1. ประวัติการเบิกรายบุคคล (reportType: 'individual_requisitions'):
+     - ⚠️ **กฎสำคัญที่สุด**: ต้องอ้างอิงจากพนักงานจริงในระบบ Store FL.6 เท่านั้น!
+     - ครอบคลุมการพูดคำสั่งทั้ง:
+       * **รหัสพนักงาน** (เช่น "1847", "1906", "รหัส 1213", "1912", "เบอร์ 63", "25")
+       * **ชื่อภาษาไทย หรือชื่อเล่นภาษาไทย** (เช่น "ชานะยุทธ", "เจมส์", "บอย", "เอก", "อัมพร", "ไพบูลย์", "มายด์")
+       * **ชื่อภาษาอังกฤษ หรือชื่อเล่นภาษาอังกฤษ** (เช่น "Chanayood", "Kiattisak", "Mild", "Jame", "Boy")
+     - ให้เทียบกับทำเนียบพนักงานจริงในระบบ แล้วส่ง \`userFilter\` เป็นชื่อภาษาอังกฤษทางการของพนักงาน เช่น 'Chanayood Wongsunthon'
+     - หากชื่อหรือรหัสที่ผู้ใช้พูดไม่มีอยู่ในทำเนียบพนักงานของ Store FL.6: **ห้ามเรียก export_report เด็ดขาด** และให้ตอบเสียงปฏิเสธทันทีว่า "ไม่พบรหัสหรือรายชื่อพนักงานนี้ในระบบ Store FL.6 ค่ะ"
   2. ประวัติการเบิก-รับเข้าทั้งหมด (reportType: 'requisition_history', ระบุช่วงวันเวลาได้)
   3. สินค้าคงคลังทั้งหมด (reportType: 'inventory_all', ระบุ categoryFilter ได้)
   4. สินค้าใกล้หมดและหมดสต็อก (reportType: 'low_stock')
   5. ประวัติและสถานะการสั่งซื้อสินค้า PO (reportType: 'purchase_orders', ระบุ orderStatusFilter ได้)
   6. สรุปภาพรวมผู้บริหาร (reportType: 'executive_summary')
-เมื่อ Admin สั่งให้ออกรายงาน ให้เรียก tool export_report ทันทีพร้อมพารามิเตอร์ที่ครบถ้วน โดยระบบจะส่งการ์ดตรวจสอบรายงานขึ้นหน้าจอให้ตรวจชื่อผู้สั่งการและเงื่อนไขก่อนออกรายงานจริง แล้วให้ AI ตอบเสียงสั้นๆ ว่า "ส่งการ์ดตรวจสอบรายงาน...ขึ้นหน้าจอให้คุณ${callingName} แล้วค่ะ โปรดตรวจสอบชื่อผู้สั่งและกดยืนยันนะคะ"`
+เมื่อ Admin สั่งให้ออกรายงาน ให้เรียก tool export_report ทันทีพร้อมพารามิเตอร์ที่ครบถ้วน โดยระบบจะส่งการ์ดตรวจสอบรายงานขึ้นหน้าจอให้ตรวจชื่อผู้สั่งการและพนักงานเป้าหมายก่อนออกรายงานจริง แล้วให้ AI ตอบเสียงสั้นๆ ว่า "ส่งการ์ดตรวจสอบรายงาน...ขึ้นหน้าจอให้คุณ${callingName} แล้วค่ะ โปรดตรวจสอบชื่อผู้สั่งและกดยืนยันนะคะ"`
           : `⛔ ผู้ใช้ท่านนี้เป็น Staff (ไม่ใช่ Admin):
 - ไม่มีสิทธิ์แก้ไขสต็อกโดยตรง (ห้าม update_stock)
 - 🔒 **ไม่มีสิทธิ์สั่งออกรายงาน PDF เด็ดขาด (ห้ามเรียก export_report)**
@@ -2868,6 +2914,9 @@ ${inventoryCatalog}
 📝 ประวัติการเบิก-รับเข้าล่าสุด: 
 ${JSON.stringify(recentReqs)}
 
+👥 ทำเนียบพนักงานจริงในระบบ Store FL.6 (สำหรับอ้างอิงการออกรายงานรายบุคคล และการจับคู่ชื่อภาษาไทย/รหัสพนักงาน):
+${getSystemEmployeeCatalogForAi()}
+
 ⚡ กฎการดำเนินการคำสั่ง (เรียก Function Tools ทันที):
 1. **เมื่อได้ยินคำสั่งเบิกสินค้า** (เช่น "ขอเบิก...", "เบิก...", "เอา...", "ใช้..."): เรียก \`prepare_stock_action\` (action: 'stock_out') ทันที แล้วพูดสั้นๆ เช่น "ส่งการ์ดยืนยันการเบิก...ให้ที่หน้าจอแล้วค่ะ คุณ${callingName}" (หรือปรับสำเนียงตามภาษาที่สนทนาอยู่)
 2. **เมื่อได้ยินคำสั่งรับเข้าสินค้า** (เช่น "รับเข้า...", "เติมของ...", "ซื้อมาเพิ่ม..."): เรียก \`prepare_stock_action\` (action: 'stock_in') ทันที แล้วพูดสั้นๆ เช่น "ส่งการ์ดยืนยันการรับเข้า...ให้ที่หน้าจอแล้วค่ะ"
@@ -2875,7 +2924,7 @@ ${JSON.stringify(recentReqs)}
 4. **เมื่อถามสินค้าใกล้หมด**: เรียก \`get_low_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าใกล้หมด...รายการ ส่งขึ้นจอแล้วค่ะ"
 5. **เมื่อถามสินค้าหมดสต็อก**: เรียก \`get_out_of_stock_items\` ทันที แล้วตอบสั้นๆ "พบสินค้าหมดสต็อก...รายการ ส่งขึ้นจอแล้วค่ะ"
 6. **เมื่อถามภาพรวมคลัง**: เรียก \`get_stock_summary\` ทันที แล้วตอบสรุปสั้นๆ 1 ประโยค
-7. **เมื่อสั่งออกรายงาน** (PDF/Excel): หากผู้ใช้เป็น Admin ให้เรียก \`export_report\` ทันที แล้วตอบสั้นๆ "ส่งการ์ดตรวจสอบรายงาน...ขึ้นหน้าจอให้คุณ${callingName} แล้วค่ะ โปรดตรวจชื่อผู้สั่งและกดยืนยันนะคะ" แต่หากผู้ใช้เป็น Staff ให้ตอบปฏิเสธทันทีว่าการออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น และห้ามเรียก export_report เด็ดขาด
+7. **เมื่อสั่งออกรายงาน** (PDF/Excel): หากผู้ใช้เป็น Admin ให้เรียก \`export_report\` ทันที โดยหากเป็นรายงานรายบุคคลให้อ้างอิงพนักงานจริงในระบบเท่านั้น แล้วตอบสั้นๆ "ส่งการ์ดตรวจสอบรายงาน...ขึ้นหน้าจอให้คุณ${callingName} แล้วค่ะ โปรดตรวจชื่อผู้สั่งและกดยืนยันนะคะ" แต่หากผู้ใช้เป็น Staff ให้ตอบปฏิเสธทันทีว่าการออกรายงาน PDF ในระบบ สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น และห้ามเรียก export_report เด็ดขาด
 8. **เมื่อยืนยันทำรายการ**: ตอบสั้นๆ "บันทึกการเบิก/รับเข้า...เรียบร้อยแล้วค่ะ คุณ${callingName}"`,
           tools: [{
             functionDeclarations: [
@@ -2939,7 +2988,7 @@ ${JSON.stringify(recentReqs)}
               },
               {
                 name: "export_report",
-                description: "เรียกใช้นี้เมื่อ Admin ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF (เฉพาะ Admin เท่านั้น): ระบบจะส่งการ์ดตรวจสอบขึ้นหน้าจอให้ผู้ใช้ตรวจชื่อผู้สั่งการและเงื่อนไขก่อนกดยืนยันออกรายงานจริง",
+                description: "เรียกใช้นี้เมื่อ Admin ต้องการออกรายงานหรือดาวน์โหลดเอกสาร PDF (เฉพาะ Admin เท่านั้น): ระบบจะส่งการ์ดตรวจสอบขึ้นหน้าจอให้ผู้ใช้ตรวจชื่อผู้สั่งการและพนักงานเป้าหมายก่อนกดยืนยันออกรายงานจริง",
                 parameters: {
                   type: Type.OBJECT,
                   properties: {
@@ -2949,7 +2998,7 @@ ${JSON.stringify(recentReqs)}
                       description: "ประเภทรายงาน: 'individual_requisitions' (ประวัติเบิกรายบุคคล), 'requisition_history' (ประวัติเบิกรับเข้าทั้งหมด), 'inventory_all' (สต็อกทั้งหมด), 'low_stock' (สินค้าใกล้หมด/หมดสต็อก), 'purchase_orders' (ประวัติการสั่งซื้อสินค้า PO), 'executive_summary' (สรุปภาพรวมผู้บริหาร), 'category' (แยกตามหมวดหมู่)" 
                     },
                     title: { type: Type.STRING, description: "ชื่อหัวข้อรายงานภาษาไทย" },
-                    userFilter: { type: Type.STRING, description: "ชื่อพนักงานหรือผู้เบิกที่ต้องการออกรายงานเฉพาะบุคคล (ถ้ามี เช่น 'สมชาย')" },
+                    userFilter: { type: Type.STRING, description: "ชื่อภาษาอังกฤษของพนักงานในระบบ หรือรหัสพนักงาน สำหรับรายงานรายบุคคล โดยต้องอ้างอิงจากทำเนียบพนักงาน Store FL.6 เท่านั้น (เช่น 'Chanayood Wongsunthon', 'Kiattisak Ninsang' หรือรหัส '1847', '1906')" },
                     categoryFilter: { type: Type.STRING, description: "ชื่อหมวดหมู่ที่ต้องการกรอง (ถ้ามี เช่น 'ไฟฟ้า', 'ประปา')" },
                     orderStatusFilter: { type: Type.STRING, description: "สถานะใบสั่งซื้อ: 'pending', 'confirmed', 'received', 'cancelled' หรือ 'all'" },
                     startDate: { type: Type.STRING, description: "วันที่เริ่มต้น รูปแบบ YYYY-MM-DD (เช่น 2026-10-01)" },
@@ -3095,7 +3144,11 @@ ${JSON.stringify(recentReqs)}
                       const format = (fc.args?.format as string || "pdf").toUpperCase();
                       const reportType = fc.args?.reportType as string || 'inventory_all';
                       const userFilter = fc.args?.userFilter as string || '';
-                      toolResult = `สร้างและส่งการ์ดดาวน์โหลดรายงาน ${format} ${userFilter ? `ของ ${userFilter}` : reportType} ส่งไปยังหน้าจอเรียบร้อยแล้วค่ะ`;
+                      const matchedEmp = findEmployeeInSystem(userFilter);
+                      const targetLabel = matchedEmp 
+                        ? `คุณ${matchedEmp.name} (${matchedEmp.nickname}) [รหัส: ${matchedEmp.id}]` 
+                        : (userFilter ? `คุณ${userFilter}` : 'ภาพรวม');
+                      toolResult = `สร้างและส่งการ์ดตรวจสอบรายงาน ${format} ของพนักงาน ${targetLabel} ส่งไปยังหน้าจอเรียบร้อยแล้วค่ะ โปรดตรวจสอบข้อมูลและกดยืนยันเพื่อดาวน์โหลดนะคะ`;
                     }
                   } else if (fc.name === "inquire_item_info" || fc.name === "check_stock") {
                     const searchTerm = (fc.args?.searchTerm as string || "").toLowerCase().trim();

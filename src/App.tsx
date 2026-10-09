@@ -13,6 +13,7 @@ import { Toast, ToastMessage } from './components/Toast';
 import { RequisitionView } from './components/RequisitionView';
 import { RequisitionModal } from './components/RequisitionModal';
 import { BulkRequisitionModal, BulkRequisitionSubmitData } from './components/BulkRequisitionModal';
+import { BatchUpdateModal, BatchUpdatePayload } from './components/BatchUpdateModal';
 import { EditItemModal } from './components/EditItemModal';
 import { EditRequisitionModal } from './components/EditRequisitionModal';
 import { CreateOrderModal } from './components/CreateOrderModal';
@@ -29,9 +30,9 @@ import { InventorySkeleton } from './components/InventorySkeleton';
 import { 
   Package, Search, RefreshCw, Filter, ClipboardList, Plus,
   AlertTriangle, CheckCircle2, XCircle, Bot, X, FileDown, Loader2, LogOut, User as UserIcon, Bell,
-  BarChart3, Layers, Users, CheckSquare, Zap, Check, ChevronDown, ShoppingCart, Star
+  BarChart3, Layers, Users, CheckSquare, Zap, Check, ChevronDown, ShoppingCart, Star, SlidersHorizontal
 } from 'lucide-react';
-import { generateAndDownloadPdf } from './utils/pdfGenerator';
+import { generateAndDownloadPdf, parseRecordDateTime } from './utils/pdfGenerator';
 import { useGeolocationAuth } from './hooks/useGeolocationAuth';
 import { GeoConfig, getSavedGeoConfig, saveGeoConfig, subscribeGeoConfig, getSavedGeoLocationEnabled, saveGeoLocationSetting, subscribeGeoLocationSetting } from './utils/geo';
 import { GeoRestrictionModal } from './components/GeoRestrictionModal';
@@ -58,7 +59,8 @@ function cleanForFirestore<T extends Record<string, any>>(obj: T): T {
   return result;
 }
 
-// Realistic initial sample records for requisition / stock logs
+// Realistic initial sample records for requisition / stock logs (with recent dynamic timestamps)
+const nowMs = Date.now();
 const INITIAL_REQUISITION_LOGS: RequisitionRecord[] = [
   {
     id: '1001',
@@ -68,10 +70,10 @@ const INITIAL_REQUISITION_LOGS: RequisitionRecord[] = [
     category: 'เคมี',
     qty: 2,
     unit: 'ถัง',
-    requestedBy: 'ช่างสมชาย ใจดี',
+    requestedBy: 'Chanayood Wongsunthon (Mild)',
     purpose: 'ผสมสีและล้างแปรงทาสี บานประตูชั้น 5',
-    timestamp: '13 ส.ค. 2569, 10:15 น.',
-    isoDate: '2026-08-13T10:15:00',
+    timestamp: 'วันนี้, 08:30 น.',
+    isoDate: new Date(nowMs - 2 * 3600 * 1000).toISOString(),
     note: 'งานปรับปรุงสีประจำสัปดาห์',
   },
   {
@@ -82,10 +84,10 @@ const INITIAL_REQUISITION_LOGS: RequisitionRecord[] = [
     category: 'ไฟฟ้า',
     qty: 10,
     unit: 'ม้วน',
-    requestedBy: 'ฝ่ายจัดซื้อ / วิชัย',
+    requestedBy: 'Kiattisak Ninsang (Jame)',
     purpose: 'รับของตามใบสั่งซื้อ PO-2026-088',
-    timestamp: '13 ส.ค. 2569, 09:30 น.',
-    isoDate: '2026-08-13T09:30:00',
+    timestamp: 'วันนี้, 06:15 น.',
+    isoDate: new Date(nowMs - 5 * 3600 * 1000).toISOString(),
     note: 'ตรวจรับเรียบร้อย สินค้าสมบูรณ์',
   },
   {
@@ -96,7 +98,7 @@ const INITIAL_REQUISITION_LOGS: RequisitionRecord[] = [
     category: 'เน็ต+โทรศัพท์',
     qty: 1,
     unit: 'ม้วน',
-    requestedBy: 'ช่างเอกชัย พัฒนา',
+    requestedBy: 'Nattawut Khiaosod (Boy)',
     purpose: 'เดินสายสัญญาณอินเทอร์เน็ต ออฟฟิศ ชั้น 6',
     timestamp: '12 ส.ค. 2569, 15:40 น.',
     isoDate: '2026-08-12T15:40:00',
@@ -110,7 +112,7 @@ const INITIAL_REQUISITION_LOGS: RequisitionRecord[] = [
     category: 'สุขภัณฑ์',
     qty: 1,
     unit: 'ชุด',
-    requestedBy: 'ช่างมนัส สุริยะ',
+    requestedBy: 'Somphong Thitsomboon (Aek)',
     purpose: 'เปลี่ยนแทนของเดิมที่รั่วซึม ห้องน้ำชาย ชั้น 2',
     timestamp: '12 ส.ค. 2569, 11:20 น.',
     isoDate: '2026-08-12T11:20:00',
@@ -258,6 +260,7 @@ export default function App() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [isBulkRequisitionModalOpen, setIsBulkRequisitionModalOpen] = useState(false);
+  const [isBatchUpdateModalOpen, setIsBatchUpdateModalOpen] = useState(false);
 
   // Requisition history state with localStorage
   const [requisitions, setRequisitions] = useState<RequisitionRecord[]>(getInitialRequisitions);
@@ -699,6 +702,7 @@ export default function App() {
           ...currentItem,
           qty: newQty,
           status: newStatus,
+          lastUpdated: new Date().toISOString(),
           ...(newStatus === 'out' 
             ? { outOfStockDate: currentItem.outOfStockDate || new Date().toISOString() } 
             : {})
@@ -1470,6 +1474,68 @@ export default function App() {
     });
   }, []);
 
+  // Handle Long Press on an ItemCard to trigger multi-select mode and select the item
+  const handleItemLongPress = useCallback((item: InventoryItem) => {
+    setIsMultiSelectMode(true);
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) {
+        next.delete(item.id);
+      } else {
+        next.add(item.id);
+      }
+      return next;
+    });
+
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate(40);
+      } catch (_) {}
+    }
+
+    addToast({
+      type: 'info',
+      title: 'เข้าสู่โหมดเลือกหลายรายการ',
+      message: `เลือก "${item.name}" แล้ว สามารถแตะรายการอื่นเพื่อเลือกเพิ่มได้`,
+    });
+  }, [addToast]);
+
+  // Set of Item IDs with active inventory movements or updates within the last 24 hours
+  const recentlyUpdatedItemIds = useMemo(() => {
+    const activeSet = new Set<string>();
+    const now = Date.now();
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+    // 1. Check item.lastUpdated
+    items.forEach((item) => {
+      if (item.lastUpdated) {
+        const time = new Date(item.lastUpdated).getTime();
+        if (!isNaN(time) && now - time <= TWENTY_FOUR_HOURS) {
+          activeSet.add(item.id);
+        }
+      }
+    });
+
+    // 2. Check requisitions (stock-in or stock-out transactions) in the last 24 hours
+    requisitions.forEach((r) => {
+      if (!r.itemId) return;
+      let recordTime: number | null = null;
+      if (r.isoDate) {
+        const d = new Date(r.isoDate).getTime();
+        if (!isNaN(d)) recordTime = d;
+      }
+      if (!recordTime && r.timestamp) {
+        const parsed = parseRecordDateTime(r.isoDate, r.timestamp);
+        if (parsed) recordTime = parsed.getTime();
+      }
+      if (recordTime && now - recordTime <= TWENTY_FOUR_HOURS) {
+        activeSet.add(r.itemId);
+      }
+    });
+
+    return activeSet;
+  }, [items, requisitions]);
+
   const handleStartMultiSelect = useCallback(async (preselectedItem?: InventoryItem | null) => {
     const isAllowed = await verifyLocation();
     if (!isAllowed) return;
@@ -1556,6 +1622,7 @@ export default function App() {
         ...item,
         qty: newQty,
         status: newStatus,
+        lastUpdated: now.toISOString(),
         ...(newStatus === 'out' ? { outOfStockDate: item.outOfStockDate || now.toISOString() } : {})
       });
       updatedItemsMap.set(item.id, updatedItem);
@@ -1647,6 +1714,92 @@ export default function App() {
       if (uItem.status === 'low' || uItem.status === 'out') {
         triggerLowStockPush(uItem, uItem.qty).catch((err) => console.warn("Web push alert:", err));
       }
+    });
+  };
+
+  // Handle Admin Batch Update (Update Location and/or MinStock for multiple items simultaneously)
+  const handleApplyBatchUpdate = async (payload: BatchUpdatePayload) => {
+    const itemsToUpdate = items.filter(i => selectedItemIds.has(i.id));
+    if (itemsToUpdate.length === 0) {
+      addToast({
+        type: 'warning',
+        title: 'ไม่มีรายการที่เลือก',
+        message: 'กรุณาเลือกรายการสินค้าที่ต้องการแก้ไข',
+      });
+      return;
+    }
+
+    const updatedMap = new Map<string, InventoryItem>();
+    const batch = writeBatch(db);
+
+    for (const item of itemsToUpdate) {
+      let targetLocation = item.location || 'Store FL.6';
+      if (payload.updateLocation) {
+        targetLocation = payload.newLocation.trim() || 'Store FL.6';
+      }
+
+      let targetMinStock = item.minStock ?? 5;
+      if (payload.updateMinStock) {
+        if (payload.minStockMode === 'uniform') {
+          targetMinStock = Math.max(0, payload.minStockValue);
+        } else {
+          targetMinStock = Math.max(0, (item.minStock ?? 5) + payload.minStockValue);
+        }
+      }
+
+      let status: 'normal' | 'low' | 'out' = 'normal';
+      if (item.qty <= 0) {
+        status = 'out';
+      } else if (item.qty <= targetMinStock) {
+        status = 'low';
+      }
+
+      const updatedItem: InventoryItem = {
+        ...item,
+        location: targetLocation,
+        minStock: targetMinStock,
+        status,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      updatedMap.set(item.id, updatedItem);
+
+      try {
+        const itemRef = doc(db, 'inventory', item.id);
+        batch.update(itemRef, {
+          location: targetLocation,
+          minStock: targetMinStock,
+          status,
+          lastModified: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn('Batch update doc error:', e);
+      }
+    }
+
+    // Instant optimistic local state update
+    setItems((prevItems) => {
+      const nextItems = prevItems.map(item => updatedMap.get(item.id) || item);
+      recalculateSummary(nextItems);
+      try {
+        localStorage.setItem('warehouse_inventory', JSON.stringify(nextItems));
+      } catch (_) {}
+      return nextItems;
+    });
+
+    // Close modal and clear selection
+    setIsBatchUpdateModalOpen(false);
+    setSelectedItemIds(new Set());
+    setIsMultiSelectMode(false);
+
+    // Commit Firestore batch asynchronously
+    batch.commit().catch(err => console.warn('Firestore batch update commit:', err));
+
+    playSuccessSoundAndSpeak(`อัปเดตข้อมูลสินค้า ${itemsToUpdate.length} รายการเรียบร้อยแล้ว`);
+    addToast({
+      type: 'success',
+      title: 'แก้ไขสินค้าแบบกลุ่มสำเร็จ',
+      message: `อัปเดต ${itemsToUpdate.length} รายการเรียบร้อยแล้ว`,
     });
   };
 
@@ -2014,6 +2167,24 @@ export default function App() {
                       <XCircle className="w-3.5 h-3.5 text-red-500" />
                       หมดสต็อก ({summary?.outOfStockCount || 0})
                     </button>
+
+                    {/* Admin Batch Update Quick Button */}
+                    {currentUser?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isMultiSelectMode) {
+                            setIsMultiSelectMode(true);
+                          }
+                          setIsBatchUpdateModalOpen(true);
+                        }}
+                        className="ml-auto px-3 sm:px-3.5 py-1.5 rounded-full font-bold shrink-0 flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-400/30 hover:bg-purple-500/25 active:scale-95"
+                        title="เปิดระบบแก้ไขข้อมูลสินค้าแบบกลุ่ม (Batch Update)"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                        <span>แก้ไขแบบกลุ่ม (Batch)</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Category Horizontal Filter Pills */}
@@ -2089,6 +2260,24 @@ export default function App() {
                       >
                         ปิดโหมดเลือก
                       </button>
+
+                      {/* Admin Batch Update Modal Trigger */}
+                      {currentUser?.role === 'admin' && (
+                        <button
+                          type="button"
+                          onClick={() => setIsBatchUpdateModalOpen(true)}
+                          disabled={selectedItemIds.size === 0}
+                          className={`px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md ${
+                            selectedItemIds.size > 0
+                              ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 active:scale-95 cursor-pointer shadow-amber-500/30'
+                              : 'bg-white/20 text-white/50 cursor-not-allowed'
+                          }`}
+                          title="แก้ไขสถานที่เก็บ หรือ Min Stock ของสินค้าที่เลือกพร้อมกัน"
+                        >
+                          <SlidersHorizontal className="w-4 h-4 text-slate-950" />
+                          <span>แก้ไขพร้อมกัน (Batch Update) ({selectedItemIds.size})</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -2168,6 +2357,8 @@ export default function App() {
                           isMultiSelectMode={isMultiSelectMode}
                           isSelected={selectedItemIds.has(item.id)}
                           onToggleSelect={handleToggleSelectItem}
+                          onLongPress={handleItemLongPress}
+                          isRecentlyUpdated={recentlyUpdatedItemIds.has(item.id)}
                           isLowSpec={deviceInfo.isLowSpec}
                           onOrderClick={handleOpenOrderModal}
                           isFavorite={favoriteItemIds.has(item.id)}
@@ -2319,6 +2510,12 @@ export default function App() {
                   setOrderModalItem(item || null);
                   setIsCreateOrderModalOpen(true);
                 }}
+                onOpenBatchUpdate={() => {
+                  if (!isMultiSelectMode) {
+                    setIsMultiSelectMode(true);
+                  }
+                  setIsBatchUpdateModalOpen(true);
+                }}
                 onNavigateToTab={(tab) => setActiveTab(tab)}
                 onFilterLowStock={() => {
                   setStatusFilter('low_or_out');
@@ -2443,6 +2640,39 @@ export default function App() {
                 });
               }}
               onSubmit={handleBulkRequisitionSubmit}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Batch Update Modal (สำหรับ Admin แก้ไขสถานที่เก็บ / Min Stock พร้อมกัน) */}
+        <AnimatePresence>
+          {isBatchUpdateModalOpen && (
+            <BatchUpdateModal
+              key="batch-update-modal"
+              isOpen={isBatchUpdateModalOpen}
+              selectedItems={items.filter(item => selectedItemIds.has(item.id))}
+              allItems={items}
+              allLocations={Array.from(new Set(items.map(i => i.location).filter(Boolean) as string[]))}
+              onClose={() => setIsBatchUpdateModalOpen(false)}
+              onRemoveItem={(itemId) => {
+                setSelectedItemIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(itemId);
+                  return next;
+                });
+              }}
+              onToggleItemSelect={(itemId) => {
+                setSelectedItemIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(itemId)) next.delete(itemId);
+                  else next.add(itemId);
+                  return next;
+                });
+              }}
+              onSelectAll={() => {
+                setSelectedItemIds(new Set(items.map(i => i.id)));
+              }}
+              onApply={handleApplyBatchUpdate}
             />
           )}
         </AnimatePresence>

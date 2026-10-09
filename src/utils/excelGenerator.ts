@@ -1,9 +1,10 @@
 import * as XLSX from 'xlsx';
 import { InventoryItem, RequisitionRecord } from '../types';
 import { formatRecordTimestamp } from './dateUtils';
+import { findEmployeeInSystem } from './employeeDirectory';
 
 interface GenerateExcelProps {
-  type: 'inventory_all' | 'low_stock' | 'requisition_history' | 'category';
+  type: 'inventory_all' | 'low_stock' | 'requisition_history' | 'individual_requisitions' | 'category';
   title: string;
   categoryFilter?: string;
   userFilter?: string;
@@ -44,12 +45,33 @@ export const generateAndDownloadExcel = async ({
       'สถานะ': item.status === 'normal' ? 'ปกติ' : item.status === 'low' ? 'ใกล้หมด' : 'หมด'
     }));
     filename = type === 'low_stock' ? 'Low_Stock_Report.xlsx' : 'Inventory_Report.xlsx';
-  } else if (type === 'requisition_history') {
+  } else if (type === 'requisition_history' || type === 'individual_requisitions') {
     let reqs = requisitions;
-    if (userFilter) {
+    const matchedEmployee = findEmployeeInSystem(userFilter);
+
+    if (matchedEmployee) {
+      const aliases = [
+        matchedEmployee.name.toLowerCase(),
+        matchedEmployee.id.toLowerCase(),
+        matchedEmployee.nickname.toLowerCase(),
+        matchedEmployee.thaiName.toLowerCase(),
+        matchedEmployee.thaiNickname.toLowerCase(),
+        ...(matchedEmployee.aliases || []).map(a => a.toLowerCase())
+      ];
+      reqs = reqs.filter(r => {
+        if (!r.requestedBy) return false;
+        const rLower = r.requestedBy.trim().toLowerCase();
+        return aliases.some(alias => rLower === alias || rLower.includes(alias) || alias.includes(rLower));
+      });
+      filename = `Transaction_History_${matchedEmployee.name.replace(/\s+/g, '_')}_ID_${matchedEmployee.id}.xlsx`;
+    } else if (userFilter) {
       const lowerFilter = userFilter.toLowerCase();
       reqs = reqs.filter(r => (r.requestedBy && r.requestedBy.toLowerCase().includes(lowerFilter)));
+      filename = `Transaction_History_${userFilter.replace(/\s+/g, '_')}.xlsx`;
+    } else {
+      filename = 'Transaction_History.xlsx';
     }
+
     const sortedReqs = [...reqs].sort((a, b) => {
       const timeA = a.isoDate ? new Date(a.isoDate).getTime() : 0;
       const timeB = b.isoDate ? new Date(b.isoDate).getTime() : 0;
@@ -65,7 +87,6 @@ export const generateAndDownloadExcel = async ({
       'งาน/สถานที่': req.purpose || '-',
       'หมายเหตุ': req.note || '-'
     }));
-    filename = userFilter ? `Transaction_History_${userFilter.replace(/\s+/g, '_')}.xlsx` : 'Transaction_History.xlsx';
   }
 
   const ws = XLSX.utils.json_to_sheet(data);

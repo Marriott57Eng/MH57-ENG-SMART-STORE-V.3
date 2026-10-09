@@ -10,6 +10,8 @@ interface ItemCardProps {
   isMultiSelectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (item: InventoryItem) => void;
+  onLongPress?: (item: InventoryItem) => void;
+  isRecentlyUpdated?: boolean;
   isLowSpec?: boolean;
   onOrderClick?: (item: InventoryItem) => void;
   isFavorite?: boolean;
@@ -23,11 +25,72 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
   isMultiSelectMode = false,
   isSelected = false,
   onToggleSelect,
+  onLongPress,
+  isRecentlyUpdated = false,
   isLowSpec = false,
   onOrderClick,
   isFavorite = false,
   onToggleFavorite,
 }) => {
+  // Long press detection for selecting multiple items
+  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isLongPressTriggeredRef = React.useRef(false);
+  const startPosRef = React.useRef<{ x: number; y: number } | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Only primary mouse button or touch
+    if (e.button !== 0) return;
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    isLongPressTriggeredRef.current = false;
+
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressTriggeredRef.current = true;
+      if (onLongPress) {
+        onLongPress(item);
+      } else if (onToggleSelect) {
+        onToggleSelect(item);
+      }
+    }, 450); // 450ms long press standard
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!startPosRef.current || !longPressTimerRef.current) return;
+    const dx = Math.abs(e.clientX - startPosRef.current.x);
+    const dy = Math.abs(e.clientY - startPosRef.current.y);
+    // If finger moves more than 8px, user is scrolling or dragging, cancel long press
+    if (dx > 8 || dy > 8) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    startPosRef.current = null;
+  };
+
+  const handlePointerCancel = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    startPosRef.current = null;
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (isLongPressTriggeredRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   // Clean neutral category badge to reduce visual noise
   const getCategoryColor = () => {
     return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
@@ -74,6 +137,11 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
   const statusConfig = getStatusConfig();
 
   const handleCardClick = (e: React.MouseEvent) => {
+    // If long press was just triggered, suppress the click event
+    if (isLongPressTriggeredRef.current) {
+      isLongPressTriggeredRef.current = false;
+      return;
+    }
     if (isMultiSelectMode && onToggleSelect) {
       e.stopPropagation();
       onToggleSelect(item);
@@ -82,13 +150,13 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
     }
   };
 
-  const cardClasses = `item-card-container liquid-glass-card rounded-[24px] sm:rounded-[28px] p-4 sm:p-5 shadow-[0_4px_20px_rgba(15,23,42,0.04)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] ${statusConfig.cardBorder} transition-all cursor-pointer relative group flex flex-col justify-between overflow-hidden border ${
+  const cardClasses = `item-card-container liquid-glass-card rounded-[24px] sm:rounded-[28px] p-4 sm:p-5 shadow-[0_4px_20px_rgba(15,23,42,0.04)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] ${statusConfig.cardBorder} transition-all cursor-pointer relative group flex flex-col justify-between overflow-hidden border select-none touch-manipulation ${
     isSelected 
       ? 'bg-blue-50/85 dark:bg-blue-950/50 border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/30' 
       : isFavorite
         ? 'border-amber-400/50 dark:border-amber-500/40 bg-amber-500/[0.03] shadow-[0_4px_20px_rgba(245,158,11,0.08)] ring-1 ring-amber-400/30'
         : 'border-white/70 dark:border-white/10'
-  } ${isLowSpec ? '' : 'active:scale-[0.99]'}`;
+  } ${isLowSpec ? '' : 'active:scale-[0.98]'}`;
 
   const cardInner = (
     <>
@@ -131,6 +199,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
               >
                 {item.category}
               </span>
+
               {isFavorite && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/40 shadow-2xs">
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
@@ -253,7 +322,15 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
 
   if (isLowSpec) {
     return (
-      <div onClick={handleCardClick} className={cardClasses}>
+      <div 
+        onClick={handleCardClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={handleContextMenu}
+        className={cardClasses}
+      >
         {cardInner}
       </div>
     );
@@ -269,6 +346,11 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
         delay: Math.min(index * 0.01, 0.05),
       }}
       onClick={handleCardClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onContextMenu={handleContextMenu}
       className={cardClasses}
     >
       {cardInner}

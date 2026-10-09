@@ -27,8 +27,7 @@ import {
 import { useScrollLock } from '../hooks/useScrollLock';
 import { InventoryItem, RequisitionRecord, PurchaseOrder, User } from '../types';
 import { generateAndDownloadPdf, parseRecordDateTime, isWithinDateTimeRange } from '../utils/pdfGenerator';
-import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { SYSTEM_EMPLOYEES, findEmployeeInSystem } from '../utils/employeeDirectory';
 
 export interface AdminReportModalProps {
   isOpen: boolean;
@@ -65,9 +64,8 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
     'individual_requisitions' | 'requisition_history' | 'inventory_all' | 'low_stock' | 'purchase_orders' | 'executive_summary'
   >(initialType === 'category' ? 'inventory_all' : initialType);
 
-  // User Filter State
+  // User Filter State (Strictly limited to 32 designated Store FL.6 employees)
   const [selectedUser, setSelectedUser] = useState<string>(initialUser);
-  const [dbUsers, setDbUsers] = useState<Array<{ name: string; username: string; role: string }>>([]);
 
   // Date & Time Range State
   const [datePreset, setDatePreset] = useState<'today' | '7days' | '30days' | 'month' | 'all'>('month');
@@ -196,70 +194,62 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
     }
   }, [isUserDropdownOpen]);
 
-  // Fetch users from Firestore
-  useEffect(() => {
-    if (!isOpen) return;
-    const fetchUsers = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'users'));
-        const uList: Array<{ name: string; username: string; role: string }> = [];
-        snap.forEach(doc => {
-          const d = doc.data();
-          if (d.name || d.username) {
-            uList.push({
-              name: d.name || d.username,
-              username: d.username || '',
-              role: d.role || 'user'
-            });
-          }
-        });
-        setDbUsers(uList);
-      } catch (err) {
-        console.warn('Could not fetch users list:', err);
-      }
-    };
-    fetchUsers();
-  }, [isOpen]);
-
-  // Aggregate all unique user names from DB and requisition history
+  // เฉพาะพนักงาน 32 คนที่กำหนดของระบบ Store FL.6 เท่านั้น (ตัดฝ่ายจัดซื้อ หรือหน่วยงาน/บุคคลภายนอกออก 100%)
   const allUserOptions = useMemo(() => {
-    const map = new Map<string, { name: string; count: number; role?: string; username?: string }>();
-    
-    // Add from DB
-    dbUsers.forEach(u => {
-      map.set(u.name.toLowerCase(), { name: u.name, count: 0, role: u.role, username: u.username });
+    return SYSTEM_EMPLOYEES.map(emp => {
+      const aliases = [
+        emp.name.toLowerCase(),
+        emp.id.toLowerCase(),
+        emp.nickname.toLowerCase(),
+        emp.thaiName.toLowerCase(),
+        emp.thaiNickname.toLowerCase(),
+        ...(emp.aliases || []).map(a => a.toLowerCase())
+      ];
+
+      const count = requisitions.filter(r => {
+        if (!r.requestedBy) return false;
+        const rLower = r.requestedBy.trim().toLowerCase();
+        return aliases.some(alias => rLower === alias || rLower.includes(alias) || alias.includes(rLower));
+      }).length;
+
+      return {
+        id: emp.id,
+        name: emp.name,
+        username: emp.id,
+        nickname: emp.nickname,
+        thaiName: emp.thaiName,
+        thaiNickname: emp.thaiNickname,
+        role: emp.role || 'user',
+        count
+      };
+    }).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return Number(a.id || 9999) - Number(b.id || 9999);
     });
+  }, [requisitions]);
 
-    // Count requisitions per user
-    requisitions.forEach(r => {
-      if (r.requestedBy) {
-        const key = r.requestedBy.trim().toLowerCase();
-        if (map.has(key)) {
-          map.get(key)!.count += 1;
-        } else {
-          map.set(key, { name: r.requestedBy.trim(), count: 1 });
-        }
-      }
-    });
-
-    return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [dbUsers, requisitions]);
-
-  // Filtered users for search in dropdown
+  // ค้นหารายชื่อพนักงานใน 32 คนที่กำหนด (ค้นหาได้ทั้งรหัส, ชื่ออังกฤษ, ชื่อเล่น, ชื่อไทย)
   const filteredUsers = useMemo(() => {
     if (!userSearchQuery.trim()) return allUserOptions;
     const q = userSearchQuery.toLowerCase().trim();
     return allUserOptions.filter(u => 
+      u.id.toLowerCase().includes(q) ||
       u.name.toLowerCase().includes(q) || 
-      (u.username && u.username.toLowerCase().includes(q)) ||
+      u.nickname.toLowerCase().includes(q) ||
+      u.thaiName.toLowerCase().includes(q) ||
+      u.thaiNickname.toLowerCase().includes(q) ||
       (u.role && u.role.toLowerCase().includes(q))
     );
   }, [allUserOptions, userSearchQuery]);
 
-  // Find currently selected user info
+  // ค้นหาข้อมูลพนักงานที่เลือกอยู่ในระบบ
   const selectedUserInfo = useMemo(() => {
     if (!selectedUser) return null;
-    return allUserOptions.find(u => u.name.toLowerCase() === selectedUser.toLowerCase());
+    const matched = findEmployeeInSystem(selectedUser);
+    if (matched) {
+      return allUserOptions.find(u => u.id === matched.id) || null;
+    }
+    return allUserOptions.find(u => u.name.toLowerCase() === selectedUser.toLowerCase() || u.id === selectedUser) || null;
   }, [allUserOptions, selectedUser]);
 
   // Categories list
@@ -289,11 +279,44 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
       });
       if (reportType === 'individual_requisitions') {
         if (!selectedUser) return 0;
-        const lower = selectedUser.toLowerCase();
-        filtered = filtered.filter(r => r.requestedBy && r.requestedBy.toLowerCase().includes(lower));
+        const matched = findEmployeeInSystem(selectedUser);
+        if (matched) {
+          const aliases = [
+            matched.name.toLowerCase(),
+            matched.id.toLowerCase(),
+            matched.nickname.toLowerCase(),
+            matched.thaiName.toLowerCase(),
+            matched.thaiNickname.toLowerCase(),
+            ...(matched.aliases || []).map(a => a.toLowerCase())
+          ];
+          filtered = filtered.filter(r => {
+            if (!r.requestedBy) return false;
+            const rLower = r.requestedBy.trim().toLowerCase();
+            return aliases.some(alias => rLower === alias || rLower.includes(alias) || alias.includes(rLower));
+          });
+        } else {
+          return 0; // ไม่อนุญาตหากไม่ใช่พนักงาน 32 คนที่กำหนด
+        }
       } else if (selectedUser) {
-        const lower = selectedUser.toLowerCase();
-        filtered = filtered.filter(r => r.requestedBy && r.requestedBy.toLowerCase().includes(lower));
+        const matched = findEmployeeInSystem(selectedUser);
+        if (matched) {
+          const aliases = [
+            matched.name.toLowerCase(),
+            matched.id.toLowerCase(),
+            matched.nickname.toLowerCase(),
+            matched.thaiName.toLowerCase(),
+            matched.thaiNickname.toLowerCase(),
+            ...(matched.aliases || []).map(a => a.toLowerCase())
+          ];
+          filtered = filtered.filter(r => {
+            if (!r.requestedBy) return false;
+            const rLower = r.requestedBy.trim().toLowerCase();
+            return aliases.some(alias => rLower === alias || rLower.includes(alias) || alias.includes(rLower));
+          });
+        } else {
+          const lower = selectedUser.toLowerCase();
+          filtered = filtered.filter(r => r.requestedBy && r.requestedBy.toLowerCase().includes(lower));
+        }
       }
       return filtered.length;
     } else if (reportType === 'purchase_orders') {
@@ -326,39 +349,48 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
     return items.length;
   }, [reportType, requisitions, orders, items, startDate, endDate, startTime, endTime, selectedUser, categoryFilter, orderStatusFilter]);
 
-  // Handle Export Click
-  const handleExport = async () => {
+  // Handle Export Click (Instant zero-delay execution with immediate UI feedback)
+  const handleExport = () => {
+    if (isGenerating) return;
+    if (reportType === 'individual_requisitions' && !selectedUser) return;
+
+    // Instant synchronous UI feedback - 0ms delay!
     setIsGenerating(true);
     setIsSuccess(false);
 
-    try {
-      await generateAndDownloadPdf({
-        type: reportType,
-        userFilter: (reportType === 'individual_requisitions' || reportType === 'purchase_orders' || reportType === 'requisition_history') 
-          ? (selectedUser || undefined) 
-          : undefined,
-        categoryFilter: categoryFilter !== 'all' ? categoryFilter : undefined,
-        orderStatusFilter: orderStatusFilter !== 'all' ? orderStatusFilter : undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        startTime,
-        endTime,
-        items,
-        requisitions,
-        orders,
-        generatedBy: currentUser.name || currentUser.username || 'Admin',
-      });
+    // Run PDF generation in the next animation frame after browser has painted the loading state
+    requestAnimationFrame(() => {
+      setTimeout(async () => {
+        try {
+          await generateAndDownloadPdf({
+            type: reportType,
+            userFilter: (reportType === 'individual_requisitions' || reportType === 'purchase_orders' || reportType === 'requisition_history') 
+              ? (selectedUser || undefined) 
+              : undefined,
+            categoryFilter: categoryFilter !== 'all' ? categoryFilter : undefined,
+            orderStatusFilter: orderStatusFilter !== 'all' ? orderStatusFilter : undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+            startTime,
+            endTime,
+            items,
+            requisitions,
+            orders,
+            generatedBy: currentUser.name || currentUser.username || 'Admin',
+          });
 
-      setIsSuccess(true);
-      setTimeout(() => {
-        setIsSuccess(false);
-      }, 4000);
-    } catch (err) {
-      console.error('Failed to generate PDF:', err);
-      alert('เกิดข้อผิดพลาดในการสร้างเอกสาร PDF กรุณาลองใหม่อีกครั้ง');
-    } finally {
-      setIsGenerating(false);
-    }
+          setIsSuccess(true);
+          setTimeout(() => {
+            setIsSuccess(false);
+          }, 3000);
+        } catch (err) {
+          console.error('Failed to generate PDF:', err);
+          alert('เกิดข้อผิดพลาดในการสร้างเอกสาร PDF กรุณาลองใหม่อีกครั้ง');
+        } finally {
+          setIsGenerating(false);
+        }
+      }, 16);
+    });
   };
 
   // Helper for status badge styling
@@ -703,25 +735,35 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
                     {selectedUser ? (
                       <>
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
-                          {selectedUser.slice(0, 1).toUpperCase()}
+                          {selectedUserInfo?.id || selectedUser.slice(0, 1).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                              {selectedUser}
+                              {selectedUserInfo ? selectedUserInfo.name : selectedUser}
                             </span>
+                            {selectedUserInfo && (
+                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-600 text-white shadow-2xs">
+                                ID: {selectedUserInfo.id}
+                              </span>
+                            )}
+                            {selectedUserInfo && (
+                              <span className="text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+                                ({selectedUserInfo.nickname})
+                              </span>
+                            )}
                             {selectedUserInfo?.role && (
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                                 selectedUserInfo.role === 'admin'
                                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/30'
                                   : 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-400/30'
                               }`}>
-                                {selectedUserInfo.role === 'admin' ? 'แอดมิน (Admin)' : 'ช่าง / พนักงาน'}
+                                {selectedUserInfo.role === 'admin' ? 'Admin' : 'Staff'}
                               </span>
                             )}
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                            {selectedUserInfo ? `มีประวัติทำรายการ ${selectedUserInfo.count} ครั้ง` : 'พนักงานที่ระบุ'}
+                            {selectedUserInfo ? `ประวัติทำรายการ ${selectedUserInfo.count} ครั้ง` : 'พนักงานที่ระบุ'}
                           </div>
                         </div>
                       </>
@@ -737,12 +779,12 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
                               : 'text-slate-600 dark:text-slate-300'
                           }`}>
                             {reportType === 'individual_requisitions'
-                              ? '👉 คลิกตรงนี้เพื่อเลือกพนักงาน...'
+                              ? '👉 คลิกเลือกพนักงาน (32 ท่านในระบบ Store FL.6)...'
                               : '👥 ผู้ทำรายการทุกคน (All Users)'}
                           </span>
                           <span className="text-[10px] text-slate-400 block truncate">
                             {reportType === 'individual_requisitions'
-                              ? 'กดเพื่อค้นหาชื่อพนักงาน หรือดูรายชื่อทั้งหมด'
+                              ? 'ค้นหาด้วยรหัสพนักงาน หรือชื่อภาษาอังกฤษ (ID, Name, Nickname)'
                               : 'แสดงข้อมูลรวมของพนักงานทุกคน'}
                           </span>
                         </div>
@@ -768,7 +810,7 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
                         type="text"
                         value={userSearchQuery}
                         onChange={(e) => setUserSearchQuery(e.target.value)}
-                        placeholder="พิมพ์เพื่อค้นหาชื่อพนักงาน หรือตำแหน่ง..."
+                        placeholder="ค้นหารหัสพนักงาน, ชื่อ หรือชื่อเล่น (e.g. 1847, Mild, Chanayood)..."
                         className="w-full liquid-glass-input rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-slate-800 dark:text-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/30 border border-slate-300/80 dark:border-slate-700"
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -818,7 +860,7 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
 
                       {filteredUsers.length === 0 ? (
                         <div className="p-4 text-center text-xs text-slate-400 dark:text-slate-500">
-                          ไม่พบรายชื่อพนักงานที่ตรงกับ "{userSearchQuery}"
+                          ไม่พบรายชื่อในทำเนียบพนักงาน 32 คนที่ตรงกับ "{userSearchQuery}"
                         </div>
                       ) : (
                         filteredUsers.map((user) => {
@@ -838,27 +880,30 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
                               }`}
                             >
                               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                                   isSelected
                                     ? 'bg-white/20 text-white'
                                     : user.role === 'admin'
                                       ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
                                       : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
                                 }`}>
-                                  {user.name.slice(0, 1).toUpperCase()}
+                                  {user.id}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-xs font-bold truncate">{user.name}</span>
-                                    {user.role && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                      isSelected ? 'bg-white/20 text-white' : 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300'
+                                    }`}>
+                                      ({user.nickname})
+                                    </span>
+                                    {user.role === 'admin' && (
                                       <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md ${
                                         isSelected
                                           ? 'bg-white/20 text-white'
-                                          : user.role === 'admin'
-                                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                                            : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                          : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                                       }`}>
-                                        {user.role === 'admin' ? 'แอดมิน' : 'ช่าง'}
+                                        Admin
                                       </span>
                                     )}
                                   </div>
@@ -1244,7 +1289,7 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
               type="button"
               onClick={handleExport}
               disabled={isGenerating || (reportType === 'individual_requisitions' && !selectedUser)}
-              className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-98"
+              className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 active:from-blue-800 active:to-violet-800 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition-all duration-75 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 active:brightness-90 select-none touch-manipulation"
             >
               {isGenerating ? (
                 <>

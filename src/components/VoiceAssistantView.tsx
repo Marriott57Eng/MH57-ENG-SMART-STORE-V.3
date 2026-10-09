@@ -16,6 +16,7 @@ import { useLiveAudio } from '../hooks/useLiveAudio';
 import { GeoRestrictionModal } from './GeoRestrictionModal';
 import { EngLogo } from './EngLogo';
 import { playSuccessSoundAndSpeak } from '../utils/audioUtils';
+import { findEmployeeInSystem, SYSTEM_EMPLOYEES } from '../utils/employeeDirectory';
 
 interface VoiceAssistantViewProps {
   items: InventoryItem[];
@@ -220,8 +221,21 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
       const isExcel = (format || '').toLowerCase() === 'excel';
       
       let defaultTitle = 'รายงานคลังสินค้า';
+      let finalUserFilter = userFilter;
+      const matchedEmp = findEmployeeInSystem(userFilter);
+      let isVerified: boolean | undefined = undefined;
+
       if (reportType === 'individual_requisitions' || (reportType === 'requisition_history' && userFilter)) {
-        defaultTitle = `รายงานประวัติการเบิก-รับสินค้ารายบุคคล: ${userFilter || 'พนักงาน'}`;
+        if (matchedEmp) {
+          finalUserFilter = matchedEmp.name;
+          isVerified = true;
+          defaultTitle = `รายงานประวัติการเบิก-รับสินค้ารายบุคคล: ${matchedEmp.name} (${matchedEmp.nickname}) [รหัส: ${matchedEmp.id}]`;
+        } else if (userFilter) {
+          isVerified = false;
+          defaultTitle = `รายงานประวัติการเบิก-รับสินค้ารายบุคคล: ${userFilter}`;
+        } else {
+          defaultTitle = 'รายงานประวัติการเบิก-รับสินค้ารายบุคคล (โปรดระบุพนักงาน)';
+        }
       } else if (reportType === 'requisition_history') {
         defaultTitle = 'รายงานประวัติการเบิก-รับเข้าสินค้าทั้งหมด';
       } else if (reportType === 'purchase_orders') {
@@ -234,11 +248,13 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         defaultTitle = 'รายงานสต็อกสินค้าคงคลังทั้งหมด';
       }
 
+      const isIndividualReport = (reportType === 'individual_requisitions' || Boolean(finalUserFilter));
+
       const reportAction: ReportAction = {
         format: isExcel ? 'excel' : 'pdf',
         type: (reportType === 'category' ? 'inventory_all' : reportType) || 'inventory_all',
         title: title || defaultTitle,
-        userFilter,
+        userFilter: finalUserFilter,
         categoryFilter,
         orderStatusFilter,
         startDate,
@@ -246,20 +262,26 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
         startTime,
         endTime,
         requestedBy: callingName,
-        isConfirmed: false,
+        isConfirmed: !isIndividualReport,
+        employeeId: matchedEmp?.id,
+        employeeName: matchedEmp?.name,
+        employeeNickname: matchedEmp?.nickname,
+        employeeThaiName: matchedEmp?.thaiName,
+        isEmployeeVerified: isVerified,
       };
 
       const msgId = Date.now().toString();
 
-      // Display Confirmation Card on screen first - user must verify requester name & criteria before confirming export
       setChatHistory(prev => [...prev, {
         id: msgId,
         role: 'assistant',
         source: 'live',
-        text: `กรุณาตรวจสอบชื่อผู้สั่งการและข้อมูลรายงาน: "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) โดยคุณ${callingName} ก่อนกดยืนยันเพื่อออกรายงานค่ะ`,
+        text: isIndividualReport 
+          ? `กรุณาตรวจสอบชื่อและรหัสพนักงานในระบบสำหรับออกรายงานรายบุคคล: "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) ก่อนกดยืนยันค่ะ`
+          : `จัดเตรียมเอกสารรายงาน "${reportAction.title}" (${isExcel ? 'EXCEL' : 'PDF'}) เรียบร้อยแล้วค่ะ สามารถเปิด/ดาวน์โหลดได้ทันทีค่ะ`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         fileReports: [reportAction],
-        isPendingConfirmation: true,
+        isPendingConfirmation: isIndividualReport,
       }]);
     }
 
@@ -558,47 +580,110 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     }
   }, [pendingQuery, clearPendingQuery]);
 
-  // Initialize Speech Recognition (Microphone input)
+  // Check browser speech recognition support
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = 'th-TH';
-
-        recognition.onstart = () => {
-          setIsListening(true);
-        };
-
-        recognition.onresult = (event: any) => {
-          let currentTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            currentTranscript += event.results[i][0].transcript;
-          }
-          setTranscript(currentTranscript);
-        };
-
-        recognition.onerror = (event: any) => {
-          console.warn('Speech recognition error:', event.error);
-          setIsListening(false);
-        };
-
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current = recognition;
-      } else {
-        setSpeechSupported(false);
-      }
+      setSpeechSupported(Boolean(SpeechRecognition));
     }
   }, []);
 
-  // When transcript updates and recognition ends, auto-send query
+  // Start fresh Speech Recognition dictation session
+  const startListening = () => {
+    if (isProcessing) return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('เบราว์เซอร์นี้ไม่รองรับไมโครโฟนสำหรับสั่งพิมพ์ด้วยเสียง กรุณาใช้ Google Chrome, Safari หรือ Edge บนมือถือหรือคอมพิวเตอร์');
+      return;
+    }
+
+    // Stop and clean up any active instance first
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'th-TH';
+
+      let lastRecognizedText = '';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setTranscript('');
+      };
+
+      recognition.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          if (event.results[i] && event.results[i][0]) {
+            currentTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (currentTranscript) {
+          lastRecognizedText = currentTranscript;
+          setTranscript(currentTranscript);
+          setInputText(currentTranscript); // Real-time sync to text input field
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          alert('ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณากดอนุญาตการใช้งานไมโครโฟนในตั้งค่าเบราว์เซอร์ของคุณเพื่อสั่งพิมพ์ด้วยเสียง');
+        } else if (event.error === 'network') {
+          alert('เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่ายสำหรับระบบแปลงเสียงเป็นข้อความ');
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        recognitionRef.current = null;
+        const finalText = lastRecognizedText.trim();
+        if (finalText) {
+          sendQuery(finalText);
+          setTranscript('');
+          setInputText('');
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error('Failed to start speech recognition:', err);
+      setIsListening(false);
+      alert('ไม่สามารถเริ่มระบบรับเสียงได้ กรุณาตรวจสอบการตั้งค่าสิทธิ์ไมโครโฟน');
+    }
+  };
+
+  // Stop Speech Recognition dictation session
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+    setIsListening(false);
+  };
+
+  // Toggle Voice Dictation Input
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  // When form submitted or stop button clicked, send query
   const handleStopAndSend = (textToSend?: string) => {
-    const text = textToSend || transcript || inputText;
+    const text = textToSend || inputText || transcript;
     if (!text.trim()) return;
 
     if (recognitionRef.current && isListening) {
@@ -610,33 +695,6 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     sendQuery(text.trim());
     setTranscript('');
     setInputText('');
-  };
-
-  // Toggle Voice Input
-  const toggleListening = () => {
-    if (!speechSupported) {
-      alert('เบราว์เซอร์นี้ไม่รองรับไมโครโฟน กรุณาพิมพ์ข้อความแทน หรือเปิดผ่าน Google Chrome/Safari');
-      return;
-    }
-
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      if (transcript.trim()) {
-        sendQuery(transcript.trim());
-        setTranscript('');
-      }
-    } else {
-      setTranscript('');
-      try {
-        recognitionRef.current?.start();
-        setIsListening(true);
-      } catch (err) {
-        console.error('Failed to start recognition:', err);
-      }
-    }
   };
 
   // Send query to AI
@@ -725,13 +783,19 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                       let serverError = null;
                       try {
                           const data = JSON.parse(trimmed.slice(6));
-                          if (data.type === 'chunk') {
-                              textBuffer += data.text;
+                          if (data.type === 'chunk' || data.type === 'complete' || data.type === 'done') {
+                              if (data.type === 'chunk') {
+                                textBuffer = textBuffer ? textBuffer + (data.text || '') : (data.text || '');
+                              } else {
+                                textBuffer = data.text || textBuffer || '';
+                              }
                               let isPending = false;
                               if (data.dbAction && (data.dbAction.action === 'requisition' || data.dbAction.action === 'stock_in' || data.dbAction.action === 'update_stock')) {
                                   isPending = true;
                               } else if (data.fileReport || (data.fileReports && data.fileReports.length > 0)) {
-                                  isPending = true;
+                                  const rawReportsList: any[] = data.fileReports || (data.fileReport ? [data.fileReport] : []);
+                                  // ONLY individual requisition reports require confirmation to prevent selecting the wrong employee
+                                  isPending = rawReportsList.some(r => r.type === 'individual_requisitions' || Boolean(r.userFilter));
                               } else if (data.dbAction && data.dbAction.action !== 'error' && onExecuteDbAction) {
                                   onExecuteDbAction(data.dbAction);
                               }
@@ -739,14 +803,50 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                               const callingName = currentUser?.nickname || currentUser?.name || 'ผู้ใช้งาน';
                               let rawReports: ReportAction[] | undefined = data.fileReports || (data.fileReport ? [data.fileReport] : undefined);
                               if (rawReports && Array.isArray(rawReports)) {
-                                rawReports = rawReports.map((r: any) => ({
-                                  ...r,
-                                  requestedBy: r.requestedBy || callingName,
-                                  isConfirmed: false
-                                }));
+                                rawReports = rawReports.map((r: any) => {
+                                  const matchedEmp = findEmployeeInSystem(r.userFilter);
+                                  let isVerified: boolean | undefined = undefined;
+                                  let finalUserFilter = r.userFilter;
+                                  let finalTitle = r.title;
+                                  const isIndividual = (r.type === 'individual_requisitions' || Boolean(r.userFilter));
+
+                                  if (r.type === 'individual_requisitions' || r.userFilter) {
+                                    if (matchedEmp) {
+                                      finalUserFilter = matchedEmp.name;
+                                      isVerified = true;
+                                      if (!finalTitle || finalTitle.includes('พนักงาน') || finalTitle.includes('ผู้ทำรายการ')) {
+                                        finalTitle = `รายงานประวัติการเบิก-รับสินค้ารายบุคคล: ${matchedEmp.name} (${matchedEmp.nickname}) [รหัส: ${matchedEmp.id}]`;
+                                      }
+                                    } else if (r.userFilter) {
+                                      isVerified = false;
+                                    }
+                                  }
+
+                                  return {
+                                    ...r,
+                                    title: finalTitle || r.title,
+                                    userFilter: finalUserFilter,
+                                    requestedBy: r.requestedBy || callingName,
+                                    isConfirmed: !isIndividual,
+                                    employeeId: matchedEmp?.id,
+                                    employeeName: matchedEmp?.name,
+                                    employeeNickname: matchedEmp?.nickname,
+                                    employeeThaiName: matchedEmp?.thaiName,
+                                    isEmployeeVerified: isVerified,
+                                  };
+                                });
                               }
 
-                              const finalText = data.text || textBuffer || '';
+                              let finalText = (data.text || textBuffer || '').trim();
+                              if (!finalText) {
+                                if (rawReports && rawReports.length > 0) {
+                                  finalText = `ทางระบบได้เตรียมเอกสารรายงาน ${rawReports[0].title || 'สรุปภาพรวมผู้บริหาร'} (Store FL.6) ให้เรียบร้อยแล้วครับ กรุณากดปุ่มเพื่อเปิดหรือดาวน์โหลดเอกสารด้านล่างได้เลยครับ`;
+                                } else if (data.dbAction) {
+                                  finalText = 'บันทึกคำสั่งและเตรียมรายการในระบบ Store FL.6 เรียบร้อยแล้วครับ';
+                                } else {
+                                  finalText = 'รับทราบคำสั่งเรียบร้อยครับ';
+                                }
+                              }
 
                               // Fallback client-side matching if server didn't provide suggestedItems
                               let finalSuggestedItems = data.suggestedItems;
@@ -780,6 +880,16 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                                 setChatHistory(prev => [...prev.filter(m => m.id !== aiMessageId), completedMessage]);
                               } else {
                                 setChatHistory(prev => prev.map(msg => msg.id === aiMessageId ? completedMessage : msg));
+                              }
+
+                              // Auto-generate & download PDF/Excel directly for general reports (Executive summary, Requisition history, etc.)
+                              // ONLY individual requisition reports require manual confirmation box.
+                              if (rawReports && rawReports.length > 0 && !isPending && currentUser?.role === 'admin') {
+                                rawReports.forEach((rep, rIdx) => {
+                                  setTimeout(() => {
+                                    handleDownloadReport(rep, aiMessageId + rIdx, rep.format === 'excel');
+                                  }, 200);
+                                });
                               }
                           } else if (data.type === 'error') {
                               serverError = new Error(data.message);
@@ -1423,7 +1533,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               {/* Interactive PDF / Excel Generation Confirmation & Download Card */}
               {(msg.fileReports || (msg.fileReport ? [msg.fileReport] : [])).map((report, idx) => {
                 const isExcel = report.format === 'excel';
-                const isPending = msg.isPendingConfirmation && !msg.isCancelled;
+                const isIndividualReport = report.type === 'individual_requisitions' || Boolean(report.userFilter);
+                const isPending = msg.isPendingConfirmation && isIndividualReport && !msg.isCancelled;
                 const isCancelled = msg.isCancelled;
                 const isGenerating = generatingPdfId === (msg.id + idx);
                 const requesterName = report.requestedBy || currentUser?.nickname || currentUser?.name || 'ผู้ใช้งาน';
@@ -1476,8 +1587,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                               {isCancelled
                                 ? 'ยกเลิกคำสั่งออกรายงานแล้ว (ไม่มีการสร้างไฟล์)'
                                 : isPending
-                                ? '⏳ กรุณาตรวจสอบชื่อผู้สั่งการและเงื่อนไขด้านล่างให้ตรงกัน ก่อนกดยืนยัน'
-                                : '✅ ออกเอกสารรายงานและพร้อมดาวน์โหลดเรียบร้อยแล้ว'}
+                                ? '⏳ กรุณาตรวจสอบชื่อพนักงานและเงื่อนไขด้านล่างให้ตรงกัน ก่อนกดยืนยัน'
+                                : '✅ ออกเอกสารรายงานพร้อมเปิด/ดาวน์โหลดเรียบร้อยแล้ว'}
                             </p>
                           </div>
                         </div>
@@ -1502,39 +1613,108 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
 
                       {/* Requester & Report Details Inspection Box */}
                       <div className="mb-3 p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 text-xs sm:text-sm space-y-2 shadow-2xs">
-                        {/* Commanded by User Name (User check request) */}
+                        {/* Commanded by User Name */}
                         <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
                           <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-medium shrink-0">
                             <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                             <span>ผู้สั่งออกรายงาน:</span>
                           </span>
                           <div className="flex items-center gap-1.5 text-right font-bold text-slate-900 dark:text-white">
-                            <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-bold">
-                              คุณ{requesterName}
+                            <span className="px-2.5 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800 font-bold">
+                              {requesterName.startsWith('คุณ') ? requesterName : `คุณ${requesterName}`}
                             </span>
-                            {currentUser?.name && requesterName !== currentUser.name && (
-                              <span className="text-[11px] text-slate-400 font-normal">
-                                ({currentUser.name})
-                              </span>
-                            )}
-                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/30 tracking-wider">
                               ADMIN
                             </span>
                           </div>
                         </div>
 
-                        {/* Target User in Report if filtered by individual */}
-                        {report.userFilter && (
-                          <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-400/30 text-amber-900 dark:text-amber-200">
-                            <span className="font-semibold flex items-center gap-1.5 shrink-0">
-                              <Users className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                              <span>พนักงานเป้าหมาย:</span>
-                            </span>
-                            <span className="font-black text-amber-700 dark:text-amber-300 text-sm">
-                              คุณ{report.userFilter}
-                            </span>
-                          </div>
-                        )}
+                        {/* Target System Employee in Report (Strict System Employee Verification) */}
+                        {(report.type === 'individual_requisitions' || report.userFilter) && (() => {
+                          const matchedEmp = findEmployeeInSystem(report.userFilter || report.employeeName || report.employeeId);
+                          
+                          if (matchedEmp) {
+                            return (
+                              <div className="p-3 rounded-xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-bold flex items-center gap-1.5 text-blue-950 dark:text-blue-100">
+                                    <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                    <span>พนักงานเป้าหมายในระบบ Store FL.6:</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3" /> ยืนยันพนักงานในระบบแล้ว (Verified)
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-blue-200/60 dark:border-blue-800/60">
+                                  <div className="min-w-0">
+                                    <div className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">
+                                      คุณ{matchedEmp.name}
+                                    </div>
+                                    <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                                      ชื่อเล่น: <strong className="text-blue-700 dark:text-blue-300">{matchedEmp.nickname}</strong> ({matchedEmp.thaiNickname}) • {matchedEmp.thaiName}
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-blue-600 text-white shadow-2xs">
+                                      รหัส: {matchedEmp.id}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // If an individual report was requested but no valid employee was matched
+                          return (
+                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 space-y-2 text-amber-900 dark:text-amber-200">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-200">
+                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>ไม่พบข้อมูลหรือรหัสพนักงาน "{report.userFilter || 'ไม่ระบุ'}" ในระบบ Store FL.6</span>
+                              </div>
+                              <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                                การออกรายงานรายบุคคลต้องอ้างอิงพนักงานจริงในระบบเท่านั้น โปรดเลือกรหัสหรือรายชื่อพนักงานจากรายการด้านล่าง:
+                              </p>
+                              <select
+                                onChange={(e) => {
+                                  const selectedId = e.target.value;
+                                  const emp = SYSTEM_EMPLOYEES.find(u => u.id === selectedId);
+                                  if (emp) {
+                                    setChatHistory(prev => prev.map(m => {
+                                      if (m.id === msg.id) {
+                                        const updatedReports = (m.fileReports || []).map((r, rIdx) => {
+                                          if (rIdx === idx) {
+                                            return {
+                                              ...r,
+                                              userFilter: emp.name,
+                                              employeeId: emp.id,
+                                              employeeName: emp.name,
+                                              employeeNickname: emp.nickname,
+                                              employeeThaiName: emp.thaiName,
+                                              isEmployeeVerified: true,
+                                              title: `รายงานประวัติการเบิก-รับสินค้ารายบุคคล: ${emp.name} (${emp.nickname}) [รหัส: ${emp.id}]`
+                                            };
+                                          }
+                                          return r;
+                                        });
+                                        return { ...m, fileReports: updatedReports };
+                                      }
+                                      return m;
+                                    }));
+                                  }
+                                }}
+                                className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-800 dark:text-slate-100 font-medium outline-none cursor-pointer"
+                                defaultValue=""
+                              >
+                                <option value="" disabled>-- แตะเพื่อเลือกพนักงานในระบบ (มีทั้งหมด 32 ท่าน) --</option>
+                                {SYSTEM_EMPLOYEES.map(emp => (
+                                  <option key={emp.id} value={emp.id}>
+                                    รหัส {emp.id}: คุณ{emp.name} ({emp.nickname} / {emp.thaiName})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })()}
 
                         {/* Category filter if specified */}
                         {report.categoryFilter && report.categoryFilter !== 'all' && (
@@ -1579,54 +1759,72 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
                       </div>
 
                       {/* Action Buttons: Pending Confirmation vs Confirmed vs Cancelled */}
-                      {isPending ? (
-                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmReport(msg.id, report, idx)}
-                            disabled={isGenerating}
-                            className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20 disabled:opacity-50"
-                          >
-                            {isGenerating ? (
-                              <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                <span>กำลังสร้างเอกสารรายงาน...</span>
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="w-5 h-5" />
-                                <span>ยืนยันออกรายงาน {isExcel ? 'Excel' : 'PDF'}</span>
-                              </>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCancelReport(msg.id, report.title)}
-                            disabled={isGenerating}
-                            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-3 px-4 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                          >
-                            <X className="w-4 h-4" />
-                            <span>ยกเลิก</span>
-                          </button>
-                        </div>
-                      ) : !isCancelled ? (
+                      {isPending ? (() => {
+                        const targetEmp = (report.type === 'individual_requisitions' || report.userFilter)
+                          ? findEmployeeInSystem(report.userFilter || report.employeeName || report.employeeId)
+                          : null;
+                        const isIndividualInvalid = (report.type === 'individual_requisitions') && !targetEmp;
+
+                        return (
+                          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmReport(msg.id, report, idx)}
+                              disabled={isGenerating || isIndividualInvalid}
+                              className={`flex-1 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50 ${
+                                isIndividualInvalid 
+                                  ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed'
+                                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-600/20'
+                              }`}
+                            >
+                              {isGenerating ? (
+                                <>
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                  <span>กำลังสร้างเอกสารรายงาน...</span>
+                                </>
+                              ) : isIndividualInvalid ? (
+                                <>
+                                  <AlertCircle className="w-5 h-5 text-amber-300" />
+                                  <span>กรุณาเลือกพนักงานในระบบก่อนออกรายงาน</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="w-5 h-5" />
+                                  <span>ยืนยันออกรายงาน {isExcel ? 'Excel' : 'PDF'}</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCancelReport(msg.id, report.title)}
+                              disabled={isGenerating}
+                              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 py-3 px-4 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <X className="w-4 h-4" />
+                              <span>ยกเลิก</span>
+                            </button>
+                          </div>
+                        );
+                      })() : !isCancelled ? (
                         <button
                           type="button"
                           onClick={() => handleDownloadReport(report, msg.id + idx, isExcel)}
                           disabled={isGenerating}
-                          className={`w-full active:scale-[0.98] disabled:opacity-75 text-white py-2.5 px-3 rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer ${
-                            isExcel ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                          className={`w-full active:scale-[0.98] disabled:opacity-75 text-white py-3 px-4 rounded-xl text-base font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer ${
+                            isExcel 
+                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-600/20' 
+                              : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 shadow-red-600/20'
                           }`}
                         >
                           {isGenerating ? (
                             <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>กำลังดาวน์โหลด...</span>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>กำลังจัดเตรียมและเปิดเอกสาร...</span>
                             </>
                           ) : (
                             <>
-                              <FileDown className="w-4 h-4" />
-                              <span>ดาวน์โหลดเอกสาร {isExcel ? 'Excel' : 'PDF'} ซ้ำอีกครั้ง</span>
+                              <FileDown className="w-5 h-5" />
+                              <span>เปิด / ดาวน์โหลดรายงาน {isExcel ? 'EXCEL' : 'PDF'}</span>
                             </>
                           )}
                         </button>
