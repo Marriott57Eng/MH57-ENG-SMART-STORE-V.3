@@ -148,12 +148,25 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
   let subtitle = options.subtitle || 'คลังสินค้า Store FL.6 • Bangkok Marriott Hotel Sukhumvit';
   let filename = `Report_${Date.now()}.pdf`;
 
+  // Fix html2canvas FontMetrics baseline calculation with Tailwind CSS
+  // Tailwind sets img { display: block }, which causes html2canvas's FontMetrics test img to wrap to a new line,
+  // throwing off the baseline calculation and slicing rendered text in half vertically.
+  const fontFixStyle = document.createElement('style');
+  fontFixStyle.id = 'html2canvas-fontmetrics-fix';
+  fontFixStyle.innerHTML = `
+    img {
+      display: inline !important;
+    }
+  `;
+  document.head.appendChild(fontFixStyle);
+
   // Hidden container positioned in normal screen space to guarantee positive pixel rendering coordinates
   const container = document.createElement('div');
   container.style.position = 'fixed';
   container.style.top = '0';
   container.style.left = '0';
   container.style.width = '794px';
+  container.style.height = '1122px';
   container.style.zIndex = '-9999';
   container.style.opacity = '0';
   container.style.pointerEvents = 'none';
@@ -221,7 +234,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
     // -------------------------------------------------------------
     const renderFooter = (pageIndex: number, totalPages: number): string => {
       return `
-        <div style="margin-top: 10px; padding-top: 6px; border-top: 1.5px solid #2563eb; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b; line-height: 1.35;">
+        <div style="margin-top: 14px; padding-top: 5px; border-top: 1.5px solid #2563eb; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b; line-height: 1.3;">
           <div style="font-weight: 700; color: #0f172a;">
             ระบบบริหารคลังสินค้าช่างและอะไหล่อัจฉริยะ (ENG SMART STORE APP) • แผนกวิศวกรรม Store FL.6
           </div>
@@ -252,7 +265,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
       page.style.backgroundColor = '#ffffff';
       page.style.color = '#1e293b';
       page.style.fontFamily = '"IBM Plex Sans Thai", "Sarabun", "Prompt", sans-serif';
-      page.style.lineHeight = '1.35';
+      page.style.lineHeight = '1.3';
       page.style.overflow = 'hidden';
 
       page.innerHTML = `
@@ -348,20 +361,22 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
       const pageSize = 30;
       const totalPages = reqs.length === 0 ? 1 : Math.ceil(reqs.length / pageSize);
 
-      const renderTableChunk = (chunk: typeof reqs, startIndex: number) => `
+      const renderTableChunk = (chunk: typeof reqs, startIndex: number, isFirstPage: boolean) => {
+        const rowH = isFirstPage ? '30px' : '32px';
+        return `
         <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.35;">
+          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.3;">
             <thead>
-              <tr style="background-color: #f1f5f9;">
-                <th style="padding: 4.5px 5px; width: 25px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">#</th>
-                <th style="padding: 4.5px 5px; width: 95px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">วัน-เวลา</th>
-                <th style="padding: 4.5px 5px; width: 55px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ประเภท</th>
-                ${!isIndividual ? `<th style="padding: 4.5px 5px; width: 90px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ผู้ทำรายการ</th>` : ''}
-                <th style="padding: 4.5px 5px; width: 75px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัสสินค้า</th>
-                <th style="padding: 4.5px 5px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รายการสินค้า / หมวด</th>
-                <th style="padding: 4.5px 5px; width: 70px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">จำนวน</th>
-                <th style="padding: 4.5px 5px; width: 80px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">สต็อกปัจจุบัน</th>
-                <th style="padding: 4.5px 5px; width: 140px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">งานที่นำไปใช้ / แหล่งที่มา</th>
+              <tr style="background-color: #f1f5f9; height: 26px;">
+                <th style="padding: 3px 5px; width: 25px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">#</th>
+                <th style="padding: 3px 5px; width: 95px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">วัน-เวลา</th>
+                <th style="padding: 3px 5px; width: 55px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ประเภท</th>
+                ${!isIndividual ? `<th style="padding: 3px 5px; width: 90px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ผู้ทำรายการ</th>` : ''}
+                <th style="padding: 3px 5px; width: 75px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัสสินค้า</th>
+                <th style="padding: 3px 5px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รายการสินค้า / หมวด</th>
+                <th style="padding: 3px 5px; width: 70px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">จำนวน</th>
+                <th style="padding: 3px 5px; width: 80px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">สต็อกปัจจุบัน</th>
+                <th style="padding: 3px 5px; width: 140px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">งานที่นำไปใช้ / แหล่งที่มา</th>
               </tr>
             </thead>
             <tbody>
@@ -371,29 +386,29 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
                 const globalIdx = startIndex + idx;
                 const isStockIn = rec.type === 'in';
                 const typeBadge = isStockIn
-                  ? `<span style="background-color: #dcfce7; color: #15803d; padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 8px;">รับเข้า</span>`
-                  : `<span style="background-color: #dbeafe; color: #1d4ed8; padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 8px;">เบิกออก</span>`;
+                  ? `<span style="background-color: #dcfce7; color: #15803d; padding: 1.5px 5px; border-radius: 4px; font-weight: bold; font-size: 8px; display: inline-block;">รับเข้า</span>`
+                  : `<span style="background-color: #dbeafe; color: #1d4ed8; padding: 1.5px 5px; border-radius: 4px; font-weight: bold; font-size: 8px; display: inline-block;">เบิกออก</span>`;
                 const qtyColor = isStockIn ? '#15803d' : '#1d4ed8';
                 const qtyPrefix = isStockIn ? '+' : '-';
                 const itemMatch = items.find(i => i.id === rec.itemId) || items.find(i => i.name === rec.itemName);
                 const currentStockText = itemMatch ? `${itemMatch.qty} ${itemMatch.unit}` : '-';
 
                 return `
-                  <tr style="${globalIdx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
-                    <td style="padding: 4px 5px; text-align: center; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${globalIdx + 1}</td>
-                    <td style="padding: 4px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${formatRecordTimestamp(rec.timestamp, rec.isoDate)}</td>
-                    <td style="padding: 4px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${typeBadge}</td>
-                    ${!isIndividual ? `<td style="padding: 4px 5px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${rec.requestedBy}</td>` : ''}
-                    <td style="padding: 4px 5px; font-family: monospace; font-size: 8px; color: #2563eb; font-weight: bold; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${rec.itemId}</td>
-                    <td style="padding: 4px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
-                      <div style="font-weight: 600; color: #1e293b; line-height: 1.35; padding: 1px 0;">${rec.itemName}</div>
-                      ${rec.category ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.25;">${rec.category}</div>` : ''}
+                  <tr style="height: ${rowH}; ${globalIdx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
+                    <td style="padding: 3px 5px; text-align: center; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${globalIdx + 1}</td>
+                    <td style="padding: 3px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${formatRecordTimestamp(rec.timestamp, rec.isoDate)}</td>
+                    <td style="padding: 3px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${typeBadge}</td>
+                    ${!isIndividual ? `<td style="padding: 3px 5px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;">${rec.requestedBy}</td>` : ''}
+                    <td style="padding: 3px 5px; font-family: monospace; font-size: 8px; color: #2563eb; font-weight: bold; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${rec.itemId}</td>
+                    <td style="padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                      <div style="font-weight: 600; color: #1e293b; line-height: 1.25; max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${rec.itemName}</div>
+                      ${rec.category ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.2; max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${rec.category}</div>` : ''}
                     </td>
-                    <td style="padding: 4px 5px; text-align: right; font-weight: bold; color: ${qtyColor}; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${qtyPrefix}${rec.qty} ${rec.unit}</td>
-                    <td style="padding: 4px 5px; text-align: right; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${currentStockText}</td>
-                    <td style="padding: 4px 5px; color: #334155; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
-                      <div style="line-height: 1.35;">${rec.purpose || '-'}</div>
-                      ${rec.note ? `<div style="font-size: 7.5px; color: #94a3b8; line-height: 1.25;">(${rec.note})</div>` : ''}
+                    <td style="padding: 3px 5px; text-align: right; font-weight: bold; color: ${qtyColor}; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${qtyPrefix}${rec.qty} ${rec.unit}</td>
+                    <td style="padding: 3px 5px; text-align: right; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${currentStockText}</td>
+                    <td style="padding: 3px 5px; color: #334155; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                      <div style="line-height: 1.25; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${rec.purpose || '-'}</div>
+                      ${rec.note ? `<div style="font-size: 7.5px; color: #94a3b8; line-height: 1.2; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">(${rec.note})</div>` : ''}
                     </td>
                   </tr>
                 `;
@@ -402,6 +417,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
           </table>
         </div>
       `;
+      };
 
       let cursor = 0;
       let pageNum = 0;
@@ -410,7 +426,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
         const isFirst = pageNum === 0;
         const pageHtml = `
           ${isFirst ? summaryBannerHtml : ''}
-          ${renderTableChunk(pRows, cursor)}
+          ${renderTableChunk(pRows, cursor, isFirst)}
         `;
         pageElements.push(createPageElement(pageHtml, pageNum, totalPages, isFirst));
         cursor += pageSize;
@@ -481,21 +497,23 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
       const pageSize = 30;
       const totalPages = filteredOrders.length === 0 ? 1 : Math.ceil(filteredOrders.length / pageSize);
 
-      const renderPoChunk = (chunk: typeof filteredOrders, startIndex: number) => `
+      const renderPoChunk = (chunk: typeof filteredOrders, startIndex: number, isFirstPage: boolean) => {
+        const rowH = isFirstPage ? '30px' : '32px';
+        return `
         <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.35;">
+          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.3;">
             <thead>
-              <tr style="background-color: #f1f5f9;">
-                <th style="padding: 4.5px 5px; width: 20px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">#</th>
-                <th style="padding: 4.5px 5px; width: 75px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัส PO</th>
-                <th style="padding: 4.5px 5px; width: 80px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">วันที่สั่ง</th>
-                <th style="padding: 4.5px 5px; width: 65px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัสสินค้า</th>
-                <th style="padding: 4.5px 5px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รายการสินค้า / ยี่ห้อ / รุ่น</th>
-                <th style="padding: 4.5px 5px; width: 65px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">จำนวน</th>
-                <th style="padding: 4.5px 5px; width: 75px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ผู้สั่งซื้อ</th>
-                <th style="padding: 4.5px 5px; width: 85px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ซัพพลายเออร์</th>
-                <th style="padding: 4.5px 5px; width: 55px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ความเร่งด่วน</th>
-                <th style="padding: 4.5px 5px; width: 70px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">สถานะ</th>
+              <tr style="background-color: #f1f5f9; height: 26px;">
+                <th style="padding: 3px 5px; width: 20px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">#</th>
+                <th style="padding: 3px 5px; width: 75px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัส PO</th>
+                <th style="padding: 3px 5px; width: 80px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">วันที่สั่ง</th>
+                <th style="padding: 3px 5px; width: 65px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัสสินค้า</th>
+                <th style="padding: 3px 5px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รายการสินค้า / ยี่ห้อ / รุ่น</th>
+                <th style="padding: 3px 5px; width: 65px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">จำนวน</th>
+                <th style="padding: 3px 5px; width: 75px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ผู้สั่งซื้อ</th>
+                <th style="padding: 3px 5px; width: 85px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ซัพพลายเออร์</th>
+                <th style="padding: 3px 5px; width: 55px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ความเร่งด่วน</th>
+                <th style="padding: 3px 5px; width: 70px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">สถานะ</th>
               </tr>
             </thead>
             <tbody>
@@ -503,13 +521,13 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
                 <tr><td colspan="10" style="padding: 24px; text-align: center; color: #94a3b8; font-size: 11px;">ไม่พบประวัติการสั่งซื้อสินค้าตามเงื่อนไขที่เลือก</td></tr>
               ` : chunk.map((order, idx) => {
                 const globalIdx = startIndex + idx;
-                let statusBadge = `<span style="background-color: #fef3c7; color: #b45309; padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 8px;">รอยืนยัน</span>`;
+                let statusBadge = `<span style="background-color: #fef3c7; color: #b45309; padding: 1.5px 5px; border-radius: 4px; font-weight: bold; font-size: 8px; display: inline-block;">รอยืนยัน</span>`;
                 if (order.status === 'confirmed') {
-                  statusBadge = `<span style="background-color: #dbeafe; color: #1d4ed8; padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 8px;">ยืนยันแล้ว</span>`;
+                  statusBadge = `<span style="background-color: #dbeafe; color: #1d4ed8; padding: 1.5px 5px; border-radius: 4px; font-weight: bold; font-size: 8px; display: inline-block;">ยืนยันแล้ว</span>`;
                 } else if (order.status === 'received') {
-                  statusBadge = `<span style="background-color: #dcfce7; color: #15803d; padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 8px;">รับสินค้าแล้ว</span>`;
+                  statusBadge = `<span style="background-color: #dcfce7; color: #15803d; padding: 1.5px 5px; border-radius: 4px; font-weight: bold; font-size: 8px; display: inline-block;">รับสินค้าแล้ว</span>`;
                 } else if (order.status === 'cancelled') {
-                  statusBadge = `<span style="background-color: #fee2e2; color: #b91c1c; padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 8px;">ยกเลิก</span>`;
+                  statusBadge = `<span style="background-color: #fee2e2; color: #b91c1c; padding: 1.5px 5px; border-radius: 4px; font-weight: bold; font-size: 8px; display: inline-block;">ยกเลิก</span>`;
                 }
 
                 let urgencyBadge = `<span style="color: #64748b;">ปกติ</span>`;
@@ -522,20 +540,20 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
                 const poDate = formatRecordTimestamp('', order.isoDate || order.createdAt);
 
                 return `
-                  <tr style="${globalIdx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
-                    <td style="padding: 4px 5px; text-align: center; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${globalIdx + 1}</td>
-                    <td style="padding: 4px 5px; font-family: monospace; font-size: 8px; font-weight: bold; color: #2563eb; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.id}</td>
-                    <td style="padding: 4px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${poDate}</td>
-                    <td style="padding: 4px 5px; font-family: monospace; font-size: 8px; color: #64748b; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.itemId}</td>
-                    <td style="padding: 4px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
-                      <div style="font-weight: 600; color: #1e293b; line-height: 1.35; padding: 1px 0;">${order.itemName}</div>
-                      ${[order.brand, order.model].filter(Boolean).length > 0 ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.25;">${[order.brand, order.model].filter(Boolean).join(' • ')}</div>` : ''}
+                  <tr style="height: ${rowH}; ${globalIdx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
+                    <td style="padding: 3px 5px; text-align: center; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${globalIdx + 1}</td>
+                    <td style="padding: 3px 5px; font-family: monospace; font-size: 8px; font-weight: bold; color: #2563eb; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.id}</td>
+                    <td style="padding: 3px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${poDate}</td>
+                    <td style="padding: 3px 5px; font-family: monospace; font-size: 8px; color: #64748b; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.itemId}</td>
+                    <td style="padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                      <div style="font-weight: 600; color: #1e293b; line-height: 1.25; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${order.itemName}</div>
+                      ${[order.brand, order.model].filter(Boolean).length > 0 ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.2; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${[order.brand, order.model].filter(Boolean).join(' • ')}</div>` : ''}
                     </td>
-                    <td style="padding: 4px 5px; text-align: right; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.qty} ${order.unit}</td>
-                    <td style="padding: 4px 5px; color: #334155; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.requestedBy}</td>
-                    <td style="padding: 4px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.supplier || '-'}</td>
-                    <td style="padding: 4px 5px; text-align: center; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${urgencyBadge}</td>
-                    <td style="padding: 4px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${statusBadge}</td>
+                    <td style="padding: 3px 5px; text-align: right; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${order.qty} ${order.unit}</td>
+                    <td style="padding: 3px 5px; color: #334155; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; max-width: 75px; overflow: hidden; text-overflow: ellipsis;">${order.requestedBy}</td>
+                    <td style="padding: 3px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; max-width: 85px; overflow: hidden; text-overflow: ellipsis;">${order.supplier || '-'}</td>
+                    <td style="padding: 3px 5px; text-align: center; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${urgencyBadge}</td>
+                    <td style="padding: 3px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${statusBadge}</td>
                   </tr>
                 `;
               }).join('')}
@@ -543,6 +561,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
           </table>
         </div>
       `;
+      };
 
       let cursor = 0;
       let pageNum = 0;
@@ -551,7 +570,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
         const isFirst = pageNum === 0;
         const pageHtml = `
           ${isFirst ? summaryBannerHtml : ''}
-          ${renderPoChunk(pRows, cursor)}
+          ${renderPoChunk(pRows, cursor, isFirst)}
         `;
         pageElements.push(createPageElement(pageHtml, pageNum, totalPages, isFirst));
         cursor += pageSize;
@@ -690,36 +709,36 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
       `;
 
       const renderCriticalTable = (chunk: typeof criticalItems, title: string = '🚨 รายการสินค้าที่ต้องสั่งซื้อด่วน (หมดสต็อกหรือต่ำกว่า Min Stock)') => `
-        <div style="border: 1px solid #fee2e2; background-color: #fffafa; border-radius: 8px; padding: 8px;">
+        <div style="border: 1px solid #fee2e2; background-color: #fffafa; border-radius: 8px; padding: 6px 8px;">
           <div style="font-size: 9.5px; font-weight: bold; color: #b91c1c; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
             <span>${title}</span>
             <span style="font-size: 8px; font-weight: normal; color: #dc2626;">ทั้งหมด ${criticalItems.length} รายการ</span>
           </div>
-          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.35;">
+          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.3;">
             <thead>
-              <tr style="background-color: #fee2e2; color: #991b1b;">
-                <th style="padding: 4px; width: 80px; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">รหัสสินค้า</th>
-                <th style="padding: 4px; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">ชื่อสินค้า</th>
-                <th style="padding: 4px; width: 90px; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">หมวดหมู่</th>
-                <th style="padding: 4px; width: 60px; text-align: right; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">คงเหลือ</th>
-                <th style="padding: 4px; width: 60px; text-align: right; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">Min Stock</th>
-                <th style="padding: 4px; width: 70px; text-align: center; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">สถานะ</th>
+              <tr style="background-color: #fee2e2; color: #991b1b; height: 25px;">
+                <th style="padding: 3px 4px; width: 80px; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">รหัสสินค้า</th>
+                <th style="padding: 3px 4px; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">ชื่อสินค้า</th>
+                <th style="padding: 3px 4px; width: 90px; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">หมวดหมู่</th>
+                <th style="padding: 3px 4px; width: 60px; text-align: right; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">คงเหลือ</th>
+                <th style="padding: 3px 4px; width: 60px; text-align: right; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">Min Stock</th>
+                <th style="padding: 3px 4px; width: 70px; text-align: center; border-bottom: 1.5px solid #fca5a5; font-weight: 700;">สถานะ</th>
               </tr>
             </thead>
             <tbody>
               ${chunk.length === 0 ? `
                 <tr><td colspan="6" style="padding: 16px; text-align: center; color: #16a34a; font-weight: bold;">สต็อกสินค้าอยู่ในเกณฑ์ปกติทุกรายการ ✅</td></tr>
               ` : chunk.map((it, idx) => `
-                <tr style="${idx % 2 === 1 ? 'background-color: #ffffff;' : ''}">
-                  <td style="padding: 4px; font-family: monospace; font-weight: bold; color: #b91c1c; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap;">${it.id}</td>
-                  <td style="padding: 4px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #fecaca; vertical-align: middle;">
-                    <div style="line-height: 1.35; padding: 1px 0;">${it.name}</div>
+                <tr style="height: 28px; ${idx % 2 === 1 ? 'background-color: #ffffff;' : ''}">
+                  <td style="padding: 3px 4px; font-family: monospace; font-weight: bold; color: #b91c1c; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap;">${it.id}</td>
+                  <td style="padding: 3px 4px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #fecaca; vertical-align: middle;">
+                    <div style="line-height: 1.25; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${it.name}</div>
                   </td>
-                  <td style="padding: 4px; color: #64748b; border-bottom: 1px solid #fecaca; vertical-align: middle;">${it.category}</td>
-                  <td style="padding: 4px; text-align: right; font-weight: bold; color: ${it.status === 'out' ? '#dc2626' : '#d97706'}; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap;">${it.qty} ${it.unit}</td>
-                  <td style="padding: 4px; text-align: right; color: #64748b; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap;">${it.minStock}</td>
-                  <td style="padding: 4px; text-align: center; border-bottom: 1px solid #fecaca; vertical-align: middle;">
-                    <span style="font-size: 7.5px; font-weight: bold; padding: 1px 5px; border-radius: 4px; background-color: ${it.status === 'out' ? '#fee2e2' : '#fef3c7'}; color: ${it.status === 'out' ? '#b91c1c' : '#b45309'};">
+                  <td style="padding: 3px 4px; color: #64748b; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;">${it.category}</td>
+                  <td style="padding: 3px 4px; text-align: right; font-weight: bold; color: ${it.status === 'out' ? '#dc2626' : '#d97706'}; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap;">${it.qty} ${it.unit}</td>
+                  <td style="padding: 3px 4px; text-align: right; color: #64748b; border-bottom: 1px solid #fecaca; vertical-align: middle; white-space: nowrap;">${it.minStock}</td>
+                  <td style="padding: 3px 4px; text-align: center; border-bottom: 1px solid #fecaca; vertical-align: middle;">
+                    <span style="font-size: 7.5px; font-weight: bold; padding: 1.5px 5px; border-radius: 4px; display: inline-block; background-color: ${it.status === 'out' ? '#fee2e2' : '#fef3c7'}; color: ${it.status === 'out' ? '#b91c1c' : '#b45309'};">
                       ${it.status === 'out' ? 'หมดสต็อก' : 'ใกล้หมด'}
                     </span>
                   </td>
@@ -802,19 +821,21 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
       const pageSize = 30;
       const totalPages = filteredItems.length === 0 ? 1 : Math.ceil(filteredItems.length / pageSize);
 
-      const renderItemChunk = (chunk: typeof filteredItems, startIndex: number) => `
+      const renderItemChunk = (chunk: typeof filteredItems, startIndex: number, isFirstPage: boolean) => {
+        const rowH = isFirstPage ? '30px' : '32px';
+        return `
         <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.35;">
+          <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 8.5px; text-align: left; line-height: 1.3;">
             <thead>
-              <tr style="background-color: #f1f5f9;">
-                <th style="padding: 4.5px 5px; width: 25px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">#</th>
-                <th style="padding: 4.5px 5px; width: 85px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัสสินค้า</th>
-                <th style="padding: 4.5px 5px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ชื่อสินค้า / รายการ</th>
-                <th style="padding: 4.5px 5px; width: 90px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">หมวดหมู่</th>
-                <th style="padding: 4.5px 5px; width: 65px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">คงเหลือ</th>
-                <th style="padding: 4.5px 5px; width: 55px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">Min Stock</th>
-                <th style="padding: 4.5px 5px; width: 85px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ตำแหน่งจัดเก็บ</th>
-                <th style="padding: 4.5px 5px; width: 65px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">สถานะ</th>
+              <tr style="background-color: #f1f5f9; height: 26px;">
+                <th style="padding: 3px 5px; width: 25px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">#</th>
+                <th style="padding: 3px 5px; width: 85px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">รหัสสินค้า</th>
+                <th style="padding: 3px 5px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ชื่อสินค้า / รายการ</th>
+                <th style="padding: 3px 5px; width: 90px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">หมวดหมู่</th>
+                <th style="padding: 3px 5px; width: 65px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">คงเหลือ</th>
+                <th style="padding: 3px 5px; width: 55px; text-align: right; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">Min Stock</th>
+                <th style="padding: 3px 5px; width: 85px; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">ตำแหน่งจัดเก็บ</th>
+                <th style="padding: 3px 5px; width: 65px; text-align: center; border-bottom: 1.5px solid #cbd5e1; color: #334155; font-weight: 700;">สถานะ</th>
               </tr>
             </thead>
             <tbody>
@@ -836,19 +857,19 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
                 }
 
                 return `
-                  <tr style="${globalIdx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
-                    <td style="padding: 4px 5px; text-align: center; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${globalIdx + 1}</td>
-                    <td style="padding: 4px 5px; font-family: monospace; font-size: 8px; font-weight: bold; color: #2563eb; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.id}</td>
-                    <td style="padding: 4px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
-                      <div style="font-weight: 600; color: #0f172a; line-height: 1.35; padding: 1px 0;">${item.name}</div>
-                      ${item.note ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.25;">${item.note}</div>` : ''}
+                  <tr style="height: ${rowH}; ${globalIdx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
+                    <td style="padding: 3px 5px; text-align: center; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">${globalIdx + 1}</td>
+                    <td style="padding: 3px 5px; font-family: monospace; font-size: 8px; font-weight: bold; color: #2563eb; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.id}</td>
+                    <td style="padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                      <div style="font-weight: 600; color: #0f172a; line-height: 1.25; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</div>
+                      ${item.note ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.2; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.note}</div>` : ''}
                     </td>
-                    <td style="padding: 4px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.category}</td>
-                    <td style="padding: 4px 5px; text-align: right; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.qty} <span style="font-size: 7.5px; font-weight: normal; color: #64748b;">${item.unit}</span></td>
-                    <td style="padding: 4px 5px; text-align: right; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.minStock}</td>
-                    <td style="padding: 4px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.location || 'Store FL.6'}</td>
-                    <td style="padding: 4px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
-                      <span style="display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 8px; font-weight: bold; background-color: ${statusBg}; color: ${statusColor};">
+                    <td style="padding: 3px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;">${item.category}</td>
+                    <td style="padding: 3px 5px; text-align: right; font-weight: bold; color: #0f172a; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.qty} <span style="font-size: 7.5px; font-weight: normal; color: #64748b;">${item.unit}</span></td>
+                    <td style="padding: 3px 5px; text-align: right; color: #64748b; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">${item.minStock}</td>
+                    <td style="padding: 3px 5px; color: #475569; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; max-width: 85px; overflow: hidden; text-overflow: ellipsis;">${item.location || 'Store FL.6'}</td>
+                    <td style="padding: 3px 5px; text-align: center; border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                      <span style="display: inline-block; padding: 1.5px 6px; border-radius: 9999px; font-size: 8px; font-weight: bold; background-color: ${statusBg}; color: ${statusColor};">
                         ${statusLabel}
                       </span>
                     </td>
@@ -859,6 +880,7 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
           </table>
         </div>
       `;
+      };
 
       let cursor = 0;
       let pageNum = 0;
@@ -867,17 +889,12 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
         const isFirst = pageNum === 0;
         const pageHtml = `
           ${isFirst ? summaryBannerHtml : ''}
-          ${renderItemChunk(pRows, cursor)}
+          ${renderItemChunk(pRows, cursor, isFirst)}
         `;
         pageElements.push(createPageElement(pageHtml, pageNum, totalPages, isFirst));
         cursor += pageSize;
         pageNum++;
       }
-    }
-
-    // Append all constructed A4 pages to the hidden container
-    for (const pageEl of pageElements) {
-      container.appendChild(pageEl);
     }
 
     // Ensure fonts are fully loaded before capturing canvas to prevent text baseline distortion
@@ -901,6 +918,11 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
         pdf.addPage();
       }
       const pageEl = pageElements[i];
+      // Mount strictly one page at a time to container so top coordinate is always 0,
+      // avoiding DOM stacking offset bugs, high memory usage, and subpixel baseline shifts.
+      container.innerHTML = '';
+      container.appendChild(pageEl);
+
       const canvas = await html2canvas(pageEl, {
         scale: 2, // 2x sharp resolution
         useCORS: true,
@@ -916,6 +938,14 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
         scrollY: 0,
         scrollX: 0,
         imageTimeout: 0,
+        onclone: (clonedDoc) => {
+          const s = clonedDoc.createElement('style');
+          s.innerHTML = `
+            img { display: inline !important; }
+            * { -webkit-font-smoothing: antialiased; }
+          `;
+          clonedDoc.head.appendChild(s);
+        },
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
@@ -924,6 +954,11 @@ export async function generateAndDownloadPdf(options: GeneratePdfOptions): Promi
 
     pdf.save(filename);
   } finally {
-    document.body.removeChild(container);
+    if (fontFixStyle.parentNode) {
+      fontFixStyle.parentNode.removeChild(fontFixStyle);
+    }
+    if (container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
   }
 }

@@ -325,3 +325,10 @@ main, .inventory-grid {
   contain-intrinsic-size: 0 170px;
 }
 
+/* Fix html2canvas FontMetrics baseline calculation with Tailwind CSS.
+   Tailwind's img { display: block } forces html2canvas's invisible measuring <img> onto a new line,
+   which shifts text baseline downward by 10-15px and slices rendered text in half vertically. */
+img[src^="data:image"] {
+  display: inline !important;
+}
+
