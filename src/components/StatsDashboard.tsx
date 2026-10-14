@@ -398,27 +398,31 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
             <div className="grid grid-cols-3 gap-2.5 relative z-10">
               <div className="liquid-glass-pill rounded-2xl p-3 sm:p-3.5 border border-white/60 dark:border-white/10 text-center shadow-xs">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-semibold">สินค้าทั้งหมด</span>
-                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary?.totalItems || items.length}</span>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block font-medium">SKUs</span>
+                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+                  {(summary?.totalItems || items.length).toLocaleString()}
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">SKUs</span>
               </div>
 
               <div 
                 onClick={onFilterLowStock}
-                className="bg-amber-500/15 dark:bg-amber-950/40 rounded-2xl p-3 sm:p-3.5 border border-amber-500/30 dark:border-amber-500/30 text-center cursor-pointer active:scale-95 transition-all shadow-xs backdrop-blur-md"
+                className="bg-amber-500/15 dark:bg-amber-950/40 border border-amber-400/40 dark:border-amber-600/40 text-amber-900 dark:text-amber-200 rounded-2xl p-3 sm:p-3.5 text-center cursor-pointer active:scale-95 transition-all shadow-xs backdrop-blur-md"
               >
-                <span className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-300 font-bold uppercase tracking-tight block truncate">
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tight block truncate">
                   ใกล้หมด/หมดแล้ว
                 </span>
-                <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
-                  {lowStockItems.length}
+                <span className="text-xl sm:text-2xl font-black tabular-nums">
+                  {lowStockItems.length.toLocaleString()}
                 </span>
-                <span className="text-[10px] sm:text-xs text-amber-600/90 dark:text-amber-400/90 block font-bold">กดดูรายการ &gt;</span>
+                <span className="text-[10px] sm:text-xs opacity-90 block font-bold">กดดูรายการ &gt;</span>
               </div>
 
               <div className="liquid-glass-pill rounded-2xl p-3 sm:p-3.5 border border-white/60 dark:border-white/10 text-center shadow-xs">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-semibold">จำนวนรวม</span>
-                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary?.totalQty || 0}</span>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 block font-medium">หน่วย</span>
+                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+                  {(summary?.totalQty || 0).toLocaleString()}
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">หน่วย</span>
               </div>
             </div>
           </div>

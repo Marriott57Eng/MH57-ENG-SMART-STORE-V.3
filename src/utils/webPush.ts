@@ -109,7 +109,8 @@ export async function fetchWebPushConfigFromFirestore(): Promise<WebPushNotifica
  */
 export async function saveWebPushConfig(
   cfg: Partial<WebPushNotificationConfig>,
-  updatedBy?: string
+  updatedBy?: string,
+  userRole: string = 'admin'
 ): Promise<WebPushNotificationConfig> {
   const current = getWebPushConfig();
   const updated: WebPushNotificationConfig = {
@@ -130,12 +131,12 @@ export async function saveWebPushConfig(
     console.error('Failed to save Web Push config to Firestore:', err);
   }
 
-  // Also sync to backend server
+  // Also sync to backend server with role authorization
   try {
     await fetch('/api/push/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
+      body: JSON.stringify({ ...updated, userRole }),
     });
   } catch (_) {}
 

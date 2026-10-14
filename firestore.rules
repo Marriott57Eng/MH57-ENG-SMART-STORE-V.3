@@ -1,9 +1,100 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+
+    // Helper functions for data validation & sanitization
+    function hasRequiredInventoryFields(data) {
+      return data.keys().hasAll(['id', 'name', 'category', 'unit', 'qty'])
+        && data.id is string
+        && data.name is string
+        && data.category is string
+        && data.unit is string
+        && data.qty is number
+        && data.qty >= 0;
+    }
+
+    function hasRequiredRequisitionFields(data) {
+      return data.keys().hasAll(['id', 'itemId', 'itemName', 'qty', 'requestedBy', 'isoDate'])
+        && data.id is string
+        && data.itemId is string
+        && data.itemName is string
+        && data.qty is number
+        && data.qty > 0
+        && data.requestedBy is string
+        && data.isoDate is string;
+    }
+
+    function hasRequiredOrderFields(data) {
+      return data.keys().hasAll(['id', 'itemId', 'itemName', 'qty', 'requestedBy', 'status'])
+        && data.id is string
+        && data.itemId is string
+        && data.itemName is string
+        && data.qty is number
+        && data.qty > 0
+        && data.status in ['pending', 'confirmed', 'received', 'cancelled'];
+    }
+
+    function hasRequiredUserFields(data) {
+      return data.keys().hasAll(['id', 'username', 'name', 'role'])
+        && data.id is string
+        && data.username is string
+        && data.name is string
+        && data.role in ['admin', 'user'];
+    }
+
+    // 1. Inventory Catalog (Read by all warehouse users, create/update with valid schema)
+    match /inventory/{itemId} {
+      allow read: if true;
+      allow create, update: if hasRequiredInventoryFields(request.resource.data);
+      allow delete: if true;
+    }
+
+    // 2. Requisition Transactions (Audit log: must have valid quantities and requisition fields)
+    match /requisitions/{requisitionId} {
+      allow read: if true;
+      allow create: if hasRequiredRequisitionFields(request.resource.data);
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    // 3. Purchase Orders (Audit trail: deletion is blocked)
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if hasRequiredOrderFields(request.resource.data);
+      allow update: if true;
+      allow delete: if false; // Purchase orders cannot be deleted from client to prevent audit trail destruction
+    }
+
+    // 4. Users Collection (Profile management & device session locking)
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if hasRequiredUserFields(request.resource.data);
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // 5. System Central Settings (LINE, WebPush, Geo Fencing)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // 6. Push Subscriptions (Endpoints are private: reads blocked, writes allowed for registration)
+    match /push_subscriptions/{subId} {
+      allow read: if false;
+      allow create, update, delete: if true;
+    }
+
+    // 7. System Connectivity Verification Doc
+    match /test/{testId} {
       allow read, write: if true;
+    }
+
+    // Default deny for unmanaged collections
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
+
 

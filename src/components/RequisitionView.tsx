@@ -64,15 +64,15 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
   return (
     <div className="flex flex-col min-h-full transition-colors duration-200">
       {/* Subheader */}
-      <div className="liquid-glass border-b border-white/60 dark:border-white/10 px-4 sm:px-6 py-3.5 shrink-0 shadow-sm backdrop-blur-2xl transition-colors duration-200">
+      <div className="bg-white/95 dark:bg-[#23201D]/95 backdrop-blur-md border-b border-[#EDE7DC] dark:border-[#38342F] px-4 sm:px-6 py-3.5 shrink-0 shadow-xs transition-colors duration-200">
         <div className="max-w-7xl mx-auto w-full">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/25 border border-blue-400/40">
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/25 border border-blue-400/30">
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">ประวัติการเบิก / รับเข้า</h2>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">ประวัติการเบิก / รับเข้า</h2>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">บันทึกความเคลื่อนไหวสต็อกสินค้าเข้า-ออก</p>
             </div>
           </div>
@@ -81,17 +81,17 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             {onStartMultiSelect && (
               <button
                 onClick={onStartMultiSelect}
-                className="liquid-glass hover:bg-white/80 dark:hover:bg-slate-700 active:scale-95 text-blue-600 dark:text-blue-400 px-3 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all border border-blue-200/80 dark:border-blue-900/50 cursor-pointer shadow-2xs"
+                className="liquid-glass-pill hover:bg-white text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all border border-white/60 dark:border-white/10 cursor-pointer shadow-2xs active:scale-95"
                 title="เปิดโหมดเลือกสินค้าหลายชิ้นเพื่อเบิกพร้อมกัน"
               >
-                <CheckSquare className="w-4 h-4" />
+                <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>เลือกหลายชิ้น</span>
               </button>
             )}
 
             <button
               onClick={onOpenNewRequisition}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all border border-blue-400/40 cursor-pointer"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all border border-blue-400/30 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
               บันทึก เบิก/รับเข้า
@@ -100,18 +100,24 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
         </div>
 
         {/* Stats summary banner */}
-        <div className="grid grid-cols-3 gap-2.5 mt-3.5 pt-3.5 border-t border-white/40 dark:border-white/10">
+        <div className="grid grid-cols-3 gap-2.5 mt-3.5 pt-3.5 border-t border-slate-200/80 dark:border-slate-800">
           <div className="liquid-glass-pill p-2.5 rounded-2xl border border-white/60 dark:border-white/10 text-center shadow-xs">
             <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 block font-semibold">รายการทั้งหมด</span>
-            <span className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">{records.length} ครั้ง</span>
+            <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white tabular-nums">
+              {records.length.toLocaleString()} ครั้ง
+            </span>
           </div>
-          <div className="bg-blue-500/10 dark:bg-blue-950/40 p-2.5 rounded-2xl border border-blue-400/30 dark:border-blue-800/60 text-center shadow-xs backdrop-blur-md">
-            <span className="text-[11px] sm:text-xs text-blue-600 dark:text-blue-400 block font-bold">เบิกออกรวม</span>
-            <span className="text-base sm:text-lg font-black text-blue-700 dark:text-blue-300">{totalWithdrawn} ชิ้น</span>
+          <div className="bg-red-500/10 dark:bg-red-950/40 border border-red-400/30 dark:border-red-700/40 text-red-700 dark:text-red-300 p-2.5 rounded-2xl text-center shadow-xs">
+            <span className="text-[11px] sm:text-xs font-bold block">เบิกออกรวม</span>
+            <span className="text-base sm:text-lg font-black tabular-nums">
+              {totalWithdrawn.toLocaleString()} ชิ้น
+            </span>
           </div>
-          <div className="bg-emerald-500/10 dark:bg-emerald-950/40 p-2.5 rounded-2xl border border-emerald-400/30 dark:border-emerald-800/60 text-center shadow-xs backdrop-blur-md">
-            <span className="text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-400 block font-bold">รับเข้ารวม</span>
-            <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-300">+{totalReceived} ชิ้น</span>
+          <div className="bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-400/30 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-300 p-2.5 rounded-2xl text-center shadow-xs">
+            <span className="text-[11px] sm:text-xs font-bold block">รับเข้ารวม</span>
+            <span className="text-base sm:text-lg font-black tabular-nums">
+              +{totalReceived.toLocaleString()} ชิ้น
+            </span>
           </div>
         </div>
 
@@ -119,20 +125,20 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
         <div className="flex items-center gap-2 mt-3.5 pt-1">
           <button
             onClick={() => setTypeFilter('all')}
-            className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-2xs border ${
+            className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-2xs active:scale-95 border ${
               typeFilter === 'all'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-400/40 shadow-blue-500/25'
-                : 'liquid-glass-pill text-slate-700 dark:text-slate-300 border-white/60 dark:border-white/10 hover:bg-white/80 dark:hover:bg-slate-800'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-800 dark:border-white/40 shadow-sm'
+                : 'liquid-glass-pill text-slate-600 dark:text-slate-300 border-white/60 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800'
             }`}
           >
             ทั้งหมด ({records.length})
           </button>
           <button
             onClick={() => setTypeFilter('out')}
-            className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs border ${
+            className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95 border ${
               typeFilter === 'out'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-400/40 shadow-blue-500/25'
-                : 'bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-400/30 dark:border-blue-800/60 hover:bg-blue-500/20'
+                ? 'bg-red-600 text-white border-red-500 shadow-sm'
+                : 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/40 hover:opacity-90'
             }`}
           >
             <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -140,10 +146,10 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
           </button>
           <button
             onClick={() => setTypeFilter('in')}
-            className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs border ${
+            className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95 border ${
               typeFilter === 'in'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400/40 shadow-emerald-500/25'
-                : 'bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-400/30 dark:border-emerald-800/60 hover:bg-emerald-500/20'
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40 hover:opacity-90'
             }`}
           >
             <ArrowDownRight className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -204,15 +210,15 @@ export const RequisitionView: React.FC<RequisitionViewProps> = ({
             return (
               <div
                 key={record.id}
-                className="liquid-glass-card rounded-[28px] border border-white/70 dark:border-white/10 p-4 sm:p-5 shadow-lg hover:border-blue-400/50 dark:hover:border-blue-500/40 transition-all space-y-3 relative overflow-hidden"
+                className="liquid-glass-card rounded-[26px] border border-white/60 dark:border-white/10 p-4 sm:p-5 shadow-xs hover:border-blue-400/40 transition-all space-y-3 relative overflow-hidden"
               >
                 {/* Top: User Info, Type Badge & Timestamp */}
-                <div className="flex items-start justify-between gap-2 border-b border-white/40 dark:border-white/10 pb-3">
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 border ${
                       isStockIn 
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/40' 
-                        : 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/40'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-400/30' 
+                        : 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-400/30'
                     }`}>
                       {isStockIn ? (
                         <ArrowDownRight className="w-4.5 h-4.5 stroke-[2.5]" />

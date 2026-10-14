@@ -110,6 +110,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   }, []);
 
   const fetchUsers = async () => {
+    if (!db) return;
     try {
       // Fetch with a 5-second timeout so it never blocks or spins indefinitely
       const fetchPromise = getDocs(collection(db, 'users'));

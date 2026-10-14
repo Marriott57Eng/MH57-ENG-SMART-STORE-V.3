@@ -35,7 +35,11 @@ export const getLineConfig = async (): Promise<LineNotificationConfig> => {
   return DEFAULT_LINE_CONFIG;
 };
 
-export const saveLineConfig = async (config: Partial<LineNotificationConfig>, updatedBy?: string): Promise<LineNotificationConfig> => {
+export const saveLineConfig = async (
+  config: Partial<LineNotificationConfig>, 
+  updatedBy?: string,
+  userRole: string = 'admin'
+): Promise<LineNotificationConfig> => {
   const current = await getLineConfig();
   const updated: LineNotificationConfig = {
     ...current,
@@ -53,12 +57,12 @@ export const saveLineConfig = async (config: Partial<LineNotificationConfig>, up
     throw err;
   }
 
-  // Also sync to backend server if needed
+  // Also sync to backend server if needed with role authorization
   try {
     await fetch('/api/line/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
+      body: JSON.stringify({ ...updated, userRole }),
     });
   } catch (_) {}
 

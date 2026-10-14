@@ -75,7 +75,8 @@ export const getSavedGeoLocationEnabled = (): boolean => {
  */
 export const saveGeoConfig = async (
   config: Partial<GeoConfig>,
-  updatedBy: string = 'Admin'
+  updatedBy: string = 'Admin',
+  userRole: string = 'admin'
 ): Promise<GeoConfig> => {
   const current = getSavedGeoConfig();
   const updated: GeoConfig = {
@@ -95,12 +96,12 @@ export const saveGeoConfig = async (
     console.error('Error saving geo setting to Firestore:', err);
   }
 
-  // Also sync to backend server
+  // Also sync to backend server with role authorization
   try {
     await fetch('/api/geo/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
+      body: JSON.stringify({ ...updated, userRole }),
     });
   } catch (_) {}
 
@@ -109,9 +110,10 @@ export const saveGeoConfig = async (
 
 export const saveGeoLocationSetting = async (
   enabled: boolean,
-  updatedBy: string = 'Admin'
+  updatedBy: string = 'Admin',
+  userRole: string = 'admin'
 ): Promise<void> => {
-  await saveGeoConfig({ isGeoLocationEnabled: enabled }, updatedBy);
+  await saveGeoConfig({ isGeoLocationEnabled: enabled }, updatedBy, userRole);
 };
 
 /**

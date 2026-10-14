@@ -75,8 +75,12 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
     setIsProcessing(false);
   }, []);
 
-  // Download handler for PDF & Excel
+  // Download handler for PDF & Excel (Strictly restricted to Admin)
   const handleDownloadReport = useCallback(async (report: any, msgId: string, isExcel: boolean = false) => {
+    if (currentUser?.role !== 'admin') {
+      alert('🔒 ขออภัยด้วยนะคะ: การดาวน์โหลดรายงานเอกสาร PDF สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นค่ะ');
+      return;
+    }
     try {
       setGeneratingPdfId(msgId);
       if (isExcel || report.format === 'excel') {
@@ -1092,8 +1096,8 @@ export const VoiceAssistantView: React.FC<VoiceAssistantViewProps> = ({
               <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 leading-tight">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 {isAdmin 
-                  ? 'โหมด Admin: สั่งเบิก/รับเข้า/แก้ไขสต็อก/แก้ไขชื่ออะไหล่' 
-                  : 'โหมด Staff: สั่งเบิก/รับเข้าสินค้า/ดูสต็อก/ออกรายงาน'}
+                  ? 'โหมด Admin: สั่งเบิก/รับเข้า/แก้ไขสต็อก/ออกรายงาน PDF' 
+                  : 'โหมด Staff: สั่งเบิก/รับเข้าสินค้า/สอบถามสต็อก'}
               </span>
             </div>
           </div>

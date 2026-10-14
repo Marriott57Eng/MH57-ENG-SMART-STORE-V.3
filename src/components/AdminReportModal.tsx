@@ -355,6 +355,11 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
     if (reportType === 'individual_requisitions' && !selectedUser) return;
 
     // Instant synchronous UI feedback - 0ms delay!
+    if (currentUser?.role !== 'admin') {
+      alert('สิทธิ์การเข้าถึงถูกจำกัด: เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถออกรายงานได้');
+      return;
+    }
+
     setIsGenerating(true);
     setIsSuccess(false);
 
@@ -405,6 +410,35 @@ export const AdminReportModal: React.FC<AdminReportModalProps> = ({
   const selectedStatusObj = orderStatusOptions.find(o => o.value === orderStatusFilter) || orderStatusOptions[0];
 
   if (!isOpen) return null;
+
+  if (currentUser?.role !== 'admin') {
+    return createPortal(
+      <div 
+        className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 text-center max-w-sm shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">จำกัดสิทธิ์เฉพาะ Admin</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+            การสร้างและส่งออกเอกสารรายงาน PDF สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น
+          </p>
+          <button 
+            onClick={onClose} 
+            className="w-full py-3 bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-md cursor-pointer transition-all active:scale-95"
+          >
+            เข้าใจแล้ว / ปิดหน้าต่าง
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div 

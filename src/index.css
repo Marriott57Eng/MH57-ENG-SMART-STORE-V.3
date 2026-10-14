@@ -150,9 +150,13 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0f172a;
+  background-color: #F8FAFC;
   -webkit-tap-highlight-color: transparent;
   min-height: 100%;
+}
+
+.dark html, .dark body {
+  background-color: #020617;
 }
 
 body {

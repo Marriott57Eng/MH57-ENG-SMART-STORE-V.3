@@ -393,6 +393,7 @@ export default function App() {
 
   // Fetch Requisitions Data from Firestore
   const fetchRequisitions = async () => {
+    if (!db) return;
     try {
       const q = query(collection(db, 'requisitions'), orderBy('isoDate', 'desc'), limit(500));
       const querySnapshot = await getDocs(q);
@@ -427,28 +428,30 @@ export default function App() {
       let inventoryData: InventoryItem[] = [];
 
       // 1. Fetch from Firestore (Source of Truth)
-      try {
-        const snapshot = await getDocs(collection(db, 'inventory'));
-        if (snapshot && !snapshot.empty) {
-          inventoryData = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data() as InventoryItem;
-            const qty = Number(data.qty) || 0;
-            const minStock = Number(data.minStock) || 1;
-            let status: 'normal' | 'low' | 'out' = data.status || 'normal';
-            if (qty <= 0) status = 'out';
-            else if (qty <= minStock) status = 'low';
+      if (db) {
+        try {
+          const snapshot = await getDocs(collection(db, 'inventory'));
+          if (snapshot && !snapshot.empty) {
+            inventoryData = snapshot.docs.map((docSnap) => {
+              const data = docSnap.data() as InventoryItem;
+              const qty = Number(data.qty) || 0;
+              const minStock = Number(data.minStock) || 1;
+              let status: 'normal' | 'low' | 'out' = data.status || 'normal';
+              if (qty <= 0) status = 'out';
+              else if (qty <= minStock) status = 'low';
 
-            return {
-              ...data,
-              qty,
-              minStock,
-              status,
-              outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() : '')
-            };
-          });
+              return {
+                ...data,
+                qty,
+                minStock,
+                status,
+                outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() : '')
+              };
+            });
+          }
+        } catch (firestoreErr) {
+          console.warn('Firestore fetch error:', firestoreErr);
         }
-      } catch (firestoreErr) {
-        console.warn('Firestore fetch error:', firestoreErr);
       }
 
       // 2. If Firestore is completely empty (initial setup only), fetch from server
@@ -511,75 +514,91 @@ export default function App() {
     }
     fetchInventory();
 
-    // Real-time Firestore Inventory Listener
-    const unsubInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
-      if (!snapshot.empty) {
-        const realTimeItems: InventoryItem[] = snapshot.docs.map(docSnap => {
-          const data = docSnap.data() as InventoryItem;
-          const qty = Number(data.qty) || 0;
-          const minStock = Number(data.minStock) || 1;
-          let status: 'normal' | 'low' | 'out' = data.status || 'normal';
-          if (qty <= 0) status = 'out';
-          else if (qty <= minStock) status = 'low';
+    // Real-time Firestore Listeners (Defensive guards to guarantee zero crash)
+    let unsubInventory = () => {};
+    let unsubReqs = () => {};
+    let unsubOrders = () => {};
 
-          return {
-            ...data,
-            qty,
-            minStock,
-            status,
-            outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() : '')
-          };
+    if (db) {
+      try {
+        unsubInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
+          if (!snapshot.empty) {
+            const realTimeItems: InventoryItem[] = snapshot.docs.map(docSnap => {
+              const data = docSnap.data() as InventoryItem;
+              const qty = Number(data.qty) || 0;
+              const minStock = Number(data.minStock) || 1;
+              let status: 'normal' | 'low' | 'out' = data.status || 'normal';
+              if (qty <= 0) status = 'out';
+              else if (qty <= minStock) status = 'low';
+
+              return {
+                ...data,
+                qty,
+                minStock,
+                status,
+                outOfStockDate: data.outOfStockDate || (qty <= 0 ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() : '')
+              };
+            });
+
+            if (realTimeItems.length > 0) {
+              setItems(realTimeItems);
+              recalculateSummary(realTimeItems);
+              try {
+                localStorage.setItem('warehouse_inventory', JSON.stringify(realTimeItems));
+              } catch (_) {}
+              setLoading(false);
+            }
+          }
+        }, (err) => {
+          console.warn('Real-time inventory snapshot warning:', err);
         });
-
-        if (realTimeItems.length > 0) {
-          setItems(realTimeItems);
-          recalculateSummary(realTimeItems);
-          try {
-            localStorage.setItem('warehouse_inventory', JSON.stringify(realTimeItems));
-          } catch (_) {}
-          setLoading(false);
-        }
+      } catch (err) {
+        console.warn('Could not attach inventory listener:', err);
       }
-    }, (err) => {
-      console.warn('Real-time inventory snapshot warning:', err);
-    });
 
-    // Real-time Firestore Requisitions Listener
-    const qReqs = query(collection(db, 'requisitions'), orderBy('isoDate', 'desc'), limit(500));
-    const unsubReqs = onSnapshot(qReqs, (snapshot) => {
-      if (!snapshot.empty) {
-        const realTimeReqs = snapshot.docs.map(d => {
-          const req = d.data() as RequisitionRecord;
-          return {
-            ...req,
-            id: (req.id || d.id).replace(/^REQ-?/i, '')
-          };
+      try {
+        const qReqs = query(collection(db, 'requisitions'), orderBy('isoDate', 'desc'), limit(500));
+        unsubReqs = onSnapshot(qReqs, (snapshot) => {
+          if (!snapshot.empty) {
+            const realTimeReqs = snapshot.docs.map(d => {
+              const req = d.data() as RequisitionRecord;
+              return {
+                ...req,
+                id: (req.id || d.id).replace(/^REQ-?/i, '')
+              };
+            });
+            setRequisitions(realTimeReqs);
+            try {
+              localStorage.setItem('warehouse_requisitions', JSON.stringify(realTimeReqs));
+            } catch (_) {}
+          }
+        }, (err) => {
+          console.warn('Real-time requisitions snapshot warning:', err);
         });
-        setRequisitions(realTimeReqs);
-        try {
-          localStorage.setItem('warehouse_requisitions', JSON.stringify(realTimeReqs));
-        } catch (_) {}
+      } catch (err) {
+        console.warn('Could not attach requisitions listener:', err);
       }
-    }, (err) => {
-      console.warn('Real-time requisitions snapshot warning:', err);
-    });
 
-    // Real-time Firestore Purchase Orders Listener (อัปเดตอัตโนมัติทันทีเมื่อยืนยันใน LINE หรือเว็บ)
-    const qOrders = query(collection(db, 'orders'), orderBy('isoDate', 'desc'), limit(200));
-    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-      if (!snapshot.empty) {
-        const realTimeOrders: PurchaseOrder[] = [];
-        snapshot.forEach(d => {
-          realTimeOrders.push(d.data() as PurchaseOrder);
+      try {
+        const qOrders = query(collection(db, 'orders'), orderBy('isoDate', 'desc'), limit(200));
+        unsubOrders = onSnapshot(qOrders, (snapshot) => {
+          if (!snapshot.empty) {
+            const realTimeOrders: PurchaseOrder[] = [];
+            snapshot.forEach(d => {
+              realTimeOrders.push(d.data() as PurchaseOrder);
+            });
+            setOrders(realTimeOrders);
+            try {
+              localStorage.setItem('warehouse_orders', JSON.stringify(realTimeOrders));
+            } catch (_) {}
+          }
+        }, (err) => {
+          console.warn('Real-time orders snapshot warning:', err);
         });
-        setOrders(realTimeOrders);
-        try {
-          localStorage.setItem('warehouse_orders', JSON.stringify(realTimeOrders));
-        } catch (_) {}
+      } catch (err) {
+        console.warn('Could not attach orders listener:', err);
       }
-    }, (err) => {
-      console.warn('Real-time orders snapshot warning:', err);
-    });
+    }
 
     return () => {
       unsubInventory();
@@ -1075,6 +1094,7 @@ export default function App() {
           orderId,
           receivedQty,
           receivedBy: currentUser?.name || 'ผู้ดูแลระบบ',
+          userRole: currentUser?.role || 'user',
           note,
         }),
       });
@@ -1119,6 +1139,7 @@ export default function App() {
           orderId,
           reason,
           cancelledBy: currentUser?.name || 'ผู้ดูแลระบบ',
+          userRole: currentUser?.role || 'user',
         }),
       });
 
@@ -1809,6 +1830,14 @@ export default function App() {
   ];
 
   const handleExportInventoryPdf = async () => {
+    if (currentUser?.role !== 'admin') {
+      addToast({
+        type: 'error',
+        title: 'จำกัดสิทธิ์เฉพาะ Admin',
+        message: 'การสร้างและดาวน์โหลดรายงาน PDF สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น'
+      });
+      return;
+    }
     try {
       setIsExportingInventoryPdf(true);
       await generateAndDownloadPdf({
@@ -1816,6 +1845,7 @@ export default function App() {
         title: 'รายงานสต็อกสินค้าคงคลังทั้งหมด (Store FL.6)',
         items: filteredItems.length > 0 ? filteredItems : items,
         requisitions,
+        generatedBy: currentUser.name || currentUser.username || 'Admin',
       });
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -1827,7 +1857,11 @@ export default function App() {
 
   // Handle update Geo Location Geofencing system (Admin master setting for all users)
   const handleUpdateGeoConfig = async (newConfig: Partial<GeoConfig>) => {
-    const updated = await saveGeoConfig(newConfig, currentUser?.name || currentUser?.username || 'Admin');
+    const updated = await saveGeoConfig(
+      newConfig, 
+      currentUser?.name || currentUser?.username || 'Admin',
+      currentUser?.role || 'user'
+    );
     setGeoConfig(updated);
     addToast({
       title: 'บันทึกการตั้งค่าพิกัดกลางแล้ว',

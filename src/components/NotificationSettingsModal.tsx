@@ -172,7 +172,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
     setWebPushConfig(updated);
     try {
       setSavingPushConfig(true);
-      await saveWebPushConfig(updated, currentUser.name || currentUser.username);
+      await saveWebPushConfig(updated, currentUser.name || currentUser.username, currentUser.role || 'admin');
       setPushConfigSaved(true);
       setTimeout(() => setPushConfigSaved(false), 2500);
     } catch (err) {
@@ -251,7 +251,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
     setSaving(true);
     setSaveSuccess(false);
     try {
-      await saveLineConfig(config, currentUser.name || currentUser.username);
+      await saveLineConfig(config, currentUser.name || currentUser.username, currentUser.role || 'admin');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err) {

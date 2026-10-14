@@ -417,7 +417,79 @@ async function startServer() {
   // Dev server must run on port 3000 as Nginx proxies 8080 -> 3000
   const PORT = Number(process.env.DEFAULT_APP_PORT) || (process.env.PORT && process.env.PORT !== '8080' ? Number(process.env.PORT) : 3000);
 
-  app.use(express.json({ limit: "50mb" }));
+  // 1. Strict Security Headers Middleware
+  app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Permissions-Policy", "geolocation=(self), microphone=(self)");
+    next();
+  });
+
+  // Limit body payload to safe size
+  app.use(express.json({ limit: "15mb" }));
+
+  // 2. High-Performance Sliding Window Rate Limiting Engine
+  interface RateLimitBucket {
+    count: number;
+    resetTime: number;
+  }
+  const rateLimitMap = new Map<string, RateLimitBucket>();
+
+  const createRateLimiter = (options: { windowMs: number; max: number; name: string }) => {
+    return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const forwarded = req.headers['x-forwarded-for'];
+      const ip = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') || req.socket.remoteAddress || '127.0.0.1';
+      const key = `${options.name}:${ip}`;
+      const now = Date.now();
+
+      const bucket = rateLimitMap.get(key);
+      if (!bucket || now > bucket.resetTime) {
+        rateLimitMap.set(key, { count: 1, resetTime: now + options.windowMs });
+        return next();
+      }
+
+      if (bucket.count >= options.max) {
+        return res.status(429).json({
+          success: false,
+          error: "⚠️ มีการส่งคำขอถี่เกินไป เพื่อความปลอดภัยกรุณารอสักครู่แล้วลองใหม่อีกครั้ง",
+          retryAfter: Math.ceil((bucket.resetTime - now) / 1000)
+        });
+      }
+
+      bucket.count += 1;
+      next();
+    };
+  };
+
+  // Periodic cleanup of expired rate limit entries
+  const rateLimitCleaner = setInterval(() => {
+    const now = Date.now();
+    for (const [key, bucket] of rateLimitMap.entries()) {
+      if (now > bucket.resetTime) rateLimitMap.delete(key);
+    }
+  }, 60000);
+  rateLimitCleaner.unref();
+
+  // Specialized Rate Limiters
+  const aiChatLimiter = createRateLimiter({ windowMs: 60000, max: 60, name: 'ai_chat' });
+  const aiAnalyzeLimiter = createRateLimiter({ windowMs: 60000, max: 20, name: 'ai_analyze' });
+  const lineTestLimiter = createRateLimiter({ windowMs: 60000, max: 15, name: 'line_test' });
+  const pushTestLimiter = createRateLimiter({ windowMs: 60000, max: 15, name: 'push_test' });
+
+  // 3. Admin RBAC Guard Middleware (Protects master settings & inventory edits)
+  const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const roleCandidate = req.body?.userRole || req.headers['x-user-role'];
+    const role = (roleCandidate && typeof roleCandidate === 'string' ? roleCandidate.trim().toLowerCase() : '');
+    if (role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: "🔒 เข้าถึงไม่ได้: การกระทำนี้สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น"
+      });
+    }
+    next();
+  };
 
   // Health check endpoints for Cloud Run container monitoring, startup, & rollout probes
   app.get("/api/health", (req, res) => {
@@ -490,8 +562,8 @@ async function startServer() {
 
 
 
-  // API: Update item stock directly
-  app.put("/api/inventory/:id", async (req, res) => {
+  // API: Update item stock directly (Admin only)
+  app.put("/api/inventory/:id", requireAdminAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const { qty, minStock, location, note } = req.body;
@@ -514,9 +586,9 @@ async function startServer() {
           targetItem.outOfStockDate = '';
         }
       }
-      if (typeof minStock === 'number') targetItem.minStock = minStock;
-      if (typeof location === 'string') targetItem.location = location;
-      if (typeof note === 'string') targetItem.note = note;
+      if (typeof minStock === 'number') targetItem.minStock = Math.max(0, minStock);
+      if (typeof location === 'string') targetItem.location = location.slice(0, 100);
+      if (typeof note === 'string') targetItem.note = note.slice(0, 500);
 
       if (firestoreDb) {
         await setDoc(doc(firestoreDb, 'inventory', targetItem.id), targetItem);
@@ -579,14 +651,30 @@ async function startServer() {
   });
 
   // API: Update Geo Location Central Config (Admin only)
-  app.post("/api/geo/config", async (req, res) => {
+  app.post("/api/geo/config", requireAdminAuth, async (req, res) => {
     try {
-      const updated = req.body;
+      const updated = req.body || {};
+      // Robust parameter sanitization & boundary checking
+      if (typeof updated.lat === 'number' && (updated.lat < -90 || updated.lat > 90)) {
+        return res.status(400).json({ error: "ค่าพิกัดละติจูด (Latitude) ไม่ถูกต้อง (-90 ถึง 90)" });
+      }
+      if (typeof updated.lng === 'number' && (updated.lng < -180 || updated.lng > 180)) {
+        return res.status(400).json({ error: "ค่าพิกัดลองจิจูด (Longitude) ไม่ถูกต้อง (-180 ถึง 180)" });
+      }
+      if (typeof updated.maxDistanceMeters === 'number' && (updated.maxDistanceMeters < 5 || updated.maxDistanceMeters > 50000)) {
+        return res.status(400).json({ error: "รัศมีต้องอยู่ระหว่าง 5 ถึง 50,000 เมตร" });
+      }
+
       serverGeoConfig = {
-        ...serverGeoConfig,
-        ...updated,
+        isGeoLocationEnabled: Boolean(updated.isGeoLocationEnabled),
+        lat: typeof updated.lat === 'number' ? updated.lat : serverGeoConfig.lat,
+        lng: typeof updated.lng === 'number' ? updated.lng : serverGeoConfig.lng,
+        maxDistanceMeters: typeof updated.maxDistanceMeters === 'number' ? Math.round(updated.maxDistanceMeters) : serverGeoConfig.maxDistanceMeters,
+        locationName: typeof updated.locationName === 'string' ? updated.locationName.slice(0, 200) : serverGeoConfig.locationName,
         updatedAt: new Date().toISOString(),
+        updatedBy: typeof updated.updatedBy === 'string' ? updated.updatedBy.slice(0, 100) : 'Admin',
       };
+
       if (firestoreDb) {
         await setDoc(doc(firestoreDb, 'settings', 'geo_config'), serverGeoConfig, { merge: true });
       }
@@ -620,10 +708,10 @@ async function startServer() {
     }
   });
 
-  // API: Save LINE Notification Config
-  app.post("/api/line/config", async (req, res) => {
+  // API: Save LINE Notification Config (Admin only)
+  app.post("/api/line/config", requireAdminAuth, async (req, res) => {
     try {
-      const updated = req.body;
+      const updated = req.body || {};
       const current = getServerLineConfig();
       
       // If client didn't send a new token (or sent masked), keep existing
@@ -652,8 +740,8 @@ async function startServer() {
     }
   });
 
-  // API: Test LINE Notification
-  app.post("/api/line/test", async (req, res) => {
+  // API: Test LINE Notification (Rate limited)
+  app.post("/api/line/test", lineTestLimiter, async (req, res) => {
     try {
       const { channelAccessToken, destinationId, isOrderTest } = req.body;
       const currentConfig = getServerLineConfig();
@@ -1419,7 +1507,7 @@ async function startServer() {
     }
   });
 
-  // API: Confirm Purchase Order from Web Admin
+  // API: Confirm Purchase Order from Web Admin (Strict Admin only)
   app.post("/api/orders/confirm", async (req, res) => {
     try {
       const { orderId, confirmedBy, userRole } = req.body;
@@ -1427,8 +1515,9 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Missing orderId" });
       }
 
-      // Enforce Admin RBAC for order confirmation
-      if (userRole && userRole !== 'admin') {
+      // Enforce strict Admin RBAC for order confirmation
+      const role = (userRole && typeof userRole === 'string' ? userRole.trim().toLowerCase() : '');
+      if (role !== 'admin') {
         return res.status(403).json({
           success: false,
           error: "เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถกดยืนยันคำสั่งซื้อได้",
@@ -1515,13 +1604,22 @@ async function startServer() {
     }
   });
 
-  // API: Mark Order Received & Auto Stock In
+  // API: Mark Order Received & Auto Stock In (Strict Admin only)
   app.post("/api/orders/receive", async (req, res) => {
     try {
-      const { orderId, receivedQty, receivedBy, note } = req.body;
+      const { orderId, receivedQty, receivedBy, userRole, note } = req.body;
       if (!orderId) {
         return res.status(400).json({ success: false, error: "Missing orderId" });
       }
+
+      const role = (userRole && typeof userRole === 'string' ? userRole.trim().toLowerCase() : '');
+      if (role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: "เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถรับสินค้าเข้าคลังจากคำสั่งซื้อได้",
+        });
+      }
+
       if (!firestoreDb) {
         return res.status(500).json({ success: false, error: "Firestore not initialized" });
       }
@@ -1645,13 +1743,22 @@ async function startServer() {
     }
   });
 
-  // API: Cancel Purchase Order
+  // API: Cancel Purchase Order (Strict Admin only)
   app.post("/api/orders/cancel", async (req, res) => {
     try {
-      const { orderId, reason, cancelledBy } = req.body;
+      const { orderId, reason, cancelledBy, userRole } = req.body;
       if (!orderId) {
         return res.status(400).json({ success: false, error: "Missing orderId" });
       }
+
+      const role = (userRole && typeof userRole === 'string' ? userRole.trim().toLowerCase() : '');
+      if (role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: "เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถยกเลิกใบสั่งซื้อได้",
+        });
+      }
+
       if (!firestoreDb) {
         return res.status(500).json({ success: false, error: "Firestore not initialized" });
       }
@@ -1785,7 +1892,7 @@ async function startServer() {
   });
 
   // API: Save Web Push Config (Admin only - sets master policy for whole system)
-  app.post("/api/push/config", async (req, res) => {
+  app.post("/api/push/config", requireAdminAuth, async (req, res) => {
     try {
       const updated = req.body || {};
       serverWebPushConfig = {
@@ -1845,8 +1952,8 @@ async function startServer() {
     }
   });
 
-  // Test Web Push notification endpoint
-  app.post("/api/push/test", async (req, res) => {
+  // Test Web Push notification endpoint (Rate limited)
+  app.post("/api/push/test", pushTestLimiter, async (req, res) => {
     try {
       const result = await sendWebPushToAll({
         title: "🔔 ทดสอบ Web Push Notifications",
@@ -1884,8 +1991,8 @@ async function startServer() {
     }
   });
 
-  // API: Analyze with Ai Agent (antigravity-preview-05-2026)
-  app.post("/api/analyze", async (req, res) => {
+  // API: Analyze with Ai Agent (Rate limited)
+  app.post("/api/analyze", aiAnalyzeLimiter, async (req, res) => {
     try {
       const { prompt, items, requisitions } = req.body;
       
@@ -2014,7 +2121,7 @@ async function startServer() {
 
   // API: AI Warehouse & Voice Assistant with DB Action execution
   
-  app.post("/api/chat", async (req, res) => {
+  app.post("/api/chat", aiChatLimiter, async (req, res) => {
     let isClientAborted = false;
     const clientAbortController = new AbortController();
 
@@ -2761,6 +2868,12 @@ ${getSystemEmployeeCatalogForAi()}
   const wss = new WebSocketServer({ server, path: '/live' });
 
   wss.on("connection", async (clientWs, req) => {
+    // WebSocket Connection Shield: Prevent connection flooding & socket starvation
+    if (wss.clients.size > 50) {
+      clientWs.close(1008, "Too many active live sessions. Please wait.");
+      return;
+    }
+
     let activeLiveSession: any = null;
     let sessionPromise: Promise<any> | null = null;
     let sessionActiveItems: Item[] = cachedItems.length > 0 ? [...cachedItems] : [];

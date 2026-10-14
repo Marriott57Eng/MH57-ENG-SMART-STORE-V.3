@@ -150,7 +150,7 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
       if (onUpdateGeoConfig) {
         await onUpdateGeoConfig(geoSettings);
       } else {
-        await saveGeoConfig(geoSettings, currentUser.name || currentUser.username);
+        await saveGeoConfig(geoSettings, currentUser.name || currentUser.username, currentUser.role || 'admin');
       }
       setGeoSavedSuccess(true);
       setTimeout(() => setGeoSavedSuccess(false), 3000);
@@ -165,6 +165,16 @@ export const AdminHubView: React.FC<AdminHubViewProps> = ({
   const lowStockItems = items.filter(
     (item) => item.status === 'out' || item.status === 'low' || (item.minStock && item.qty <= item.minStock)
   );
+
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 flex flex-col items-center justify-center text-center transition-colors">
+        <AlertTriangle className="w-16 h-16 text-amber-500 mb-4" />
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">ไม่มีสิทธิ์เข้าถึง</h2>
+        <p className="text-slate-500 dark:text-slate-400">เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถเข้าถึง Admin Console ได้</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto pb-28 sm:pb-32 transition-colors">

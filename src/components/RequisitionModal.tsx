@@ -237,23 +237,23 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
         className="fixed inset-0 bg-slate-950/80 transform-gpu touch-none"
       />
 
-      {/* Smooth Modal Dialog - Hardware-Accelerated without CSS transition conflicts */}
+      {/* Smooth Modal Dialog */}
       <motion.div 
-        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 8 }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 28, mass: 0.8 }}
         style={{ willChange: 'transform, opacity' }}
-        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-[34px] flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200/90 dark:border-slate-800 transform-gpu"
+        className="relative z-10 bg-white dark:bg-slate-900 w-full h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:max-w-lg sm:rounded-[34px] flex flex-col shadow-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 transform-gpu"
       >
         {/* Specular top rim highlight */}
         <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/20 to-transparent pointer-events-none rounded-full" />
         
         {/* Header */}
-        <div className="px-4 sm:px-5 pt-safe-header pb-3 sm:py-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/80 shrink-0">
+        <div className="px-4 sm:px-5 pt-safe-header pb-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-md transition-colors border ${
-              transactionType === 'out' ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 border-blue-400/50 shadow-blue-500/25' : 'bg-gradient-to-tr from-emerald-600 to-teal-600 border-emerald-400/50 shadow-emerald-500/25'
+              transactionType === 'out' ? 'bg-gradient-to-tr from-red-600 to-rose-600 border-red-500/50 shadow-red-500/25' : 'bg-gradient-to-tr from-emerald-600 to-teal-600 border-emerald-500/50 shadow-emerald-500/25'
             }`}>
               {transactionType === 'out' ? (
                 <ArrowUpRight className="w-5 h-5 stroke-[2.5]" />
@@ -274,7 +274,7 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full liquid-glass-pill hover:bg-white/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-white/60 dark:border-white/10 shadow-2xs"
+            className="w-8 h-8 rounded-full liquid-glass-pill hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-all active:scale-95 cursor-pointer border border-white/60 dark:border-white/10 shadow-2xs"
           >
             <X className="w-4 h-4" />
           </button>
@@ -289,9 +289,9 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 setTransactionType('out');
                 setError('');
               }}
-              className={`py-2 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
                 transactionType === 'out'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/40'
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/25 border border-red-500/40'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -305,9 +305,9 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
                 setTransactionType('in');
                 setError('');
               }}
-              className={`py-2 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
                 transactionType === 'in'
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25 border border-emerald-400/40'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/25 border border-emerald-500/40'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -711,17 +711,17 @@ export const RequisitionModal: React.FC<RequisitionModalProps> = ({
         </div>
 
         {/* Sticky Fixed Bottom Action Button */}
-        <div className="p-4 sm:p-5 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 shrink-0 pb-[max(18px,calc(env(safe-area-inset-bottom,16px)+14px))] shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+        <div className="p-4 sm:p-5 border-t border-[#EDE7DC] dark:border-[#38342F] bg-white dark:bg-[#23201D] shrink-0 pb-[max(18px,calc(env(safe-area-inset-bottom,16px)+14px))] shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
           <button
             type="submit"
             onTouchStart={() => triggerHapticFeedback(25)}
-            className={`w-full text-white font-bold py-3.5 rounded-2xl shadow-md text-base flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer border relative overflow-hidden ${
+            className={`w-full text-white font-bold py-3.5 rounded-2xl shadow-md text-base flex items-center justify-center gap-2 active:scale-96 transition-all cursor-pointer border relative overflow-hidden ${
               transactionType === 'out'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-blue-400/40 shadow-blue-500/25'
-                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border-emerald-400/40 shadow-emerald-500/25'
+                ? 'bg-[#D9624C] hover:bg-[#C8543F] border-[#E87560]/40 shadow-[#D9624C]/25'
+                : 'bg-[#3D7A58] hover:bg-[#34694B] border-[#55A073]/40 shadow-[#3D7A58]/25'
             }`}
           >
-            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
             <Check className="w-5 h-5 stroke-[2.5] relative z-10" />
             <span className="relative z-10">{transactionType === 'out' ? 'ยืนยันการบันทึกการเบิกสินค้า' : 'ยืนยันการบันทึกรับเข้าสินค้า'}</span>
           </button>

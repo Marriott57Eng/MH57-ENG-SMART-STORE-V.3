@@ -56,7 +56,7 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
   return (
     <nav 
       aria-label="Navigation Tabs"
-      className={`items-center gap-1 liquid-glass p-1.5 rounded-2xl border border-white/60 dark:border-white/10 shadow-[0_4px_20px_rgba(15,23,42,0.06)] dark:shadow-[0_6px_25px_rgba(0,0,0,0.4)] ${className}`}
+      className={`items-center gap-1 liquid-glass-pill p-1.5 rounded-2xl border border-white/60 dark:border-white/10 shadow-sm ${className}`}
     >
       {tabs.map((tab) => {
         const Icon = tab.icon;
@@ -67,10 +67,10 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer select-none relative shrink-0 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer select-none relative shrink-0 active:scale-95 ${
               isActive
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/60'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800'
             }`}
           >
             <Icon className={`w-3.5 h-3.5 ${isActive ? 'stroke-[2.5]' : 'stroke-[2]'}`} />
@@ -81,8 +81,8 @@ export const TopNavTabs: React.FC<TopNavTabsProps> = ({
               <span 
                 className={`ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold shadow-2xs ${
                   isActive 
-                    ? 'bg-white text-blue-700' 
-                    : 'bg-blue-100 dark:bg-blue-900/80 text-blue-700 dark:text-blue-300'
+                    ? 'bg-white/20 text-white' 
+                    : 'bg-red-500/15 text-red-600 dark:text-red-400'
                 }`}
               >
                 {tab.badge > 99 ? '99+' : tab.badge}

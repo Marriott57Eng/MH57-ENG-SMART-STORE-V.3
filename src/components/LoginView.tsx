@@ -53,6 +53,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   useEffect(() => {
     let isMounted = true;
     const syncUsersSilently = async () => {
+      if (!db) return;
       try {
         const usersSnapshot = await getDocs(collection(db, 'users'));
         let loadedUsers: User[] = [];

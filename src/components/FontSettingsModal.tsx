@@ -19,7 +19,7 @@ export const FONT_OPTIONS: FontOption[] = [
     name: 'IBM Plex Sans Thai',
     thaiName: 'ไอบีเอ็ม เพล็กซ์',
     previewClass: 'font-preview-ibm-plex',
-    recommendedTag: 'ฟอนต์หลักประจำระบบ (แม่นยำ สไตล์วิศวกรรม)',
+    recommendedTag: 'ฟอนต์หลัก (ชัดเจน อ่านง่าย)',
     description: 'ออกแบบโดยทีม IBM Typography เพื่อระบบซอฟต์แวร์และข้อมูลโดยเฉพาะ รูปร่างแม่นยำสูง ตัวเลขและรหัสอะไหล่อ่านง่ายชัดเจนมาก เหมาะกับงานช่างและวิศวกรรม',
     vibe: 'แม่นยำ • วิศวกรรม • เทคโนโลยี'
   },
@@ -31,6 +31,14 @@ export const FONT_OPTIONS: FontOption[] = [
     recommendedTag: 'โมเดิร์นยอดนิยม',
     description: 'ฟอนต์โมเดิร์นแบบไม่มีหัว สไตล์แอปพลิเคชันยุคใหม่ สะอาดตา โครงสร้างตัวอักษรสมส่วน อ่านสบายตาทั้งบนมือถือและจอคอม',
     vibe: 'ล้ำสมัย • มืออาชีพ • สากล'
+  },
+  {
+    id: 'mitr',
+    name: 'Mitr',
+    thaiName: 'มิตร',
+    previewClass: 'font-preview-mitr',
+    description: 'ฟอนต์ไร้หัวแนวอบอุ่น นุ่มนวล ดูสะอาดสะอ้านและเป็นมิตร เส้นสายโค้งมนกำลังดี สบายตา',
+    vibe: 'นุ่มนวล • เป็นมิตร • โมเดิร์น'
   },
   {
     id: 'kanit',
@@ -49,14 +57,6 @@ export const FONT_OPTIONS: FontOption[] = [
     recommendedTag: 'สไตล์ช่าง ENG',
     description: 'ฟอนต์สไตล์เหลี่ยมมุมกึ่งอุตสาหกรรม (Industrial Tech) เอกลักษณ์เฉพาะตัวสูงมาก เข้ากับธีมงานช่างและโลโก้ ENG STORE',
     vibe: 'ช่างเทคนิค • ไซไฟ • หนักแน่น'
-  },
-  {
-    id: 'mitr',
-    name: 'Mitr',
-    thaiName: 'มิตร',
-    previewClass: 'font-preview-mitr',
-    description: 'ฟอนต์ไร้หัวแนวอบอุ่น นุ่มนวล ดูสะอาดสะอ้านและเป็นมิตร เส้นสายโค้งมนกำลังดี สบายตา',
-    vibe: 'นุ่มนวล • เป็นมิตร • สบายตา'
   },
   {
     id: 'sarabun',
